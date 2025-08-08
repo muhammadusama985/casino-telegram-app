@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from "react";
 
-// Load Telegram SDK dynamically (safe for Vite/React)
-const tg = window?.Telegram?.WebApp;
-
 export default function TopBar({
   balance = "0.00000",
   currency = "T",
@@ -17,17 +14,17 @@ export default function TopBar({
   const [userAvatar, setUserAvatar] = useState(avatarUrl);
 
   useEffect(() => {
-    try {
-      if (tg?.initDataUnsafe?.user) {
-        const user = tg.initDataUnsafe.user;
-        const name = user.first_name || user.username || "User";
-        setUsername(name);
-        if (user.photo_url) {
-          setUserAvatar(user.photo_url);
-        }
+    const tg = window?.Telegram?.WebApp; // ✅ Move this INSIDE the effect
+    if (tg?.initDataUnsafe?.user) {
+      tg.ready(); // just to be safe again
+      const user = tg.initDataUnsafe.user;
+      const name = user.first_name || user.username || "User";
+      setUsername(name);
+      if (user.photo_url) {
+        setUserAvatar(user.photo_url);
       }
-    } catch (err) {
-      console.error("Telegram Login Error:", err);
+    } else {
+      console.warn("⚠️ Not running inside Telegram WebApp.");
     }
   }, []);
 
@@ -36,17 +33,12 @@ export default function TopBar({
       <div className="flex items-center justify-between">
         {/* LEFT: Welcome message with avatar */}
         <div className="flex items-center gap-2">
-          <img
-            src={userAvatar}
-            alt="avatar"
-            className="w-9 h-9 rounded-full border border-zinc-700 object-cover"
-          />
+         
           <span className="text-sm text-white">Welcome, {username}</span>
         </div>
 
         {/* RIGHT: Balance pill + Avatar + Optional menu */}
         <div className="flex items-center gap-3">
-          {/* Balance pill */}
           <button
             onClick={onCurrencyClick}
             className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 active:scale-[0.99]"
@@ -58,7 +50,6 @@ export default function TopBar({
             <span className="text-zinc-400">▾</span>
           </button>
 
-          {/* Avatar Button */}
           <button
             onClick={onAvatarClick}
             className="h-9 w-9 rounded-full overflow-hidden border border-zinc-700"
@@ -66,7 +57,6 @@ export default function TopBar({
             <img src={userAvatar} alt="avatar" className="h-full w-full object-cover" />
           </button>
 
-          {/* Optional Extra Menu */}
           {rightMenu ? rightMenu : null}
         </div>
       </div>
