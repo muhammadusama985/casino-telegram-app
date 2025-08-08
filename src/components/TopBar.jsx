@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
+// Load Telegram SDK dynamically (safe for Vite/React)
+const tg = window?.Telegram?.WebApp;
 
 export default function TopBar({
   balance = "0.00000",
@@ -11,26 +13,38 @@ export default function TopBar({
   rightMenu,
   className = "",
 }) {
+  const [username, setUsername] = useState("Guest");
+  const [userAvatar, setUserAvatar] = useState(avatarUrl);
+
+  useEffect(() => {
+    try {
+      if (tg?.initDataUnsafe?.user) {
+        const user = tg.initDataUnsafe.user;
+        const name = user.first_name || user.username || "User";
+        setUsername(name);
+        if (user.photo_url) {
+          setUserAvatar(user.photo_url);
+        }
+      }
+    } catch (err) {
+      console.error("Telegram Login Error:", err);
+    }
+  }, []);
+
   return (
     <div className={`px-4 pt-3 pb-3 sticky top-0 z-40 bg-[#0e0e10] ${className}`}>
       <div className="flex items-center justify-between">
-        {/* Left: close (or invisible placeholder to preserve layout) */}
-        {onClose ? (
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 text-zinc-300 active:opacity-80"
-          >
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-zinc-900">✖</span>
-            <span className="text-sm">Close</span>
-          </button>
-        ) : (
-          <div className="flex items-center gap-2 invisible">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-zinc-900">✖</span>
-            <span className="text-sm">Close</span>
-          </div>
-        )}
+        {/* LEFT: Welcome message with avatar */}
+        <div className="flex items-center gap-2">
+          <img
+            src={userAvatar}
+            alt="avatar"
+            className="w-9 h-9 rounded-full border border-zinc-700 object-cover"
+          />
+          <span className="text-sm text-white">Welcome, {username}</span>
+        </div>
 
-        {/* Right cluster: balance pill + avatar + optional menu */}
+        {/* RIGHT: Balance pill + Avatar + Optional menu */}
         <div className="flex items-center gap-3">
           {/* Balance pill */}
           <button
@@ -44,15 +58,15 @@ export default function TopBar({
             <span className="text-zinc-400">▾</span>
           </button>
 
-          {/* Avatar */}
+          {/* Avatar Button */}
           <button
             onClick={onAvatarClick}
             className="h-9 w-9 rounded-full overflow-hidden border border-zinc-700"
           >
-            <img src={avatarUrl} alt="avatar" className="h-full w-full object-cover" />
+            <img src={userAvatar} alt="avatar" className="h-full w-full object-cover" />
           </button>
 
-          {/* Optional extra */}
+          {/* Optional Extra Menu */}
           {rightMenu ? rightMenu : null}
         </div>
       </div>
