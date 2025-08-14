@@ -13,20 +13,23 @@ export default function TopBar({
   const [username, setUsername] = useState("Guest");
   const [userAvatar, setUserAvatar] = useState(avatarUrl);
 
-  useEffect(() => {
-    const tg = window?.Telegram?.WebApp; // ✅ Move this INSIDE the effect
-    if (tg?.initDataUnsafe?.user) {
-      tg.ready(); // just to be safe again
-      const user = tg.initDataUnsafe.user;
-      const name = user.first_name || user.username || "User";
-      setUsername(name);
-      if (user.photo_url) {
-        setUserAvatar(user.photo_url);
-      }
-    } else {
-      console.warn("⚠️ Not running inside Telegram WebApp.");
+ useEffect(() => {
+  try {
+    const tg = window.Telegram?.WebApp;
+    const initData = tg?.initData;
+    if (initData) {
+      fetch("/api/session/tg-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ initData }),
+      }).catch(() => {});
     }
-  }, []);
+  } catch (e) {
+    console.error("tg-login post failed:", e);
+  }
+}, []);
+
 
   return (
     <div className={`px-4 pt-3 pb-3 sticky top-0 z-40 bg-[#0e0e10] ${className}`}>
