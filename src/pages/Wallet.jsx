@@ -1,5 +1,7 @@
-// src/pages/Wallet.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api, getBalance } from "../api";
+import { TonConnectUIProvider, TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
+import { beginCell } from "@ton/ton";
 
 function TabButton({ active, children, onClick }) {
   return (
@@ -20,12 +22,7 @@ function TabButton({ active, children, onClick }) {
 function FieldRow({ label, value, onCopy, readOnly = true }) {
   return (
     <div className="mt-3">
-      {label ? (
-        <div className="mb-2 text-sm text-zinc-400">
-          {label}
-        </div>
-      ) : null}
-
+      {label ? <div className="mb-2 text-sm text-zinc-400">{label}</div> : null}
       <div className="flex items-stretch bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
         <input
           value={value}
@@ -51,7 +48,6 @@ function SelectRow({ label, value, options, onChange, note }) {
       <div className="text-sm text-zinc-400">
         {label} {note ? <span className="font-semibold text-zinc-300">{note}</span> : null}
       </div>
-
       <div className="mt-2">
         <div className="relative">
           <button className="w-full flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3">
@@ -61,38 +57,77 @@ function SelectRow({ label, value, options, onChange, note }) {
             </span>
             <span className="text-zinc-400">▾</span>
           </button>
-
-          {/* Static list (closed by design in screenshot). 
-              If you want a real dropdown, wire a local "open" state. */}
-          {/* <div className="absolute left-0 right-0 mt-2 bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden z-20">
-            {options.map((opt) => (
-              <button key={opt} onClick={() => onChange(opt)} className="w-full text-left px-4 py-3 hover:bg-zinc-800 text-zinc-200">
-                {opt}
-              </button>
-            ))}
-          </div> */}
         </div>
       </div>
     </div>
   );
 }
 
-export default function Wallet() {
+// --- helper to build text-comment payload (opcode 0) ---
+function textCommentPayload(text) {
+  const cell = beginCell().storeUint(0, 32).storeStringTail(text).endCell();
+  return cell.toBoc().toString("base64");
+}
+
+function WalletInner({ onCredited }) {
   const [mode, setMode] = useState("deposit"); // 'deposit' | 'withdraw'
   const [token, setToken] = useState("Toncoin (TON)");
 
-  // demo data (replace with real values from backend later)
-  const depositAddress = useMemo(
-    () => "UQBJ2IsFo_Vt8R0Iw4GCMgWxxxxxxxxxxxxxxxxxxxxxx",
-    []
-  );
-  const destinationTag = useMemo(() => "306500466EF029A37272", []);
+  // Fetched from backend:
+  const [adminAddress, setAdminAddress] = useState("");
+  const [comment, setComment] = useState("");
+  const [minAmountTon, setMinAmountTon] = useState(0.2);
+  const [loadingIntent, setLoadingIntent] = useState(false);
 
+  const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
+
+  // copy helper
   const copy = async (text) => {
+    try { await navigator.clipboard.writeText(text); } catch {}
+  };
+
+  // Get a fresh deposit intent each time the Deposit tab opens
+  useEffect(() => {
+    if (mode !== "deposit") return;
+    (async () => {
+      setLoadingIntent(true);
+      try {
+        const intent = await api("/deposits/intent", { method: "POST" });
+        setAdminAddress(intent.adminAddress || "");
+        setComment(intent.comment || "");
+        setMinAmountTon(intent.minAmountTon || 0.2);
+      } catch (e) {
+        console.error("Failed to fetch deposit intent:", e.message);
+      } finally {
+        setLoadingIntent(false);
+      }
+    })();
+  }, [mode]);
+
+  const handleDeposit = async () => {
+    if (!wallet) return; // must connect first
+
+    if (!adminAddress || !comment) {
+      alert("Deposit address not ready. Please try again.");
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // no-op
+      await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 300,
+        messages: [
+          {
+            address: adminAddress,
+            amount: String(Math.max(minAmountTon, 0.2) * 1e9), // TON → nanotons
+            payload: textCommentPayload(comment),
+          },
+        ],
+      });
+      // Give watcher a moment to see the tx, then refresh balance in UI:
+      setTimeout(onCredited, 4000);
+    } catch (e) {
+      console.error("User canceled or wallet error:", e);
     }
   };
 
@@ -111,12 +146,16 @@ export default function Wallet() {
           </TabButton>
         </div>
 
-        {/* Deposit section (as in screenshot) */}
         {mode === "deposit" ? (
           <>
+            {/* Connect button */}
+            <div className="mt-4">
+              <TonConnectButton />
+            </div>
+
             <SelectRow
               label="Select the token to deposit"
-              note="(Minimum 0.1 Toncoin (TON))"
+              note={`(Minimum ${minAmountTon} Toncoin (TON))`}
               value={token}
               options={["Toncoin (TON)"]}
               onChange={setToken}
@@ -124,27 +163,33 @@ export default function Wallet() {
 
             <FieldRow
               label="TON deposit address"
-              value={depositAddress}
-              onCopy={() => copy(depositAddress)}
+              value={adminAddress || "Loading…"}
+              onCopy={() => copy(adminAddress)}
             />
 
             <FieldRow
               label={
                 <span>
-                  Destination tag – <span className="underline">MANDATORY FIELD</span>
+                  Destination tag / Comment – <span className="underline">MANDATORY</span>
                 </span>
               }
-              value={destinationTag}
-              onCopy={() => copy(destinationTag)}
+              value={comment || (loadingIntent ? "Loading…" : "—")}
+              onCopy={() => copy(comment)}
             />
 
+            <button
+              disabled={!wallet || !adminAddress || !comment}
+              onClick={handleDeposit}
+              className="mt-5 w-full h-12 rounded-xl bg-yellow-500 text-black font-semibold disabled:opacity-50"
+            >
+              {wallet ? `Deposit at least ${minAmountTon} TON` : "Connect TON Wallet"}
+            </button>
+
             <p className="mt-5 text-center text-sm text-zinc-400">
-              Send only TON to this deposit address. <br />
-              Values sent below the minimum amount or to an incorrect address will be lost.
+              Send only TON to this address. Use the exact comment above to credit your account.
             </p>
           </>
         ) : (
-          /* Simple placeholder for Withdraw tab (matches look) */
           <div className="mt-4">
             <SelectRow
               label="Select the token to withdraw"
@@ -158,11 +203,26 @@ export default function Wallet() {
               Continue
             </button>
             <p className="mt-3 text-xs text-zinc-400">
-              Withdrawals may take up to a few minutes to process on-chain.
+              Withdrawals may take a few minutes to process on-chain.
             </p>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+export default function Wallet() {
+  // when credited, refresh any global balance UI if you want (optional)
+  const [_, setTick] = useState(0);
+  const onCredited = async () => {
+    try { await getBalance(); } catch {}
+    setTick((t) => t + 1);
+  };
+
+  return (
+    <TonConnectUIProvider manifestUrl="/tonconnect-manifest.json">
+      <WalletInner onCredited={onCredited} />
+    </TonConnectUIProvider>
   );
 }

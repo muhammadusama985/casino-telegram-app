@@ -2,16 +2,44 @@ import { Outlet } from "react-router-dom";
 import BottomNav from "./BottomNav";
 import TopBar from "./TopBar";
 import WebApp from "@twa-dev/sdk";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { telegramAuth, getBalance } from "../api"; // <-- NEW
 
 export default function MainLayout() {
+  const [username, setUsername] = useState("Guest");
+  const [avatar, setAvatar] = useState("/assets/avatar.png");
+  const [coins, setCoins] = useState(0);
+
   useEffect(() => {
-    WebApp.ready();
-    WebApp.expand();
+    // Telegram UI polish
     try {
+      WebApp.ready();
+      WebApp.expand();
       WebApp.setHeaderColor("#0a0a0a");
       WebApp.setBackgroundColor("#000000");
     } catch {}
+
+    // 1) Telegram server auth + get user info
+    (async () => {
+      try {
+        const u = await telegramAuth(); // verifies on backend, stores tgId
+        const name =
+          u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` :
+          u.first_name || u.username || "Guest";
+        setUsername(name);
+        setAvatar(u.photo_url || "/assets/avatar.png");
+      } catch (e) {
+        console.error(e);
+      }
+
+      // 2) Fetch balance from backend
+      try {
+        const c = await getBalance();
+        setCoins(c);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
   }, []);
 
   return (
@@ -21,17 +49,17 @@ export default function MainLayout() {
         <h1 className="text-lg font-semibold">Lucky Bot</h1>
       </div>
 
-      {/* TopBar without close button */}
+      {/* TopBar now receives live data */}
       <TopBar
-        balance="0.00000"
+        balance={String(coins.toFixed(5))}
         currency="T"
-        avatarUrl="/assets/avatar.png"
+        username={username}
+        avatarUrl={avatar}
         onCurrencyClick={() => console.log("open currency selector")}
         onAvatarClick={() => console.log("open profile drawer")}
         className="bg-black"
       />
 
-      {/* Page content; bottom padding so content isn't hidden by the nav */}
       <div className="px-4 pt-2 pb-[84px]">
         <Outlet />
       </div>
