@@ -5,9 +5,12 @@ import { api, getBalance } from "../api";
 import { useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { beginCell } from "@ton/ton";
 
+// ---------------- utils ----------------
+
 // Build a text comment payload (opcode 0)
 function textCommentPayload(text) {
   const cell = beginCell().storeUint(0, 32).storeStringTail(text).endCell();
+  // NOTE: If you see "toString is not a function", make sure Buffer polyfill exists (Vite).
   return cell.toBoc().toString("base64");
 }
 
@@ -66,14 +69,14 @@ export default function Wallet() {
         setComment(intent.comment || "");
         setMinAmountTon(intent.minAmountTon || 0.2);
       } catch (e) {
-        console.error("Failed to fetch deposit intent:", e.message);
+        console.error("Failed to fetch deposit intent:", e?.message || e);
       } finally {
         setLoadingIntent(false);
       }
     })();
   }, []);
 
-  // Helpful logs (optional)
+  // Helpful logs
   useEffect(() => {
     const off1 = ui.onStatusChange((info) => console.log("[TonConnect status]", info));
     const off2 = ui.onModalStateChange((state) => console.log("[TonConnect modal]", state));
@@ -83,16 +86,24 @@ export default function Wallet() {
     };
   }, [ui]);
 
-  // Connect Tonkeeper directly (no wallet list)
+  // ---------------- Tonkeeper-only connect flow ----------------
   const connectTonkeeper = async () => {
     try {
-      // localStorage.removeItem("ton-connect-ui_last-wallet"); // uncomment once if wrong wallet persists
+      // If a wrong wallet persists, you can clear once:
+      // localStorage.removeItem("ton-connect-ui_last-wallet");
+
+      // 1) Get wallets from the official registry
       const wallets = await ui.getWallets();
       console.log(
         "[TC] wallets:",
-        wallets.map((w) => ({ name: w.name, appName: w.appName, hasLink: !!w.universalLink }))
+        wallets.map((w) => ({
+          name: w.name,
+          appName: w.appName,
+          universalLink: !!w.universalLink,
+        }))
       );
 
+      // 2) Find Tonkeeper
       const tk = wallets.find(
         (w) =>
           (w.appName && w.appName.toLowerCase() === "tonkeeper") ||
@@ -100,19 +111,19 @@ export default function Wallet() {
       );
 
       if (!tk) {
-        // Tonkeeper not detected in the list → suggest install
-        const go = confirm("Tonkeeper is not installed. Open install page?");
-        if (go) window.open("https://tonkeeper.com/download", "_blank");
+        const go = confirm("Tonkeeper not found. Open the install page?");
+        if (go) window.open("https://tonkeeper.com/download", "_blank", "noopener,noreferrer");
         return;
       }
 
-      // Try direct connect to Tonkeeper (no modal)
+      // 3) Try direct connect to Tonkeeper (no modal)
+      // This will trigger the appropriate deep link or extension flow.
       await ui.connectWallet(tk);
       // If user accepts, useTonWallet() becomes non-null → UI shows “connected”
     } catch (err) {
       console.warn("connectWallet error:", err);
 
-      // Fallback: open Tonkeeper universal link manually (works better in some Telegram webviews)
+      // 4) Fallback: open Tonkeeper universal link (works better inside Telegram webview)
       try {
         const wallets = await ui.getWallets();
         const tk = wallets.find(
@@ -122,24 +133,25 @@ export default function Wallet() {
         );
         if (tk?.universalLink) {
           const link = tk.universalLink;
+          // Telegram-friendly opener if available
           if (WebApp?.openTelegramLink) {
-            WebApp.openTelegramLink(link); // Telegram-friendly opener
+            WebApp.openTelegramLink(link);
           } else {
-            window.open(link, "_blank") || (window.location.href = link);
+            window.open(link, "_blank", "noopener,noreferrer") || (window.location.href = link);
           }
           return;
         }
-      } catch (e2) {
-        console.warn("universalLink fallback failed:", e2);
+      } catch (fallbackErr) {
+        console.warn("universalLink fallback failed:", fallbackErr);
       }
 
-      // Last resort: prompt install
+      // 5) Last resort: prompt install
       const go = confirm("Could not open Tonkeeper. Install Tonkeeper?");
-      if (go) window.open("https://tonkeeper.com/download", "_blank");
+      if (go) window.open("https://tonkeeper.com/download", "_blank", "noopener,noreferrer");
     }
   };
 
-  // Send TON to treasury with mandatory comment
+  // ---------------- Send TON with mandatory comment ----------------
   const transferTon = async () => {
     const amt = parseFloat(amountTon);
     if (!wallet) return alert("Please connect Tonkeeper first.");
@@ -161,7 +173,9 @@ export default function Wallet() {
 
       // Nudge balance refresh after a few seconds (watcher will credit)
       setTimeout(async () => {
-        try { await getBalance(); } catch {}
+        try {
+          await getBalance();
+        } catch {}
       }, 4000);
 
       alert("Transfer submitted. We will credit coins after confirmation.");
@@ -247,7 +261,8 @@ export default function Wallet() {
           </button>
 
           <p className="mt-4 text-center text-sm text-zinc-400">
-            Send only TON to this address. Use the exact comment above so we can credit your account.
+            Send only TON to this address. Use the exact comment above so we can credit your
+            account.
           </p>
         </div>
       </div>

@@ -5,7 +5,15 @@ import './index.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+
+  <TonConnectUIProvider manifestUrl="https://casino-telegram-app.vercel.app/tonconnect-manifest.json">
+    <StrictMode>
+
+      <App />
+    </StrictMode>
+
+  </TonConnectUIProvider>
+
+
+
 )

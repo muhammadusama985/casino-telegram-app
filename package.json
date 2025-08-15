@@ -13,6 +13,7 @@
     "@tailwindcss/vite": "^4.1.11",
     "@ton/core": "^0.61.0",
     "@ton/ton": "^15.3.1",
+    "@tonconnect/sdk": "^3.2.0",
     "@tonconnect/ui-react": "^2.2.0",
     "@twa-dev/sdk": "^8.0.2",
     "buffer": "^6.0.3",
