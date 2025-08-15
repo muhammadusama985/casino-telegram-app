@@ -1,1 +1,7 @@
-{ "url": "https://casino-telegram-app.vercel.app", "name": "Lucky Bot Casino", "iconUrl": "https://casino-telegram-app.vercel.app/icon.png" }
+{
+  "url": "https://casino-telegram-app.vercel.app",
+  "name": "Lucky Bot Casino",
+  "iconUrl": "https://casino-telegram-app.vercel.app/icon.png",
+  "termsOfUseUrl": "https://casino-telegram-app.vercel.app/terms",
+  "privacyPolicyUrl": "https://casino-telegram-app.vercel.app/privacy"
+}
