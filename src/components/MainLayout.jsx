@@ -22,6 +22,9 @@ export default function MainLayout() {
     // 1) Telegram server auth + get user info
     (async () => {
       try {
+        const tg = window.Telegram?.WebApp;
+console.log('[FE] has tg?', !!tg, 'initData length:', tg?.initData?.length, tg?.initDataUnsafe?.user);
+
         const u = await telegramAuth(); // verifies on backend, stores tgId
         const name =
           u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` :
