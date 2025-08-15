@@ -27,8 +27,8 @@ console.log('[FE] has tg?', !!tg, 'initData length:', tg?.initData?.length, tg?.
 
         const u = await telegramAuth(); // verifies on backend, stores tgId
         const name =
-          u.first_name && u.last_name ? `${u.first_name} ${u.last_name}` :
-          u.first_name || u.username || "Guest";
+  (u.first_name && u.last_name) ? `${u.first_name} ${u.last_name}` :
+   (u.first_name || u.username || "Guest");
         setUsername(name);
         setAvatar(u.photo_url || "/assets/avatar.png");
       } catch (e) {
