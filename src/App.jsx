@@ -26,8 +26,11 @@ export default function App() {
       // Critical for Telegram Mini App: lets wallet return to your bot
       actionsConfiguration={{
         // <-- replace with your bot username
-    includeWallets: [{ appName: 'tonkeeper' }]  // 👈 show Tonkeeper only
+        twaReturnUrl: "https://t.me/FotuneFlipBot?start=app"
       }}
+        walletsListConfiguration={{
+    includeWallets: [{ appName: "tonkeeper" }],   // show/target Tonkeeper only
+  }}
     >
       <BrowserRouter>
         <Routes>

@@ -3,18 +3,11 @@ import { api, getBalance } from "../api";
 import { useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { beginCell } from "@ton/ton";
 
-// --- helper to build text-comment payload (opcode 0) ---
 function textCommentPayload(text) {
   const cell = beginCell().storeUint(0, 32).storeStringTail(text).endCell();
   return cell.toBoc().toString("base64");
 }
-
-// very simple TON -> nanotons (string) converter
-function toNanoStr(v) {
-  const n = Number(v);
-  if (!isFinite(n) || n <= 0) return "0";
-  return String(Math.round(n * 1e9));
-}
+const toNanoStr = (v) => String(Math.round(Number(v || 0) * 1e9));
 
 function FieldRow({ label, value, onCopy, readOnly = true, onChange }) {
   return (
@@ -28,13 +21,7 @@ function FieldRow({ label, value, onCopy, readOnly = true, onChange }) {
           className="flex-1 bg-transparent px-4 py-3 text-white outline-none"
         />
         {onCopy && (
-          <button
-            onClick={onCopy}
-            className="px-3 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-            title="Copy"
-          >
-            📋
-          </button>
+          <button onClick={onCopy} className="px-3 bg-zinc-800 text-zinc-200 hover:bg-zinc-700" title="Copy">📋</button>
         )}
       </div>
     </div>
@@ -43,15 +30,14 @@ function FieldRow({ label, value, onCopy, readOnly = true, onChange }) {
 
 export default function Wallet() {
   const wallet = useTonWallet();
-  const [tonConnectUI] = useTonConnectUI();
+  const [ui] = useTonConnectUI();
 
-  const [adminAddress, setAdminAddress] = useState(""); // from backend
-  const [comment, setComment] = useState("");           // from backend (MANDATORY)
+  const [adminAddress, setAdminAddress] = useState("");
+  const [comment, setComment] = useState("");
   const [minAmountTon, setMinAmountTon] = useState(0.2);
-  const [amountTon, setAmountTon] = useState("");       // user-entered TON amount
+  const [amountTon, setAmountTon] = useState("");
   const [loadingIntent, setLoadingIntent] = useState(false);
 
-  // 1) Fetch a fresh deposit intent (admin address + unique comment) on mount
   useEffect(() => {
     (async () => {
       setLoadingIntent(true);
@@ -68,80 +54,67 @@ export default function Wallet() {
     })();
   }, []);
 
-  // 2) Connect specifically to Tonkeeper if present, otherwise show install
+  // --- DIRECT Tonkeeper connect (no wallet list) ---
   const connectTonkeeper = async () => {
     try {
-      const wallets = await tonConnectUI.getWallets();
-      // find Tonkeeper by appName or name
-      const tk = wallets.find(
-        (w) =>
-          (w.appName && w.appName.toLowerCase() === "tonkeeper") ||
-          /tonkeeper/i.test(w.name)
+      // clear old “last-wallet” cache once if it keeps opening a different wallet
+      // localStorage.removeItem("ton-connect-ui_last-wallet");
+
+      const all = await ui.getWallets();
+      const tk = all.find(
+        (w) => (w.appName && w.appName.toLowerCase() === "tonkeeper") || /tonkeeper/i.test(w.name)
       );
 
-      if (tk) {
-        // try direct connect to Tonkeeper
-        await tonConnectUI.connectWallet(tk);
-      } else {
-        // fallback: show install prompt (you can customize this UI)
-        const wants = confirm(
-          "Tonkeeper is not detected. Do you want to install it?"
-        );
-        if (wants) {
-          // official download page
-          window.open("https://tonkeeper.com/download", "_blank");
-        }
+      if (!tk) {
+        // Tonkeeper not present in the list: prompt to install
+        const go = confirm("Tonkeeper is not installed. Open install page?");
+        if (go) window.open("https://tonkeeper.com/download", "_blank");
+        return;
       }
+
+      // Try direct connect to Tonkeeper
+      await ui.connectWallet(tk);
+
+      // If the user accepts, useTonWallet() becomes non-null and we show “connected”
     } catch (e) {
-      console.log("Connect Tonkeeper error:", e);
-      // fallback to the default modal (will still only list Tonkeeper due to provider filter)
-      try {
-        await tonConnectUI.openModal();
-      } catch {}
+      console.log("connectWallet error:", e);
+      // User canceled or the app isn’t installed; offer install
+      const go = confirm("Could not open Tonkeeper or connection was denied. Install Tonkeeper?");
+      if (go) window.open("https://tonkeeper.com/download", "_blank");
     }
   };
 
-  // 3) Transfer via connected wallet
   const transferTon = async () => {
     const amt = parseFloat(amountTon);
     if (!wallet) return alert("Please connect Tonkeeper first.");
-    if (!adminAddress || !comment) return alert("Deposit info is not ready yet.");
+    if (!adminAddress || !comment) return alert("Deposit info not ready yet.");
     if (!isFinite(amt) || amt <= 0) return alert("Enter a valid TON amount.");
     if (amt < minAmountTon) return alert(`Minimum is ${minAmountTon} TON.`);
 
     try {
-      await tonConnectUI.sendTransaction({
+      await ui.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 300,
         messages: [
-          {
-            address: adminAddress,
-            amount: toNanoStr(amt),            // TON -> nanotons
-            payload: textCommentPayload(comment),
-          },
+          { address: adminAddress, amount: toNanoStr(amt), payload: textCommentPayload(comment) }
         ],
       });
 
-      // Optional: poll your balance after a few seconds
-      setTimeout(async () => {
-        try { await getBalance(); } catch {}
-      }, 4000);
-      alert("Transfer submitted. We will credit coins after confirmation.");
+      setTimeout(async () => { try { await getBalance(); } catch {} }, 4000);
+      alert("Transfer submitted. We’ll credit coins after confirmation.");
     } catch (e) {
       console.error("Transfer error:", e);
       alert("Transfer canceled or failed.");
     }
   };
 
-  const copy = async (text) => {
-    try { await navigator.clipboard.writeText(text); } catch {}
-  };
+  const copy = async (t) => { try { await navigator.clipboard.writeText(t); } catch {} };
 
   return (
     <div className="bg-[#0e0e10] text-white">
       <div className="px-4 pb-28">
         <h2 className="mt-2 text-2xl font-semibold">Wallet</h2>
 
-        {/* Connect Tonkeeper */}
+        {/* CONNECT TONKEEPER */}
         <div className="mt-4">
           {!wallet ? (
             <button
@@ -156,24 +129,18 @@ export default function Wallet() {
             </div>
           )}
 
-          {/* Optional: a small install hint if not connected */}
           {!wallet && (
             <p className="mt-2 text-xs text-zinc-400 text-center">
               Don’t have Tonkeeper?{" "}
-              <a
-                href="https://tonkeeper.com/download"
-                target="_blank"
-                rel="noreferrer"
-                className="underline"
-              >
+              <a href="https://tonkeeper.com/download" target="_blank" rel="noreferrer" className="underline">
                 Install it
-              </a>
-              , then tap Connect again.
+              </a>{" "}
+              and tap Connect again.
             </p>
           )}
         </div>
 
-        {/* Deposit form */}
+        {/* DEPOSIT FORM */}
         <div className="mt-5">
           <FieldRow
             label={`Amount (TON) — minimum ${minAmountTon}`}
@@ -189,11 +156,7 @@ export default function Wallet() {
           />
 
           <FieldRow
-            label={
-              <span>
-                Destination tag / Comment — <span className="underline">MANDATORY</span>
-              </span>
-            }
+            label={<span>Destination tag / Comment — <span className="underline">MANDATORY</span></span>}
             value={comment || (loadingIntent ? "Loading…" : "—")}
             onCopy={() => copy(comment)}
           />
