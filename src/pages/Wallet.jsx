@@ -1,67 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, getBalance } from "../api";
-import { TonConnectUIProvider, TonConnectButton, useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
+import { useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { beginCell } from "@ton/ton";
-
-function TabButton({ active, children, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className={[
-        "flex-1 h-12 rounded-xl border px-4 font-medium",
-        active
-          ? "bg-yellow-500/20 text-yellow-400 border-yellow-600"
-          : "bg-zinc-900 text-zinc-200 border-zinc-800",
-      ].join(" ")}
-    >
-      {children}
-    </button>
-  );
-}
-
-function FieldRow({ label, value, onCopy, readOnly = true }) {
-  return (
-    <div className="mt-3">
-      {label ? <div className="mb-2 text-sm text-zinc-400">{label}</div> : null}
-      <div className="flex items-stretch bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-        <input
-          value={value}
-          readOnly={readOnly}
-          onChange={() => {}}
-          className="flex-1 bg-transparent px-4 py-3 text-white outline-none"
-        />
-        <button
-          onClick={onCopy}
-          className="px-3 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-          title="Copy"
-        >
-          📋
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SelectRow({ label, value, options, onChange, note }) {
-  return (
-    <div className="mt-4">
-      <div className="text-sm text-zinc-400">
-        {label} {note ? <span className="font-semibold text-zinc-300">{note}</span> : null}
-      </div>
-      <div className="mt-2">
-        <div className="relative">
-          <button className="w-full flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3">
-            <span className="flex items-center gap-2">
-              <span className="h-5 w-5 grid place-items-center rounded-full bg-sky-600">🟦</span>
-              <span className="text-white">{value}</span>
-            </span>
-            <span className="text-zinc-400">▾</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // --- helper to build text-comment payload (opcode 0) ---
 function textCommentPayload(text) {
@@ -69,27 +9,50 @@ function textCommentPayload(text) {
   return cell.toBoc().toString("base64");
 }
 
-function WalletInner({ onCredited }) {
-  const [mode, setMode] = useState("deposit"); // 'deposit' | 'withdraw'
-  const [token, setToken] = useState("Toncoin (TON)");
+// very simple TON -> nanotons (string) converter
+function toNanoStr(v) {
+  const n = Number(v);
+  if (!isFinite(n) || n <= 0) return "0";
+  return String(Math.round(n * 1e9));
+}
 
-  // Fetched from backend:
-  const [adminAddress, setAdminAddress] = useState("");
-  const [comment, setComment] = useState("");
-  const [minAmountTon, setMinAmountTon] = useState(0.2);
-  const [loadingIntent, setLoadingIntent] = useState(false);
+function FieldRow({ label, value, onCopy, readOnly = true, onChange }) {
+  return (
+    <div className="mt-3">
+      {label ? <div className="mb-2 text-sm text-zinc-400">{label}</div> : null}
+      <div className="flex items-stretch bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+        <input
+          value={value}
+          readOnly={readOnly}
+          onChange={onChange || (() => {})}
+          className="flex-1 bg-transparent px-4 py-3 text-white outline-none"
+        />
+        {onCopy && (
+          <button
+            onClick={onCopy}
+            className="px-3 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+            title="Copy"
+          >
+            📋
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
+export default function Wallet() {
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
 
-  // copy helper
-  const copy = async (text) => {
-    try { await navigator.clipboard.writeText(text); } catch {}
-  };
+  const [adminAddress, setAdminAddress] = useState(""); // from backend
+  const [comment, setComment] = useState("");           // from backend (MANDATORY)
+  const [minAmountTon, setMinAmountTon] = useState(0.2);
+  const [amountTon, setAmountTon] = useState("");       // user-entered TON amount
+  const [loadingIntent, setLoadingIntent] = useState(false);
 
-  // Get a fresh deposit intent each time the Deposit tab opens
+  // 1) Fetch a fresh deposit intent (admin address + unique comment) on mount
   useEffect(() => {
-    if (mode !== "deposit") return;
     (async () => {
       setLoadingIntent(true);
       try {
@@ -103,15 +66,48 @@ function WalletInner({ onCredited }) {
         setLoadingIntent(false);
       }
     })();
-  }, [mode]);
+  }, []);
 
-  const handleDeposit = async () => {
-    if (!wallet) return; // must connect first
+  // 2) Connect specifically to Tonkeeper if present, otherwise show install
+  const connectTonkeeper = async () => {
+    try {
+      const wallets = await tonConnectUI.getWallets();
+      // find Tonkeeper by appName or name
+      const tk = wallets.find(
+        (w) =>
+          (w.appName && w.appName.toLowerCase() === "tonkeeper") ||
+          /tonkeeper/i.test(w.name)
+      );
 
-    if (!adminAddress || !comment) {
-      alert("Deposit address not ready. Please try again.");
-      return;
+      if (tk) {
+        // try direct connect to Tonkeeper
+        await tonConnectUI.connectWallet(tk);
+      } else {
+        // fallback: show install prompt (you can customize this UI)
+        const wants = confirm(
+          "Tonkeeper is not detected. Do you want to install it?"
+        );
+        if (wants) {
+          // official download page
+          window.open("https://tonkeeper.com/download", "_blank");
+        }
+      }
+    } catch (e) {
+      console.log("Connect Tonkeeper error:", e);
+      // fallback to the default modal (will still only list Tonkeeper due to provider filter)
+      try {
+        await tonConnectUI.openModal();
+      } catch {}
     }
+  };
+
+  // 3) Transfer via connected wallet
+  const transferTon = async () => {
+    const amt = parseFloat(amountTon);
+    if (!wallet) return alert("Please connect Tonkeeper first.");
+    if (!adminAddress || !comment) return alert("Deposit info is not ready yet.");
+    if (!isFinite(amt) || amt <= 0) return alert("Enter a valid TON amount.");
+    if (amt < minAmountTon) return alert(`Minimum is ${minAmountTon} TON.`);
 
     try {
       await tonConnectUI.sendTransaction({
@@ -119,16 +115,25 @@ function WalletInner({ onCredited }) {
         messages: [
           {
             address: adminAddress,
-            amount: String(Math.max(minAmountTon, 0.2) * 1e9), // TON → nanotons
+            amount: toNanoStr(amt),            // TON -> nanotons
             payload: textCommentPayload(comment),
           },
         ],
       });
-      // Give watcher a moment to see the tx, then refresh balance in UI:
-      setTimeout(onCredited, 4000);
+
+      // Optional: poll your balance after a few seconds
+      setTimeout(async () => {
+        try { await getBalance(); } catch {}
+      }, 4000);
+      alert("Transfer submitted. We will credit coins after confirmation.");
     } catch (e) {
-      console.error("User canceled or wallet error:", e);
+      console.error("Transfer error:", e);
+      alert("Transfer canceled or failed.");
     }
+  };
+
+  const copy = async (text) => {
+    try { await navigator.clipboard.writeText(text); } catch {}
   };
 
   return (
@@ -136,93 +141,76 @@ function WalletInner({ onCredited }) {
       <div className="px-4 pb-28">
         <h2 className="mt-2 text-2xl font-semibold">Wallet</h2>
 
-        {/* Tabs */}
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <TabButton active={mode === "deposit"} onClick={() => setMode("deposit")}>
-            ↓ Deposit
-          </TabButton>
-          <TabButton active={mode === "withdraw"} onClick={() => setMode("withdraw")}>
-            ↑ Withdraw
-          </TabButton>
+        {/* Connect Tonkeeper */}
+        <div className="mt-4">
+          {!wallet ? (
+            <button
+              onClick={connectTonkeeper}
+              className="w-full h-12 rounded-xl bg-emerald-600 text-white font-semibold"
+            >
+              Connect Tonkeeper
+            </button>
+          ) : (
+            <div className="w-full h-12 rounded-xl bg-emerald-800/40 border border-emerald-700 grid place-items-center text-emerald-300">
+              ✅ Tonkeeper connected
+            </div>
+          )}
+
+          {/* Optional: a small install hint if not connected */}
+          {!wallet && (
+            <p className="mt-2 text-xs text-zinc-400 text-center">
+              Don’t have Tonkeeper?{" "}
+              <a
+                href="https://tonkeeper.com/download"
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                Install it
+              </a>
+              , then tap Connect again.
+            </p>
+          )}
         </div>
 
-        {mode === "deposit" ? (
-          <>
-            {/* Connect button */}
-            <div className="mt-4">
-              <TonConnectButton />
-            </div>
+        {/* Deposit form */}
+        <div className="mt-5">
+          <FieldRow
+            label={`Amount (TON) — minimum ${minAmountTon}`}
+            value={amountTon}
+            readOnly={false}
+            onChange={(e) => setAmountTon(e.target.value)}
+          />
 
-            <SelectRow
-              label="Select the token to deposit"
-              note={`(Minimum ${minAmountTon} Toncoin (TON))`}
-              value={token}
-              options={["Toncoin (TON)"]}
-              onChange={setToken}
-            />
+          <FieldRow
+            label="Treasury / Admin TON address"
+            value={adminAddress || (loadingIntent ? "Loading…" : "—")}
+            onCopy={() => copy(adminAddress)}
+          />
 
-            <FieldRow
-              label="TON deposit address"
-              value={adminAddress || "Loading…"}
-              onCopy={() => copy(adminAddress)}
-            />
+          <FieldRow
+            label={
+              <span>
+                Destination tag / Comment — <span className="underline">MANDATORY</span>
+              </span>
+            }
+            value={comment || (loadingIntent ? "Loading…" : "—")}
+            onCopy={() => copy(comment)}
+          />
 
-            <FieldRow
-              label={
-                <span>
-                  Destination tag / Comment – <span className="underline">MANDATORY</span>
-                </span>
-              }
-              value={comment || (loadingIntent ? "Loading…" : "—")}
-              onCopy={() => copy(comment)}
-            />
+          <button
+            onClick={transferTon}
+            disabled={!wallet || !adminAddress || !comment}
+            className="mt-4 w-full h-12 rounded-xl bg-yellow-500 text-black font-semibold disabled:opacity-50"
+          >
+            Transfer TON
+          </button>
 
-            <button
-              disabled={!wallet || !adminAddress || !comment}
-              onClick={handleDeposit}
-              className="mt-5 w-full h-12 rounded-xl bg-yellow-500 text-black font-semibold disabled:opacity-50"
-            >
-              {wallet ? `Deposit at least ${minAmountTon} TON` : "Connect TON Wallet"}
-            </button>
-
-            <p className="mt-5 text-center text-sm text-zinc-400">
-              Send only TON to this address. Use the exact comment above to credit your account.
-            </p>
-          </>
-        ) : (
-          <div className="mt-4">
-            <SelectRow
-              label="Select the token to withdraw"
-              value={token}
-              options={["Toncoin (TON)"]}
-              onChange={setToken}
-            />
-            <FieldRow label="Your TON wallet address" value="" onCopy={() => {}} readOnly={false} />
-            <FieldRow label="Amount" value="" onCopy={() => {}} readOnly={false} />
-            <button className="mt-4 w-full h-12 rounded-xl bg-yellow-500 text-black font-semibold">
-              Continue
-            </button>
-            <p className="mt-3 text-xs text-zinc-400">
-              Withdrawals may take a few minutes to process on-chain.
-            </p>
-          </div>
-        )}
+          <p className="mt-4 text-center text-sm text-zinc-400">
+            Send only TON to this address. Use the exact comment above so we can credit your account.
+          </p>
+        </div>
       </div>
     </div>
-  );
-}
-
-export default function Wallet() {
-  // when credited, refresh any global balance UI if you want (optional)
-  const [_, setTick] = useState(0);
-  const onCredited = async () => {
-    try { await getBalance(); } catch {}
-    setTick((t) => t + 1);
-  };
-
-  return (
-    <TonConnectUIProvider manifestUrl="/tonconnect-manifest.json">
-      <WalletInner onCredited={onCredited} />
-    </TonConnectUIProvider>
   );
 }
