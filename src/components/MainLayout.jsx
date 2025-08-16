@@ -3,7 +3,8 @@ import BottomNav from "../components/BottomNav";
 import TopBar from "../components/TopBar";
 import WebApp from "@twa-dev/sdk";
 import { useEffect, useState } from "react";
-import { telegramAuth, getBalance } from "../api"; // <-- NEW
+import { telegramAuth, getBalance, pollBalance } from "../api";
+
 
 export default function MainLayout() {
   const [username, setUsername] = useState("Guest");
@@ -43,6 +44,9 @@ console.log('[FE] has tg?', !!tg, 'initData length:', tg?.initData?.length, tg?.
         console.error(e);
       }
     })();
+   // 🔁 keep balance fresh every 4s (watcher credits asynchronously)
+  const stop = pollBalance((coins) => setCoins(coins), 4000);
+ return () => stop();
   }, []);
 
   return (

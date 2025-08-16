@@ -16,6 +16,7 @@ function getUserId() {
 function setUserId(id) {
   if (!id) return localStorage.removeItem(LS_USER_ID);
   localStorage.setItem(LS_USER_ID, id);
+  console.log('[api] set userId:', id);
 }
 
 function setTgProfile(obj) {
