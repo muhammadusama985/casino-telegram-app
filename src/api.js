@@ -170,3 +170,29 @@ export function pollBalance(onUpdate, intervalMs = 5000) {
   tick();
   return () => { alive = false; };
 }
+
+// --- Named exports expected by MainLayout.jsx ---
+// Uses Telegram WebApp.initData, calls backend /auth/login, returns normalized user
+export async function telegramAuth() {
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || "";
+
+  // auth.login sets localStorage userId for x-user-id header
+  const data = await auth.login(initData, tg?.initDataUnsafe?.user || null);
+  // Normalize to what MainLayout expects
+  return {
+    id: data._id,
+    username: data.username || tg?.initDataUnsafe?.user?.username || "Guest",
+    first_name: data.firstName || tg?.initDataUnsafe?.user?.first_name || "",
+    last_name: data.lastName || tg?.initDataUnsafe?.user?.last_name || "",
+    photo_url: data.photoUrl || tg?.initDataUnsafe?.user?.photo_url || "",
+    coins: data.coins ?? 0,
+  };
+}
+
+// Return a plain number for convenience in MainLayout
+export async function getBalance() {
+  const r = await wallet.getBalance();   // your wallet.getBalance() returns { coins }
+  return Number(r?.coins ?? 0);
+}
+
