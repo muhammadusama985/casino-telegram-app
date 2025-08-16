@@ -193,12 +193,12 @@ export async function telegramAuth() {
   };
 }
 
-// Return a plain number (not { coins }), and THROW on error so callers can ignore bad polls
+// replace your current getBalance with this numeric wrapper
 export async function getBalance() {
-  const r = await wallet.getBalance(); // -> { coins: <number> }
-  const val = r && typeof r.coins !== "undefined" ? r.coins : 0;
-  const num = typeof val === "number" ? val : Number(val);
+  const res = await api("/wallet/balance");   // -> { coins: <number or string> }
+  const num = Number(res?.coins);
   if (!Number.isFinite(num)) throw new Error("bad-balance");
-  return num;
+  return num;                                  // <- ALWAYS a number
 }
+
 

@@ -44,8 +44,9 @@ export default function MainLayout() {
 
         // 2) Confirm from backend once (now that x-user-id is set)
         try {
-          const c = await getBalance();          // throws on bad response
-          setCoins(toNum(c));
+           const c = await getBalance();
+ const next = (typeof c === "number") ? c : Number(c?.coins);
+ if (Number.isFinite(next)) setCoins(next);
         } catch {
           /* ignore single bad read */
         }
