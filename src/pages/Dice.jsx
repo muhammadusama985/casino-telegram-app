@@ -1,5 +1,6 @@
+// src/pages/Dice.jsx
 import { useEffect, useState } from "react";
-import { games, getBalance } from "../api"; // <-- uses your API client
+import { games, getBalance, users } from "../api"; // NOTE: users.getUserId()
 import diceRollSound from "../assets/diceRoll.mp3";
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
@@ -17,24 +18,43 @@ export default function Dice() {
   const [dice, setDice] = useState(1);
   const [guess, setGuess] = useState(1);
   const [bet, setBet] = useState(1);
-
-  // show a local balance on this screen too (TopBar is global)
-  const [balance, setBalance] = useState(0);
-
+  const [balance, setBalance] = useState(0);   // ← will be fetched
   const [result, setResult] = useState("");
   const [rolling, setRolling] = useState(false);
 
-  // initial balance from backend
+  // --- wait for login (userId), then fetch; also react to balance:refresh ---
   useEffect(() => {
-    (async () => {
+    let alive = true;
+
+    const fetchBalance = async () => {
       try {
-        const c = await getBalance(); // must return a Number in your api.js
-        if (Number.isFinite(c)) setBalance(c);
-      } catch {}
+        const c = await getBalance();          // returns Number (your fn)
+        if (alive && Number.isFinite(c)) setBalance(c);
+      } catch {
+        // ignore (e.g., network hiccup); we'll get it on next refresh or bet
+      }
+    };
+
+    (async function waitForLoginThenFetch() {
+      // poll until MainLayout's telegramAuth() has written userId
+      let tries = 0;
+      while (alive && !users.getUserId()) {
+        await new Promise(r => setTimeout(r, 250));
+        if (++tries > 80) break; // ~20s max guard
+      }
+      if (!alive) return;
+      await fetchBalance();
     })();
+
+    const onRefresh = () => fetchBalance();
+    window.addEventListener("balance:refresh", onRefresh);
+    return () => {
+      alive = false;
+      window.removeEventListener("balance:refresh", onRefresh);
+    };
   }, []);
 
-  // helper: safe ints
+  // helpers
   const toInt = (v, min, max) => {
     const n = Math.floor(Number(v || 0));
     if (!Number.isFinite(n)) return min;
@@ -44,75 +64,48 @@ export default function Dice() {
   const rollDice = async () => {
     const stake = toInt(bet, 1);
     const pick = toInt(guess, 1, 6);
-
     if (stake <= 0) return alert("Enter a valid bet (>= 1).");
-    if (pick < 1 || pick > 6) return alert("Your guess must be between 1 and 6.");
-
-    // local guard (server also enforces)
-    if (balance < stake) {
-      alert("Not enough coins.");
-      return;
-    }
+    if (pick < 1 || pick > 6) return alert("Your guess must be 1–6.");
+    if (balance < stake) return alert("Not enough coins.");
 
     setResult("");
     setRolling(true);
 
-    // start roll sfx + quick spin animation
-    try {
-      new Audio(diceRollSound).play().catch(() => {});
-    } catch {}
+    try { new Audio(diceRollSound).play().catch(() => {}); } catch {}
 
-    // spin animation frames while we wait for the server
+    // quick spin while waiting for server
     let frames = 0;
     const spin = setInterval(() => {
-      const r = Math.floor(Math.random() * 6) + 1;
-      setDice(r);
-      frames++;
-      if (frames >= 10) clearInterval(spin);
+      setDice(Math.floor(Math.random() * 6) + 1);
+      if (++frames >= 10) clearInterval(spin);
     }, 90);
 
     try {
-      // call backend: RTP-aware outcome comes from server
-      const res = await games.dice(stake, pick);
-      // res: { ok, result, payout, newBalance, details:{ roll, ... } }
-
-      // stop any residual spinner
+      // SERVER decides outcome & updates balance
+      const res = await games.dice(stake, pick); // -> { result, payout, newBalance, details.roll, ... }
       try { clearInterval(spin); } catch {}
 
-      // show the server roll if provided
-      const final = res?.details?.roll ? Number(res.details.roll) : Math.floor(Math.random() * 6) + 1;
+      const final = Number(res?.details?.roll) || Math.floor(Math.random() * 6) + 1;
       setDice(final);
 
-      // update local balance from server
-      if (Number.isFinite(res?.newBalance)) {
-        setBalance(res.newBalance);
-      }
+      if (Number.isFinite(res?.newBalance)) setBalance(res.newBalance);
 
-      // outcome UI + sounds
       if (res?.result === "win") {
         setResult(`🎉 You Win! +${res.payout}`);
         try { new Audio(winSound).play().catch(() => {}); } catch {}
-      } else if (res?.result === "loss") {
+      } else {
         setResult(`❌ You Lose! -${stake}`);
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
-      } else {
-        setResult("Round settled.");
       }
 
-      // nudge the global header to refresh too
+      // let the header update too
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
-      // map a few common server errors
-      const msg = e?.message || "";
-      if (msg.includes("insufficient-funds")) {
-        alert("Not enough coins.");
-      } else if (msg.includes("min-stake")) {
-        alert("Bet is below minimum.");
-      } else if (msg.includes("max-stake")) {
-        alert("Bet exceeds maximum.");
-      } else {
-        alert("Bet failed. Try again.");
-      }
+      const msg = String(e?.message || "");
+      if (msg.includes("insufficient-funds")) alert("Not enough coins.");
+      else if (msg.includes("min-stake")) alert("Bet is below minimum.");
+      else if (msg.includes("max-stake")) alert("Bet exceeds maximum.");
+      else alert("Bet failed. Try again.");
     } finally {
       setRolling(false);
     }
@@ -154,16 +147,8 @@ export default function Dice() {
         </div>
 
         {/* Dice Box */}
-        <div
-          className={`mb-8 p-6 rounded-xl bg-gradient-to-br from-yellow-900 via-yellow-600 to-amber-500 shadow-xl border border-yellow-400 transition-transform duration-300 ${
-            rolling ? "animate-pulse" : ""
-          }`}
-        >
-          <img
-            src={diceImages[dice - 1]}
-            alt={`Dice ${dice}`}
-            className="w-28 h-28 mx-auto rounded-lg shadow-lg"
-          />
+        <div className={`mb-8 p-6 rounded-xl bg-gradient-to-br from-yellow-900 via-yellow-600 to-amber-500 shadow-xl border border-yellow-400 transition-transform duration-300 ${rolling ? "animate-pulse" : ""}`}>
+          <img src={diceImages[dice - 1]} alt={`Dice ${dice}`} className="w-28 h-28 mx-auto rounded-lg shadow-lg" />
         </div>
 
         {/* Roll Button */}
@@ -172,9 +157,7 @@ export default function Dice() {
             onClick={rollDice}
             disabled={rolling}
             className={`px-6 py-3 rounded-xl font-bold text-lg shadow-md transition-all duration-200 ${
-              rolling
-                ? "bg-yellow-300 text-black opacity-70 cursor-not-allowed"
-                : "bg-yellow-500 hover:bg-yellow-400 text-black"
+              rolling ? "bg-yellow-300 text-black opacity-70 cursor-not-allowed" : "bg-yellow-500 hover:bg-yellow-400 text-black"
             }`}
           >
             {rolling ? "Rolling..." : "Roll Dice"}
@@ -185,11 +168,9 @@ export default function Dice() {
         {result && (
           <div
             className={`mt-6 px-6 py-4 text-center rounded-xl font-semibold text-lg ${
-              result.includes("Win")
-                ? "bg-green-600 text-white shadow-lg"
-                : result.includes("Lose")
-                ? "bg-red-600 text-white shadow-lg"
-                : "bg-zinc-800 text-white"
+              result.includes("Win") ? "bg-green-600 text-white shadow-lg" :
+              result.includes("Lose") ? "bg-red-600 text-white shadow-lg" :
+              "bg-zinc-800 text-white"
             }`}
           >
             {result}

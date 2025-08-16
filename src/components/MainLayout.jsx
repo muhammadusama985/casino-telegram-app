@@ -39,14 +39,16 @@ export default function MainLayout() {
         setUsername(name);
         setAvatar(u.photo_url || "/assets/avatar.png");
 
-        // Show DB coins immediately
-        setCoins(toNum(u.coins));
+        // Show DB coins from login payload ONLY if provided as a finite number
+        if (Number.isFinite(Number(u?.coins))) {
+          const initial = toNum(u.coins);
+          if (initial !== coins) setCoins(initial);
+        }
 
         // 2) Confirm from backend once (now that x-user-id is set)
         try {
-           const c = await getBalance();
- const next = (typeof c === "number") ? c : Number(c?.coins);
- if (Number.isFinite(next)) setCoins(next);
+          const c = await getBalance(); // your getBalance() returns a Number
+          if (Number.isFinite(c) && c !== coins) setCoins(c);
         } catch {
           /* ignore single bad read */
         }
@@ -59,7 +61,7 @@ export default function MainLayout() {
               if (!alive) return;
               try {
                 const c = await getBalance();
-                setCoins(toNum(c));             // only updates on success
+                if (Number.isFinite(c) && c !== coins) setCoins(c);
               } catch {
                 /* ignore failed poll; do not set 0 */
               } finally {
@@ -77,21 +79,27 @@ export default function MainLayout() {
     return () => {
       stopPolling?.();
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 🔔 Listen for Wallet.jsx -> window.dispatchEvent(new Event("balance:refresh"))
+  // 🔔 Listen for Wallet.jsx / game screens → window.dispatchEvent(new Event("balance:refresh"))
   useEffect(() => {
     const refresh = async () => {
       try {
         const c = await getBalance();
-        setCoins(toNum(c));
+        if (Number.isFinite(c) && c !== coins) setCoins(c);
       } catch {
         /* ignore errors so we don't overwrite with 0 */
       }
     };
     window.addEventListener("balance:refresh", refresh);
-    return () => window.removeEventListener("balance:refresh", refresh);
-  }, []);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") refresh();
+    });
+    return () => {
+      window.removeEventListener("balance:refresh", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [coins]); // depend on coins so we skip redundant sets
 
   return (
     <div className="min-h-screen bg-black text-white">
