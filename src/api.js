@@ -121,16 +121,45 @@ export const wallet = {
 // ---------- Games ----------
 export const games = {
   /**
-   * Place a bet
-   * @param {Object} p
-   * @param {'dice'|'slot'|'crash'|'coinflip'} p.game
-   * @param {number} p.stakeCoins
-   * @param {Object} [p.input] - game-specific input (e.g., { pick: 3 } for dice)
+   * Low-level bet call. Use the helpers below in UI code.
+   * @param {'dice'|'slot'|'crash'|'coinflip'} game
+   * @param {number} stakeCoins
+   * @param {Object} [input]
    */
   async bet({ game, stakeCoins, input }) {
-    return api("/games/bet", { method: "POST", body: { game, stakeCoins, input } });
+    // sanitize stake on the client (server floors too, but this avoids surprises)
+    const stake = Math.max(1, Math.floor(Number(stakeCoins || 0)));
+    return api("/games/bet", { method: "POST", body: { game, stakeCoins: stake, input } });
+  },
+
+  // --- Convenience wrappers (use these in components) ---
+
+  /** Coinflip: pick 'H' or 'T' */
+  coinflip(stakeCoins, pick = "H") {
+    return this.bet({ game: "coinflip", stakeCoins, input: { pick } });
+  },
+
+  /** Dice: pick 1..6 */
+  dice(stakeCoins, pick = 3) {
+    return this.bet({ game: "dice", stakeCoins, input: { pick } });
+  },
+
+  /** Slot: no input */
+  slot(stakeCoins) {
+    return this.bet({ game: "slot", stakeCoins });
+  },
+
+  /** Crash: choose a cashout multiplier (e.g. 1.8) */
+  crash(stakeCoins, cashoutX = 1.8) {
+    return this.bet({ game: "crash", stakeCoins, input: { cashoutX } });
+  },
+
+  /** Last 100 rounds for the user */
+  history() {
+    return api("/games/history");
   },
 };
+
 
 // ---------- Transactions / Users (optional expansion) ----------
 export const tx = {
@@ -200,5 +229,7 @@ export async function getBalance() {
   if (!Number.isFinite(num)) throw new Error("bad-balance");
   return num;                                  // <- ALWAYS a number
 }
+
+
 
 
