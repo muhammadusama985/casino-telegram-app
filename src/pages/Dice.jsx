@@ -1,6 +1,7 @@
 // src/pages/Dice.jsx
 import { useEffect, useState } from "react";
-import { games, getBalance, users } from "../api"; // NOTE: users.getUserId()
+import { useOutletContext } from "react-router-dom";
+import { games } from "../api"; // you already have games.dice(...)
 import diceRollSound from "../assets/diceRoll.mp3";
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
@@ -15,46 +16,15 @@ import dice6 from "../assets/6.jpg";
 const diceImages = [dice1, dice2, dice3, dice4, dice5, dice6];
 
 export default function Dice() {
+  // 👇 read global coins from MainLayout
+  const { coins, setCoins } = useOutletContext(); // { coins, setCoins }
   const [dice, setDice] = useState(1);
   const [guess, setGuess] = useState(1);
   const [bet, setBet] = useState(1);
-  const [balance, setBalance] = useState(0);   // ← will be fetched
   const [result, setResult] = useState("");
   const [rolling, setRolling] = useState(false);
 
-  // --- wait for login (userId), then fetch; also react to balance:refresh ---
-  useEffect(() => {
-    let alive = true;
-
-    const fetchBalance = async () => {
-      try {
-        const c = await getBalance();          // returns Number (your fn)
-        if (alive && Number.isFinite(c)) setBalance(c);
-      } catch {
-        // ignore (e.g., network hiccup); we'll get it on next refresh or bet
-      }
-    };
-
-    (async function waitForLoginThenFetch() {
-      // poll until MainLayout's telegramAuth() has written userId
-      let tries = 0;
-      while (alive && !users.getUserId()) {
-        await new Promise(r => setTimeout(r, 250));
-        if (++tries > 80) break; // ~20s max guard
-      }
-      if (!alive) return;
-      await fetchBalance();
-    })();
-
-    const onRefresh = () => fetchBalance();
-    window.addEventListener("balance:refresh", onRefresh);
-    return () => {
-      alive = false;
-      window.removeEventListener("balance:refresh", onRefresh);
-    };
-  }, []);
-
-  // helpers
+  // keep inputs sane
   const toInt = (v, min, max) => {
     const n = Math.floor(Number(v || 0));
     if (!Number.isFinite(n)) return min;
@@ -64,16 +34,16 @@ export default function Dice() {
   const rollDice = async () => {
     const stake = toInt(bet, 1);
     const pick = toInt(guess, 1, 6);
+
     if (stake <= 0) return alert("Enter a valid bet (>= 1).");
     if (pick < 1 || pick > 6) return alert("Your guess must be 1–6.");
-    if (balance < stake) return alert("Not enough coins.");
+    if (Number(coins) < stake) return alert("Not enough coins.");
 
     setResult("");
     setRolling(true);
 
+    // fun sfx + spinner while waiting for server
     try { new Audio(diceRollSound).play().catch(() => {}); } catch {}
-
-    // quick spin while waiting for server
     let frames = 0;
     const spin = setInterval(() => {
       setDice(Math.floor(Math.random() * 6) + 1);
@@ -81,14 +51,15 @@ export default function Dice() {
     }, 90);
 
     try {
-      // SERVER decides outcome & updates balance
-      const res = await games.dice(stake, pick); // -> { result, payout, newBalance, details.roll, ... }
+      // SERVER decides outcome & updates user balance; returns newBalance
+      const res = await games.dice(stake, pick); // { result, payout, newBalance, details:{roll}, ... }
       try { clearInterval(spin); } catch {}
 
       const final = Number(res?.details?.roll) || Math.floor(Math.random() * 6) + 1;
       setDice(final);
 
-      if (Number.isFinite(res?.newBalance)) setBalance(res.newBalance);
+      // 🔥 update GLOBAL balance immediately (no more local desync)
+      if (Number.isFinite(res?.newBalance)) setCoins(res.newBalance);
 
       if (res?.result === "win") {
         setResult(`🎉 You Win! +${res.payout}`);
@@ -98,7 +69,7 @@ export default function Dice() {
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
 
-      // let the header update too
+      // also tell anyone else (e.g., TopBar) to refresh
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
       const msg = String(e?.message || "");
@@ -117,7 +88,7 @@ export default function Dice() {
         <h1 className="text-4xl font-extrabold mb-6 text-center text-yellow-400">🎲 Dice Game</h1>
 
         <div className="text-2xl mb-6 text-center font-mono text-zinc-300">
-          Balance: <span className="text-yellow-500">{Number(balance).toFixed(0)} COIN</span>
+          Balance: <span className="text-yellow-500">{Number(coins).toFixed(0)} COIN</span>
         </div>
 
         {/* Inputs */}
