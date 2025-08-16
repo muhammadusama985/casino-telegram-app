@@ -1,6 +1,6 @@
 import { Outlet } from "react-router-dom";
-import BottomNav from "./BottomNav";
-import TopBar from "./TopBar";
+import BottomNav from "../components/BottomNav";
+import TopBar from "../components/TopBar";
 import WebApp from "@twa-dev/sdk";
 import { useEffect, useState } from "react";
 import { telegramAuth, getBalance } from "../api"; // <-- NEW
