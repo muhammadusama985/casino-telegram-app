@@ -153,16 +153,16 @@ export const users = {
  * Poll user balance every `intervalMs` and invoke `onUpdate(coins)`
  * Returns a stop function.
  */
-export function pollBalance(onUpdate, intervalMs = 5000) {
+// Poll using the numeric getBalance() wrapper
+export function pollBalance(onUpdate, intervalMs = 4000) {
   let alive = true;
 
   async function tick() {
     try {
-      const { coins } = await wallet.getBalance();
+      const coins = await getBalance(); // number
       if (alive) onUpdate?.(coins);
-    } catch (e) {
-      // swallow or surface as toast
-      // console.warn("pollBalance error:", e.message);
+    } catch {
+      // ignore
     } finally {
       if (alive) setTimeout(tick, intervalMs);
     }
@@ -191,9 +191,15 @@ export async function telegramAuth() {
   };
 }
 
-// Return a plain number for convenience in MainLayout
+// Return a plain number (not { coins: ... })
 export async function getBalance() {
-  const r = await wallet.getBalance();   // your wallet.getBalance() returns { coins }
-  return Number(r?.coins ?? 0);
+  try {
+    const r = await wallet.getBalance(); // -> { coins: <number> }
+    const val = r && typeof r.coins !== "undefined" ? r.coins : 0;
+    const num = typeof val === "number" ? val : Number(val);
+    return Number.isFinite(num) ? num : 0;
+  } catch {
+    return 0;
+  }
 }
 
