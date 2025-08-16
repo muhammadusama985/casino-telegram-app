@@ -12,29 +12,33 @@ export default function TopBar({
   className = "",
 }) {
   return (
-    <div className={`px-4 pt-3 pb-3 sticky top-0 z-40 bg-[#0e0e10] ${className}`}>
+    <div className={`px-4 pt-4 pb-4 sticky top-0 z-40 bg-[#0e0e10] ${className}`}>
       <div className="flex items-center justify-between">
-        {/* LEFT: Welcome message with avatar */}
+        {/* LEFT: Welcome message */}
         <div className="flex items-center gap-2">
-          <span className="text-sm text-white">Welcome, {username}</span>
+          <span className="text-sm sm:text-base text-white">Welcome, {username}</span>
         </div>
 
-        {/* RIGHT: Balance pill + Avatar + Optional menu */}
-        <div className="flex items-center gap-3">
+        {/* RIGHT: Bigger Balance pill + Avatar + Optional menu */}
+        <div className="flex items-center gap-4">
           <button
             onClick={onCurrencyClick}
-            className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 active:scale-[0.99]"
+            className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl px-5 py-3 active:scale-[0.99] shadow-sm"
+            aria-label="Balance"
           >
-            <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-600 text-white text-xs">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-600 text-white text-sm">
               {currency?.[0] ?? "T"}
             </span>
-            <span className="font-mono text-sm text-white">{balance}</span>
-            <span className="text-zinc-400">▾</span>
+            <span className="font-mono text-lg text-white leading-none tabular-nums min-w-[64px] text-right">
+              {balance}
+            </span>
+            <span className="text-zinc-400 text-base">▾</span>
           </button>
 
           <button
             onClick={onAvatarClick}
-            className="h-9 w-9 rounded-full overflow-hidden border border-zinc-700"
+            className="h-10 w-10 rounded-full overflow-hidden border border-zinc-700"
+            aria-label="Profile"
           >
             <img src={avatarUrl} alt="avatar" className="h-full w-full object-cover" />
           </button>
