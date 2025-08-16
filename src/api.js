@@ -153,23 +153,25 @@ export const users = {
  * Poll user balance every `intervalMs` and invoke `onUpdate(coins)`
  * Returns a stop function.
  */
-// Poll using the numeric getBalance() wrapper
+// Poll AFTER login; do NOT call onUpdate if fetch fails
 export function pollBalance(onUpdate, intervalMs = 4000) {
   let alive = true;
 
   async function tick() {
     try {
       const coins = await getBalance(); // number
-      if (alive) onUpdate?.(coins);
+      if (alive && Number.isFinite(coins)) onUpdate?.(coins);
     } catch {
-      // ignore
+      // swallow errors; don't push 0 into UI
     } finally {
       if (alive) setTimeout(tick, intervalMs);
     }
   }
 
-  tick();
-  return () => { alive = false; };
+  // caller will start this AFTER login
+  return () => {
+    // noop until started
+  };
 }
 
 // --- Named exports expected by MainLayout.jsx ---
@@ -191,15 +193,12 @@ export async function telegramAuth() {
   };
 }
 
-// Return a plain number (not { coins: ... })
+// Return a plain number (not { coins }), and THROW on error so callers can ignore bad polls
 export async function getBalance() {
-  try {
-    const r = await wallet.getBalance(); // -> { coins: <number> }
-    const val = r && typeof r.coins !== "undefined" ? r.coins : 0;
-    const num = typeof val === "number" ? val : Number(val);
-    return Number.isFinite(num) ? num : 0;
-  } catch {
-    return 0;
-  }
+  const r = await wallet.getBalance(); // -> { coins: <number> }
+  const val = r && typeof r.coins !== "undefined" ? r.coins : 0;
+  const num = typeof val === "number" ? val : Number(val);
+  if (!Number.isFinite(num)) throw new Error("bad-balance");
+  return num;
 }
 

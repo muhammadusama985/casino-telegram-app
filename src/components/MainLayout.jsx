@@ -4,7 +4,7 @@ import BottomNav from "../components/BottomNav";
 import TopBar from "../components/TopBar";
 import WebApp from "@twa-dev/sdk";
 import { useEffect, useState } from "react";
-import { telegramAuth, getBalance, pollBalance } from "../api";
+import { telegramAuth, getBalance } from "../api";
 
 function toNum(v) {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -18,7 +18,6 @@ export default function MainLayout() {
   const [coins, setCoins] = useState(0);
 
   useEffect(() => {
-    // Telegram UI polish
     try {
       WebApp.ready();
       WebApp.expand();
@@ -26,20 +25,12 @@ export default function MainLayout() {
       WebApp.setBackgroundColor("#000000");
     } catch {}
 
+    let stopPolling = () => {};
+
     (async () => {
       try {
-        const tg = window.Telegram?.WebApp;
-        console.log(
-          "[FE] has tg?",
-          !!tg,
-          "initData length:",
-          tg?.initData?.length || 0,
-          tg?.initDataUnsafe?.user
-        );
-
-        // 1) Login with backend; returns user incl. coins
-        const u = await telegramAuth(); // sets localStorage.userId
-        console.log("[FE] userId in LS after login:", localStorage.getItem("userId"));
+        // 1) Login → sets localStorage.userId
+        const u = await telegramAuth();
 
         const name =
           u.first_name && u.last_name
@@ -48,24 +39,57 @@ export default function MainLayout() {
         setUsername(name);
         setAvatar(u.photo_url || "/assets/avatar.png");
 
-        // Set coins from login payload (numeric guard)
+        // Show DB coins immediately
         setCoins(toNum(u.coins));
+
+        // 2) Confirm from backend once (now that x-user-id is set)
+        try {
+          const c = await getBalance();          // throws on bad response
+          setCoins(toNum(c));
+        } catch {
+          /* ignore single bad read */
+        }
+
+        // 3) Start polling ONLY AFTER login succeeded
+        stopPolling = (() => {
+          let alive = true;
+          (function tick() {
+            setTimeout(async () => {
+              if (!alive) return;
+              try {
+                const c = await getBalance();
+                setCoins(toNum(c));             // only updates on success
+              } catch {
+                /* ignore failed poll; do not set 0 */
+              } finally {
+                if (alive) tick();
+              }
+            }, 4000);
+          })();
+          return () => { alive = false; };
+        })();
       } catch (e) {
         console.error("[FE] telegramAuth failed:", e);
       }
+    })();
 
-      // 2) Defensive: fetch balance from backend (numeric)
+    return () => {
+      stopPolling?.();
+    };
+  }, []);
+
+  // 🔔 Listen for Wallet.jsx -> window.dispatchEvent(new Event("balance:refresh"))
+  useEffect(() => {
+    const refresh = async () => {
       try {
         const c = await getBalance();
         setCoins(toNum(c));
-      } catch (e) {
-        console.error("[FE] getBalance failed:", e);
+      } catch {
+        /* ignore errors so we don't overwrite with 0 */
       }
-    })();
-
-    // 3) Auto-refresh every 4s
-    const stop = pollBalance((c) => setCoins(toNum(c)), 4000);
-    return () => stop();
+    };
+    window.addEventListener("balance:refresh", refresh);
+    return () => window.removeEventListener("balance:refresh", refresh);
   }, []);
 
   return (
@@ -77,8 +101,8 @@ export default function MainLayout() {
 
       {/* TopBar gets live coins */}
       <TopBar
-        balance={String(coins)}          // in-app coins
-        currency="COIN"                  // label matches your DB 'coins'
+        balance={String(coins)}          // in-app coins from DB
+        currency="COIN"
         username={username}
         avatarUrl={avatar}
         onCurrencyClick={() => console.log("open currency selector")}
