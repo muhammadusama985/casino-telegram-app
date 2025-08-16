@@ -120,8 +120,7 @@ export default function MainLayout() {
       />
 
       <div className="px-4 pt-2 pb-[84px]">
-        {/* share coins + setter with all pages */}
-       <Outlet context={{ coins, setCoins }} />
+        <Outlet />
       </div>
 
       <BottomNav />
