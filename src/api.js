@@ -175,6 +175,11 @@ export const users = {
     const raw = localStorage.getItem(LS_TG_PROFILE);
     try { return raw ? JSON.parse(raw) : null; } catch { return null; }
   },
+  async me() {
+    const r = await api("/users/me");         // -> { user: {...} }
+    if (!r?.user) throw new Error("no-user");
+    return r.user;                             // return full user doc (with coins)
+  },
 };
 
 // ---------- Convenience: polling helpers ----------

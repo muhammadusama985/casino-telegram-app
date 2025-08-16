@@ -1,6 +1,6 @@
 // src/pages/Dice.jsx
 import { useEffect, useState } from "react";
-import { games, getBalance, users } from "../api"; // <-- getBalance + users.getUserId
+import { games, users } from "../api"; // 👈 use users.me()
 import diceRollSound from "../assets/diceRoll.mp3";
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
@@ -14,105 +14,71 @@ import dice6 from "../assets/6.jpg";
 
 const diceImages = [dice1, dice2, dice3, dice4, dice5, dice6];
 
-function toNum(v) {
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
+const clampInt = (v, min, max) => {
+  const n = Math.floor(Number(v || 0));
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max ?? n, n));
+};
 
 export default function Dice() {
-  // ---- dice UI state ----
   const [dice, setDice] = useState(1);
   const [guess, setGuess] = useState(1);
   const [bet, setBet] = useState(1);
+
+  // ← this is the REAL coins value from Mongo via /users/me
+  const [coins, setCoins] = useState(0);
+
   const [result, setResult] = useState("");
   const [rolling, setRolling] = useState(false);
 
-  // ---- COINS (same logic style as MainLayout) ----
-  const [coins, setCoins] = useState(0);
-
+  // Boot: wait for login, then fetch the user doc (coins from Mongo)
   useEffect(() => {
-    let stopPolling = () => {};
-    let mounted = true;
-
-    // Wait for login (x-user-id present), then fetch balance
+    let alive = true;
     (async () => {
+      // wait for MainLayout's telegramAuth to store userId
+      let tries = 0;
+      while (alive && !users.getUserId()) {
+        await new Promise(r => setTimeout(r, 250));
+        if (++tries > 80) break;
+      }
+      if (!alive) return;
+
       try {
-        // 🕒 wait for telegramAuth() in MainLayout to set localStorage.userId
-        let tries = 0;
-        while (mounted && !users.getUserId()) {
-          await new Promise(r => setTimeout(r, 250));
-          if (++tries > 80) break; // ~20s cap
+        const me = await users.me();         // -> { _id, coins, ... }
+        if (alive && Number.isFinite(Number(me?.coins))) {
+          setCoins(Number(me.coins));
         }
-
-        // 1) initial confirm from backend (now that x-user-id is set)
-        try {
-          const c = await getBalance(); // returns Number in your api.js
-          if (mounted && Number.isFinite(c) && c !== coins) setCoins(c);
-        } catch {
-          /* ignore single bad read */
-        }
-
-        // 2) start polling (same cadence & guards as MainLayout)
-        stopPolling = (() => {
-          let alive = true;
-          (function tick() {
-            setTimeout(async () => {
-              if (!alive) return;
-              try {
-                const c = await getBalance();
-                if (Number.isFinite(c)) setCoins(prev => (c !== prev ? c : prev));
-              } catch {
-                /* ignore failed poll; do not set 0 */
-              } finally {
-                if (alive) tick();
-              }
-            }, 4000);
-          })();
-          return () => { alive = false; };
-        })();
       } catch (e) {
-        console.error("[Dice] balance bootstrap failed:", e);
+        console.warn("[Dice] users.me() failed:", e?.message || e);
       }
     })();
-
-    return () => {
-      mounted = false;
-      stopPolling?.();
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Listen for global refresh events (same idea as MainLayout)
-  useEffect(() => {
-    const refresh = async () => {
-      try {
-        const c = await getBalance();
-        if (Number.isFinite(c)) setCoins(prev => (c !== prev ? c : prev));
-      } catch {
-        /* ignore */
-      }
-    };
-    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
-
-    window.addEventListener("balance:refresh", refresh);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.removeEventListener("balance:refresh", refresh);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
+    return () => { alive = false; };
   }, []);
 
-  // helpers
-  const clampInt = (v, min, max) => {
-    const n = Math.floor(Number(v || 0));
-    if (!Number.isFinite(n)) return min;
-    return Math.max(min, Math.min(max ?? n, n));
-  };
+  // Also refresh coins if other screens trigger a change
+  useEffect(() => {
+    const refreshFromMe = async () => {
+      try {
+        const me = await users.me();
+        if (Number.isFinite(Number(me?.coins))) setCoins(prev => {
+          const n = Number(me.coins);
+          return n !== prev ? n : prev;
+        });
+      } catch {}
+    };
+    window.addEventListener("balance:refresh", refreshFromMe);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") refreshFromMe();
+    });
+    return () => {
+      window.removeEventListener("balance:refresh", refreshFromMe);
+      document.removeEventListener("visibilitychange", refreshFromMe);
+    };
+  }, []);
 
   const rollDice = async () => {
     const stake = clampInt(bet, 1);
     const pick = clampInt(guess, 1, 6);
-
     if (stake <= 0) return alert("Enter a valid bet (>= 1).");
     if (pick < 1 || pick > 6) return alert("Your guess must be 1–6.");
     if (Number(coins) < stake) return alert("Not enough coins.");
@@ -120,8 +86,9 @@ export default function Dice() {
     setResult("");
     setRolling(true);
 
-    // spin + sfx while waiting for server
     try { new Audio(diceRollSound).play().catch(() => {}); } catch {}
+
+    // spin while awaiting server
     let frames = 0;
     const spin = setInterval(() => {
       setDice(Math.floor(Math.random() * 6) + 1);
@@ -129,17 +96,14 @@ export default function Dice() {
     }, 90);
 
     try {
-      // SERVER decides outcome & updates balance
-      const res = await games.dice(stake, pick); // { result, payout, newBalance, details:{roll}, ... }
+      const res = await games.dice(stake, pick); // server decides, updates Mongo, returns newBalance
       try { clearInterval(spin); } catch {}
 
       const final = Number(res?.details?.roll) || Math.floor(Math.random() * 6) + 1;
       setDice(final);
 
-      // Update our coins with server truth (same as MainLayout behavior)
-      if (Number.isFinite(res?.newBalance)) {
-        setCoins(prev => (res.newBalance !== prev ? res.newBalance : prev));
-      }
+      // Apply server truth from Mongo immediately
+      if (Number.isFinite(res?.newBalance)) setCoins(res.newBalance);
 
       if (res?.result === "win") {
         setResult(`🎉 You Win! +${res.payout}`);
@@ -149,7 +113,7 @@ export default function Dice() {
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
 
-      // Tell the rest of the app (TopBar/MainLayout) to refresh too
+      // Let TopBar/MainLayout update too
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
       const msg = String(e?.message || "");
@@ -168,12 +132,12 @@ export default function Dice() {
         <h1 className="text-4xl font-extrabold mb-6 text-center text-yellow-400">🎲 Dice Game</h1>
 
         <div className="text-2xl mb-6 text-center font-mono text-zinc-300">
-          Balance: <span className="text-yellow-500">{toNum(coins).toFixed(0)} COIN</span>
+          Balance: <span className="text-yellow-500">{Number(coins).toFixed(0)} COIN</span>
         </div>
 
         {/* Inputs */}
         <div className="flex flex-col md:flex-row justify-center items-center gap-6 mb-8">
-          <div className="w-full md:w-auto bg-zinc-900/50 backdrop-blur-lg p-4 rounded-xl border border-zinc-700 shadow-inner">
+          <div className="w-full md:w-auto bg-zinc-900/50 p-4 rounded-xl border border-zinc-700 shadow-inner">
             <label className="block mb-1 text-sm font-semibold text-zinc-300">Bet (coins):</label>
             <input
               type="number"
@@ -184,7 +148,7 @@ export default function Dice() {
             />
           </div>
 
-          <div className="w-full md:w-auto bg-zinc-900/50 backdrop-blur-lg p-4 rounded-xl border border-zinc-700 shadow-inner">
+          <div className="w-full md:w-auto bg-zinc-900/50 p-4 rounded-xl border border-zinc-700 shadow-inner">
             <label className="block mb-1 text-sm font-semibold text-zinc-300">Your Guess (1–6):</label>
             <input
               type="number"
@@ -198,7 +162,7 @@ export default function Dice() {
         </div>
 
         {/* Dice Box */}
-        <div className={`mb-8 p-6 rounded-xl bg-gradient-to-br from-yellow-900 via-yellow-600 to-amber-500 shadow-xl border border-yellow-400 transition-transform duration-300 ${rolling ? "animate-pulse" : ""}`}>
+        <div className={`mb-8 p-6 rounded-xl bg-gradient-to-br from-yellow-900 via-yellow-600 to-amber-500 shadow-xl border border-yellow-400 ${rolling ? "animate-pulse" : ""}`}>
           <img src={diceImages[dice - 1]} alt={`Dice ${dice}`} className="w-28 h-28 mx-auto rounded-lg shadow-lg" />
         </div>
 
@@ -219,9 +183,9 @@ export default function Dice() {
         {result && (
           <div
             className={`mt-6 px-6 py-4 text-center rounded-xl font-semibold text-lg ${
-              result.includes("Win") ? "bg-green-600 text-white shadow-lg" :
-              result.includes("Lose") ? "bg-red-600 text-white shadow-lg" :
-              "bg-zinc-800 text-white"
+              result.includes("Win") ? "bg-green-600 text-white shadow-lg"
+              : result.includes("Lose") ? "bg-red-600 text-white shadow-lg"
+              : "bg-zinc-800 text-white"
             }`}
           >
             {result}
