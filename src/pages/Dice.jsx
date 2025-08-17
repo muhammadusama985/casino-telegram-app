@@ -204,8 +204,21 @@ export default function Dice() {
               type="number"
               min="1"
               max="6"
+              step="1"
+              inputMode="numeric"
               value={guess}
-              onChange={(e) => setGuess(clampInt(e.target.value, 1, 6))}
+              onChange={(e) => {
+                const raw = e.target.value;
+                // allow empty while typing
+                if (raw === "" || raw == null) {
+                  setGuess(1);
+                  return;
+                }
+                const n = Number(raw);
+                if (!Number.isFinite(n)) return;
+                const clamped = Math.max(1, Math.min(6, Math.floor(n)));
+                setGuess(clamped);
+              }}
               className="text-black w-full px-3 py-2 rounded bg-white font-bold"
             />
           </div>
