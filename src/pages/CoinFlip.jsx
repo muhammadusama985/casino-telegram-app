@@ -136,9 +136,10 @@ export default function FlipCoin() {
         setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
       }
 
-      // Outcome UI
-      if (res?.result === "win") {
-        setResult(`🎉 You Win! +${res.payout}`);
+      // 🔴 KEY CHANGE: decide win/lose by comparing your pick with the landed side
+      const isWin = landed === pick;
+      if (isWin) {
+        setResult(`🎉 You Win! +${res?.payout ?? 0}`);
       } else {
         setResult(`❌ You Lose! -${stake}`);
       }
