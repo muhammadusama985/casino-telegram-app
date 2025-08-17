@@ -27,7 +27,8 @@ export default function Dice() {
 
   // ---- dice UI state ----
   const [dice, setDice] = useState(1);
-  const [guess, setGuess] = useState(1);
+  const [guess, setGuess] = useState(1);     // numeric guess used for bets
+  const [guessStr, setGuessStr] = useState("1"); // text shown in the input (fixes 1/6 jump)
   const [bet, setBet] = useState(1);
   const [result, setResult] = useState("");
   const [rolling, setRolling] = useState(false);
@@ -116,7 +117,7 @@ export default function Dice() {
   // ---------- roll / bet ----------
   const rollDice = async () => {
     const stake = clampInt(bet, 1);
-    const pick = clampInt(guess, 1, 6);
+    const pick = clampInt(guess, 1, 6); // numeric guess derived from guessStr
 
     if (stake <= 0) return alert("Enter a valid bet (>= 1).");
     if (pick < 1 || pick > 6) return alert("Your guess must be 1–6.");
@@ -206,18 +207,27 @@ export default function Dice() {
               max="6"
               step="1"
               inputMode="numeric"
-              value={guess}
+              value={guessStr}
               onChange={(e) => {
-                const raw = e.target.value;
+                const v = e.target.value;
                 // allow empty while typing
-                if (raw === "" || raw == null) {
-                  setGuess(1);
+                if (v === "") {
+                  setGuessStr("");
                   return;
                 }
-                const n = Number(raw);
-                if (!Number.isFinite(n)) return;
-                const clamped = Math.max(1, Math.min(6, Math.floor(n)));
-                setGuess(clamped);
+                // accept only single digit 1..6
+                if (/^[1-6]$/.test(v)) {
+                  setGuessStr(v);
+                  setGuess(Number(v));
+                }
+                // ignore anything else (prevents jumping to 6)
+              }}
+              onBlur={() => {
+                // normalize empty or invalid to 1
+                if (!/^[1-6]$/.test(guessStr)) {
+                  setGuessStr("1");
+                  setGuess(1);
+                }
               }}
               className="text-black w-full px-3 py-2 rounded bg-white font-bold"
             />
