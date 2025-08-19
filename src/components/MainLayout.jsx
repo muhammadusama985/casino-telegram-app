@@ -12,6 +12,13 @@ function toNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+// NEW: format balance with up to 2 decimals (no trailing zeros)
+function formatCoins(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "0";
+  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
 export default function MainLayout() {
   const [username, setUsername] = useState("Guest");
   const [avatar, setAvatar] = useState("/assets/avatar.png");
@@ -110,7 +117,7 @@ export default function MainLayout() {
 
       {/* TopBar gets live coins */}
       <TopBar
-        balance={String(coins)}          // in-app coins from DB
+        balance={formatCoins(coins)}    // <-- show decimals when present
         currency="COIN"
         username={username}
         avatarUrl={avatar}

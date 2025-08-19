@@ -15,10 +15,17 @@ import dice6 from "../assets/6.jpg";
 
 const diceImages = [dice1, dice2, dice3, dice4, dice5, dice6];
 
+// ---- helpers ----
 function toNum(v) {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+function formatCoins(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "0";
+  // Show up to 2 decimals without trailing zeros (e.g., 9 -> "9", 9.5 -> "9.5", 9.57 -> "9.57")
+  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 export default function Dice() {
@@ -38,7 +45,7 @@ export default function Dice() {
   // win chance (for display only)
   const winChance = Math.max(1, Math.min(99, modeOver ? 100 - threshold : threshold));
 
-  // STICKY base multiplier: not tied to slider/toggle; only win-streak changes it
+  // STICKY base multiplier (unchanged)
   const [baseMultiplier] = useState(() => {
     const initialWinChance = Math.max(1, Math.min(99, 100 - 42)); // 58
     return Number(((100 / initialWinChance) * 0.93).toFixed(2));  // ≈ 1.60
@@ -48,7 +55,7 @@ export default function Dice() {
   const [streak, setStreak] = useState(0);
   const currentMultiplier = Number((baseMultiplier * (1 + 0.05 * streak)).toFixed(2));
 
-  // UI payout display = 90% of bet (per your request)
+  // UI payout display = 90% of bet
   const displayPayout = Number((bet * 0.90).toFixed(2));
 
   // keep your previous 1–6 mapping so server stays happy
@@ -138,7 +145,7 @@ export default function Dice() {
     }, 90);
 
     try {
-      // keep original signature; pass mode/threshold as 3rd optional arg if your API supports it
+      // send mode/threshold so backend uses new dice path
       const guessForServer = sliderToGuess(threshold);
       const res = await games.dice(stake, guessForServer, { mode: modeOver ? "over" : "under", threshold });
 
@@ -151,21 +158,21 @@ export default function Dice() {
       }
 
       if (res?.result === "win") {
-        setStreak((s) => s + 1); // increase streak → multiplier grows
+        setStreak((s) => s + 1);
         const msg = `🎉 You Win! +${res.payout}`;
         setResult(msg);
         try { new Audio(winSound).play().catch(() => {}); } catch {}
-        alert(msg); // requested alert on win
+        alert(msg);
       } else {
-        setStreak(0); // reset on loss
+        setStreak(0);
         const msg = `❌ You Lose! -${stake}`;
         setResult(msg);
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
-        alert(msg); // requested alert on loss
+        alert(msg);
       }
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
-      setStreak(0); // on error, also reset
+      setStreak(0);
       const msg = String(e?.message || "");
       if (msg.includes("insufficient-funds")) alert("Not enough coins.");
       else if (msg.includes("min-stake")) alert("Bet is below minimum.");
@@ -183,7 +190,7 @@ export default function Dice() {
       <div className="flex items-center justify-between px-4 py-3">
         <div className="text-sm">
           <span className="opacity-70 mr-2">Coins: </span>
-          <span className="font-bold">{toNum(coins).toFixed(0)}</span>
+          <span className="font-bold">{formatCoins(coins)}</span>
         </div>
       </div>
 
