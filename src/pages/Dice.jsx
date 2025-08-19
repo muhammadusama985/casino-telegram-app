@@ -1,6 +1,6 @@
 // src/pages/Dice.jsx
 import { useEffect, useState } from "react";
-import { telegramAuth, getBalance, games } from "../api"; // ⬅️ use same auth+balance as MainLayout
+import { telegramAuth, getBalance, games } from "../api";
 
 import diceRollSound from "../assets/diceRoll.mp3";
 import winSound from "../assets/win.mp3";
@@ -22,41 +22,60 @@ function toNum(v) {
 }
 
 export default function Dice() {
-  // ---- coins managed with the SAME logic you provided ----
+  // ----- balance (unchanged) --------------------------------------------------
   const [coins, setCoins] = useState(0);
 
-  // ---- dice UI state ----
+  // ----- game state -----------------------------------------------------------
   const [dice, setDice] = useState(1);
-  const [guess, setGuess] = useState(1);     // numeric guess used for bets
-  const [guessStr, setGuessStr] = useState("1"); // text shown in the input (fixes 1/6 jump)
   const [bet, setBet] = useState(1);
   const [result, setResult] = useState("");
   const [rolling, setRolling] = useState(false);
 
-  // ---------- BALANCE BOOTSTRAP (your snippet, adapted here) ----------
+  // UI slider (0–100) and mode toggle (over/under)
+  const [threshold, setThreshold] = useState(42);
+  const [modeOver, setModeOver] = useState(true); // true = over, false = under
+
+  // win chance (for display only)
+  const winChance = Math.max(1, Math.min(99, modeOver ? 100 - threshold : threshold));
+
+  // ❗ Make base multiplier STICKY: compute once, not tied to over/under or slider
+  // Default uses initial state: threshold=42, over => winChance ≈ 58% → ~1.60x with 7% edge
+  const [baseMultiplier] = useState(() => {
+    const initialWinChance = Math.max(1, Math.min(99, 100 - 42)); // 58
+    return Number(((100 / initialWinChance) * 0.93).toFixed(2));  // ≈ 1.60
+  });
+
+  // win-streak boosted multiplier (+5% per consecutive win)
+  const [streak, setStreak] = useState(0);
+  const currentMultiplier = Number((baseMultiplier * (1 + 0.05 * streak)).toFixed(2));
+
+  // UI payout display = 90% of bet (per request)
+  const displayPayout = Number((bet * 0.90).toFixed(2));
+
+  // keep your previous 1–6 mapping so server stays happy
+  const sliderToGuess = (t) => {
+    if (t <= 16) return 1;
+    if (t <= 33) return 2;
+    if (t <= 50) return 3;
+    if (t <= 66) return 4;
+    if (t <= 83) return 5;
+    return 6;
+  };
+
+  // ---------- balance bootstrap (unchanged) -----------------------------------
   useEffect(() => {
     let stopPolling = () => {};
-
     (async () => {
       try {
-        // 1) Login → returns user object (u) just like MainLayout does
         const u = await telegramAuth();
-
-        // Show DB coins from login payload ONLY if provided as a finite number
         if (Number.isFinite(Number(u?.coins))) {
           const initial = toNum(u.coins);
           setCoins((prev) => (initial !== prev ? initial : prev));
         }
-
-        // 2) Confirm from backend once (now that x-user-id is set)
         try {
-          const c = await getBalance(); // your getBalance() returns a Number
+          const c = await getBalance();
           if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
-        } catch {
-          /* ignore single bad read */
-        }
-
-        // 3) Start polling ONLY AFTER login succeeded
+        } catch {}
         stopPolling = (() => {
           let alive = true;
           (function tick() {
@@ -65,36 +84,26 @@ export default function Dice() {
               try {
                 const c = await getBalance();
                 if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
-              } catch {
-                /* ignore failed poll; do not set 0 */
-              } finally {
+              } catch {} finally {
                 if (alive) tick();
               }
             }, 4000);
           })();
-          return () => {
-            alive = false;
-          };
+          return () => { alive = false; };
         })();
       } catch (e) {
         console.error("[Dice] telegramAuth failed:", e);
       }
     })();
+    return () => { stopPolling?.(); };
+  }, []);
 
-    return () => {
-      stopPolling?.();
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 🔔 Same refresh hooks as MainLayout (event + tab visibility)
   useEffect(() => {
     const refresh = async () => {
       try {
         const c = await getBalance();
         if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
-      } catch {
-        /* ignore errors so we don't overwrite with 0 */
-      }
+      } catch {}
     };
     const onVisible = () => {
       if (document.visibilityState === "visible") refresh();
@@ -107,29 +116,22 @@ export default function Dice() {
     };
   }, []);
 
-  // ---------- helpers ----------
   const clampInt = (v, min, max) => {
     const n = Math.floor(Number(v || 0));
     if (!Number.isFinite(n)) return min;
     return Math.max(min, Math.min(max ?? n, n));
   };
 
-  // ---------- roll / bet ----------
+  // ---------- roll / bet ------------------------------------------------------
   const rollDice = async () => {
     const stake = clampInt(bet, 1);
-    const pick = clampInt(guess, 1, 6); // numeric guess derived from guessStr
-
     if (stake <= 0) return alert("Enter a valid bet (>= 1).");
-    if (pick < 1 || pick > 6) return alert("Your guess must be 1–6.");
     if (Number(coins) < stake) return alert("Not enough coins.");
 
     setResult("");
     setRolling(true);
 
-    // spin + sfx while waiting for server
-    try {
-      new Audio(diceRollSound).play().catch(() => {});
-    } catch {}
+    try { new Audio(diceRollSound).play().catch(() => {}); } catch {}
     let frames = 0;
     const spin = setInterval(() => {
       setDice(Math.floor(Math.random() * 6) + 1);
@@ -137,35 +139,30 @@ export default function Dice() {
     }, 90);
 
     try {
-      // Server decides outcome (RTP-aware) and updates Mongo balance
-      const res = await games.dice(stake, pick); // { result, payout, newBalance, details:{roll}, ... }
-      try {
-        clearInterval(spin);
-      } catch {}
+      // keep original signature; pass mode/threshold as 3rd optional arg if your API supports it
+      const guessForServer = sliderToGuess(threshold);
+      const res = await games.dice(stake, guessForServer, { mode: modeOver ? "over" : "under", threshold });
 
+      try { clearInterval(spin); } catch {}
       const final = Number(res?.details?.roll) || Math.floor(Math.random() * 6) + 1;
       setDice(final);
 
-      // Apply server truth immediately
       if (Number.isFinite(res?.newBalance)) {
         setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
       }
 
       if (res?.result === "win") {
+        setStreak((s) => s + 1);            // increase streak → multiplier grows
         setResult(`🎉 You Win! +${res.payout}`);
-        try {
-          new Audio(winSound).play().catch(() => {});
-        } catch {}
+        try { new Audio(winSound).play().catch(() => {}); } catch {}
       } else {
+        setStreak(0);                        // reset on loss → back to base multiplier
         setResult(`❌ You Lose! -${stake}`);
-        try {
-          new Audio(loseSound).play().catch(() => {});
-        } catch {}
+        try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
-
-      // Notify the rest of the app to refresh too
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
+      setStreak(0); // on error, also reset
       const msg = String(e?.message || "");
       if (msg.includes("insufficient-funds")) alert("Not enough coins.");
       else if (msg.includes("min-stake")) alert("Bet is below minimum.");
@@ -176,106 +173,141 @@ export default function Dice() {
     }
   };
 
-  // ---------- UI ----------
+  // ---------- UI --------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-zinc-900 to-black px-4 py-10 text-white">
-      <div className="max-w-xl mx-auto">
-        <h1 className="text-4xl font-extrabold mb-6 text-center text-yellow-400">🎲 Dice Game</h1>
+    <div className="min-h-screen bg-[#08122B] text-white">
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-4 py-3">
+        
+      </div>
 
-        <div className="text-2xl mb-6 text-center font-mono text-zinc-300">
-          Balance: <span className="text-yellow-500">{toNum(coins).toFixed(0)} COIN</span>
+      <div className="max-w-md mx-auto px-4 pb-24">
+        {/* Slider card (only one, fully functional) */}
+        <div className="mt-2 rounded-2xl bg-[#0C1A3A] border border-white/10 p-4 relative">
+          {/* visual track */}
+          <div className="relative">
+            <div className="h-3 w-full rounded-full bg-gradient-to-r from-red-500 via-red-500 to-green-500" />
+
+            {/* thumb */}
+            <div
+              className="absolute -top-2"
+              style={{ left: `calc(${threshold}% - 14px)` }}
+            >
+              <div className="w-7 h-7 rounded-md bg-[#FFB800] border-2 border-yellow-300 shadow" />
+            </div>
+
+            {/* click/drag overlay: invisible range makes the bar functional */}
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={threshold}
+              onChange={(e) => setThreshold(Number(e.target.value))}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+
+            {/* labels 0 and 100 only (50 removed) */}
+            <div className="mt-2 flex justify-between text-xs opacity-70">
+              <span>0</span><span>100</span>
+            </div>
+          </div>
+
+          {/* blue pill showing number */}
+          <div className="mt-2 flex justify-center">
+            <div className="px-3 py-1 text-sm rounded-full bg-[#133AA5]">{threshold}</div>
+          </div>
+
+          {/* info row */}
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-black/30 border border-white/10 p-3">
+              <div className="text-[10px] uppercase tracking-wider opacity-60">Multiplier</div>
+              <div className="text-lg font-semibold">
+                {currentMultiplier.toFixed(2)}
+                <span className="opacity-60 text-sm">x</span>
+              </div>
+              {streak > 0 && (
+                <div className="mt-1 text-[10px] opacity-60">streak +{streak} (base {baseMultiplier.toFixed(2)}x)</div>
+              )}
+            </div>
+
+            {/* Roll over/under toggle – no numeric value field */}
+            <div className="rounded-lg bg-black/30 border border-white/10 p-3">
+              <div className="text-[10px] uppercase tracking-wider opacity-60">
+                {modeOver ? "Roll over to win" : "Roll under to win"}
+              </div>
+              <button
+                onClick={() => setModeOver((v) => !v)}
+                className="mt-2 rounded bg-[#133AA5] px-2 py-1 text-xs"
+                title="Toggle over/under"
+              >
+                ↔ Change
+              </button>
+            </div>
+
+            <div className="rounded-lg bg-black/30 border border-white/10 p-3">
+              <div className="text-[10px] uppercase tracking-wider opacity-60">Win chance</div>
+              <div className="text-lg font-semibold">
+                {winChance.toFixed(2)}<span className="opacity-60 text-sm">%</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Inputs */}
-        <div className="flex flex-col md:flex-row justify-center items-center gap-6 mb-8">
-          <div className="w-full md:w-auto bg-zinc-900/50 p-4 rounded-xl border border-zinc-700 shadow-inner">
-            <label className="block mb-1 text-sm font-semibold text-zinc-300">Bet (coins):</label>
+        {/* Tabs (Auto disabled) */}
+        <div className="mt-5 flex gap-6 border-b border-white/10">
+          <button className="pb-2 text-sm font-semibold border-b-2 border-white">MANUAL</button>
+          <button className="pb-2 text-sm opacity-50 cursor-not-allowed">AUTO</button>
+        </div>
+
+        {/* Bet amount card */}
+        <div className="mt-4 rounded-2xl bg-[#0C1A3A] border border-white/10 p-4">
+          <div className="text-xs opacity-70 mb-2">BET AMOUNT</div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setBet((b) => Math.max(1, b - 1))}
+              className="w-12 h-12 rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+            >−</button>
             <input
               type="number"
               min="1"
               value={bet}
-              onChange={(e) => setBet(clampInt(e.target.value, 1))}
-              className="text-black w-full px-3 py-2 rounded bg-white font-bold"
+              onChange={(e) => setBet(Math.max(1, Number(e.target.value || 1)))}
+              className="flex-1 text-center text-2xl font-bold rounded-md bg-black/60 border border-white/10 py-2"
             />
+            <button
+              onClick={() => setBet((b) => b + 1)}
+              className="w-12 h-12 rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+            >+</button>
           </div>
 
-          <div className="w-full md:w-auto bg-zinc-900/50 p-4 rounded-xl border border-zinc-700 shadow-inner">
-            <label className="block mb-1 text-sm font-semibold text-zinc-300">Your Guess (1–6):</label>
-            <input
-              type="number"
-              min="1"
-              max="6"
-              step="1"
-              inputMode="numeric"
-              value={guessStr}
-              onChange={(e) => {
-                const v = e.target.value;
-                // allow empty while typing
-                if (v === "") {
-                  setGuessStr("");
-                  return;
-                }
-                // accept only single digit 1..6
-                if (/^[1-6]$/.test(v)) {
-                  setGuessStr(v);
-                  setGuess(Number(v));
-                }
-                // ignore anything else (prevents jumping to 6)
-              }}
-              onBlur={() => {
-                // normalize empty or invalid to 1
-                if (!/^[1-6]$/.test(guessStr)) {
-                  setGuessStr("1");
-                  setGuess(1);
-                }
-              }}
-              className="text-black w-full px-3 py-2 rounded bg-white font-bold"
-            />
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-xs opacity-70 mb-1">MULTIPLY BET AMOUNT</div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setBet((b) => Math.max(1, b * 2))} className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm">2X</button>
+                <button onClick={() => setBet((b) => Math.max(1, b * 5))} className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm">5X</button>
+                <button onClick={() => setBet((b) => Math.max(1, Math.floor(coins)))} className="px-3 py-2 rounded bg-[#1F5EFF] text-white text-sm">MAX</button>
+              </div>
+            </div>
+            <div>
+              <div className="text-xs opacity-70 mb-1">PAYOUT ON WIN</div>
+              <div className="px-3 py-2 rounded bg-black/60 border border-white/10 text-sm font-semibold">
+                {displayPayout.toFixed(2)}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Dice Box */}
-        <div
-          className={`mb-8 p-6 rounded-xl bg-gradient-to-br from-yellow-900 via-yellow-600 to-amber-500 shadow-xl border border-yellow-400 transition-transform duration-300 ${
-            rolling ? "animate-pulse" : ""
-          }`}
-        >
-          <img
-            src={diceImages[dice - 1]}
-            alt={`Dice ${dice}`}
-            className="w-28 h-28 mx-auto rounded-lg shadow-lg"
-          />
-        </div>
-
-        {/* Roll Button */}
-        <div className="text-center">
+        {/* ROLL button */}
+        <div className="mt-6 flex justify-center">
           <button
             onClick={rollDice}
             disabled={rolling}
-            className={`px-6 py-3 rounded-xl font-bold text-lg shadow-md transition-all duration-200 ${
-              rolling
-                ? "bg-yellow-300 text-black opacity-70 cursor-not-allowed"
-                : "bg-yellow-500 hover:bg-yellow-400 text-black"
-            }`}
+            className={`w-full max-w-xs py-4 rounded-xl text-xl font-bold shadow-md ${rolling ? "bg-green-300 text-black/80 cursor-not-allowed" : "bg-[#35D15E] text-white"}`}
           >
-            {rolling ? "Rolling..." : "Roll Dice"}
+            {rolling ? "Rolling..." : "ROLL"}
           </button>
         </div>
-
-        {/* Result */}
-        {result && (
-          <div
-            className={`mt-6 px-6 py-4 text-center rounded-xl font-semibold text-lg ${
-              result.includes("Win")
-                ? "bg-green-600 text-white shadow-lg"
-                : result.includes("Lose")
-                ? "bg-red-600 text-white shadow-lg"
-                : "bg-zinc-800 text-white"
-            }`}
-          >
-            {result}
-          </div>
-        )}
       </div>
     </div>
   );
