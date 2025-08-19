@@ -15,6 +15,16 @@ import dice6 from "../assets/6.jpg";
 
 const diceImages = [dice1, dice2, dice3, dice4, dice5, dice6];
 
+// Base payout% on win (matches your server default unless you change it there)
+const BASE_PAYOUT_PCT = 0.90;     // set to 0.88 if you configure 88% in DB
+const BOOST_PER_WIN   = 0.05;     // +5% per win (same as cfg.diceStreakBoostPct)
+const PAYOUT_CAP      = 1.0;      // cap at 100% of stake
+
+const effectivePayoutPct = Math.min(
+  PAYOUT_CAP,
+  BASE_PAYOUT_PCT * (1 + BOOST_PER_WIN * streak)
+);
+
 // ---- helpers ----
 function toNum(v) {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -56,7 +66,8 @@ export default function Dice() {
   const currentMultiplier = Number((baseMultiplier * (1 + 0.05 * streak)).toFixed(2));
 
   // UI payout display = 90% of bet
-  const displayPayout = Number((bet * 0.90).toFixed(2));
+// Use effectivePayoutPct for the card:
+const displayPayout = Number((bet * effectivePayoutPct).toFixed(2));
 
   // keep your previous 1–6 mapping so server stays happy
   const sliderToGuess = (t) => {
@@ -147,7 +158,11 @@ export default function Dice() {
     try {
       // send mode/threshold so backend uses new dice path
       const guessForServer = sliderToGuess(threshold);
-      const res = await games.dice(stake, guessForServer, { mode: modeOver ? "over" : "under", threshold });
+const res = await games.dice(
+  stake,
+  guessForServer,
+  { mode: modeOver ? "over" : "under", threshold, streak } // <-- add streak
+);
 
       try { clearInterval(spin); } catch {}
       const final = Number(res?.details?.roll) || Math.floor(Math.random() * 6) + 1;
