@@ -175,13 +175,19 @@ export default function Dice() {
 
   // ---------- UI --------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#08122B] text-white">
+    <div className="min-h-screen bg-[#08122B] text-white overflow-x-hidden">
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 py-3">
-        
+        <div className="text-sm">
+          <span className="opacity-70 mr-2">Coins: </span>
+          <span className="font-bold">{toNum(coins).toFixed(0)}</span>
+        </div>
       </div>
 
-      <div className="max-w-md mx-auto px-4 pb-24">
+      <div
+        className="max-w-md mx-auto px-4 pb-24 w-full"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)" }}
+      >
         {/* Slider card (only one, fully functional) */}
         <div className="mt-2 rounded-2xl bg-[#0C1A3A] border border-white/10 p-4 relative">
           {/* visual track */}
@@ -203,7 +209,8 @@ export default function Dice() {
               max={100}
               value={threshold}
               onChange={(e) => setThreshold(Number(e.target.value))}
-              className="absolute inset-0 opacity-0 cursor-pointer"
+              aria-label="Win range slider"
+              className="absolute left-0 right-0 top-[-8px] bottom-[-8px] opacity-0 cursor-pointer"
             />
 
             {/* labels 0 and 100 only (50 removed) */}
@@ -220,24 +227,26 @@ export default function Dice() {
           {/* info row */}
           <div className="mt-4 grid grid-cols-3 gap-3">
             <div className="rounded-lg bg-black/30 border border-white/10 p-3">
-              <div className="text-[10px] uppercase tracking-wider opacity-60">Multiplier</div>
-              <div className="text-lg font-semibold">
+              <div className="text-[10px] sm:text-xs uppercase tracking-wider opacity-60">Multiplier</div>
+              <div className="text-lg sm:text-xl font-semibold">
                 {currentMultiplier.toFixed(2)}
                 <span className="opacity-60 text-sm">x</span>
               </div>
               {streak > 0 && (
-                <div className="mt-1 text-[10px] opacity-60">streak +{streak} (base {baseMultiplier.toFixed(2)}x)</div>
+                <div className="mt-1 text-[10px] sm:text-xs opacity-60">
+                  streak +{streak} (base {baseMultiplier.toFixed(2)}x)
+                </div>
               )}
             </div>
 
             {/* Roll over/under toggle – no numeric value field */}
             <div className="rounded-lg bg-black/30 border border-white/10 p-3">
-              <div className="text-[10px] uppercase tracking-wider opacity-60">
+              <div className="text-[10px] sm:text-xs uppercase tracking-wider opacity-60">
                 {modeOver ? "Roll over to win" : "Roll under to win"}
               </div>
               <button
                 onClick={() => setModeOver((v) => !v)}
-                className="mt-2 rounded bg-[#133AA5] px-2 py-1 text-xs"
+                className="mt-2 rounded bg-[#133AA5] px-3 py-2 text-xs sm:text-sm min-h-[40px]"
                 title="Toggle over/under"
               >
                 ↔ Change
@@ -245,8 +254,8 @@ export default function Dice() {
             </div>
 
             <div className="rounded-lg bg-black/30 border border-white/10 p-3">
-              <div className="text-[10px] uppercase tracking-wider opacity-60">Win chance</div>
-              <div className="text-lg font-semibold">
+              <div className="text-[10px] sm:text-xs uppercase tracking-wider opacity-60">Win chance</div>
+              <div className="text-lg sm:text-xl font-semibold">
                 {winChance.toFixed(2)}<span className="opacity-60 text-sm">%</span>
               </div>
             </div>
@@ -265,28 +274,41 @@ export default function Dice() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setBet((b) => Math.max(1, b - 1))}
-              className="w-12 h-12 rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+              aria-label="Decrease bet"
             >−</button>
             <input
               type="number"
+              inputMode="numeric"
               min="1"
               value={bet}
               onChange={(e) => setBet(Math.max(1, Number(e.target.value || 1)))}
-              className="flex-1 text-center text-2xl font-bold rounded-md bg-black/60 border border-white/10 py-2"
+              className="flex-1 text-center text-2xl font-bold rounded-md bg-black/60 border border-white/10 py-2 px-3"
+              aria-label="Bet amount"
             />
             <button
               onClick={() => setBet((b) => b + 1)}
-              className="w-12 h-12 rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+              aria-label="Increase bet"
             >+</button>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div>
               <div className="text-xs opacity-70 mb-1">MULTIPLY BET AMOUNT</div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setBet((b) => Math.max(1, b * 2))} className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm">2X</button>
-                <button onClick={() => setBet((b) => Math.max(1, b * 5))} className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm">5X</button>
-                <button onClick={() => setBet((b) => Math.max(1, Math.floor(coins)))} className="px-3 py-2 rounded bg-[#1F5EFF] text-white text-sm">MAX</button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setBet((b) => Math.max(1, b * 2))}
+                  className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm min-h-[40px]"
+                >2X</button>
+                <button
+                  onClick={() => setBet((b) => Math.max(1, b * 5))}
+                  className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm min-h-[40px]"
+                >5X</button>
+                <button
+                  onClick={() => setBet((b) => Math.max(1, Math.floor(coins)))}
+                  className="px-3 py-2 rounded bg-[#1F5EFF] text-white text-sm min-h-[40px]"
+                >MAX</button>
               </div>
             </div>
             <div>
@@ -303,7 +325,10 @@ export default function Dice() {
           <button
             onClick={rollDice}
             disabled={rolling}
-            className={`w-full max-w-xs py-4 rounded-xl text-xl font-bold shadow-md ${rolling ? "bg-green-300 text-black/80 cursor-not-allowed" : "bg-[#35D15E] text-white"}`}
+            className={`w-full max-w-xs py-4 rounded-xl text-xl font-bold shadow-md min-h-[48px] ${
+              rolling ? "bg-green-300 text-black/80 cursor-not-allowed" : "bg-[#35D15E] text-white"
+            }`}
+            aria-label="Roll"
           >
             {rolling ? "Rolling..." : "ROLL"}
           </button>
