@@ -20,11 +20,6 @@ const BASE_PAYOUT_PCT = 0.90;     // set to 0.88 if you configure 88% in DB
 const BOOST_PER_WIN   = 0.05;     // +5% per win (same as cfg.diceStreakBoostPct)
 const PAYOUT_CAP      = 1.0;      // cap at 100% of stake
 
-const effectivePayoutPct = Math.min(
-  PAYOUT_CAP,
-  BASE_PAYOUT_PCT * (1 + BOOST_PER_WIN * streak)
-);
-
 // ---- helpers ----
 function toNum(v) {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -36,6 +31,12 @@ function formatCoins(v) {
   if (!Number.isFinite(n)) return "0";
   // Show up to 2 decimals without trailing zeros (e.g., 9 -> "9", 9.5 -> "9.5", 9.57 -> "9.57")
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+// Calculate effective payout % given the current streak
+function calcEffectivePayoutPct(streak) {
+  const s = Math.max(0, Number(streak) || 0);
+  const pct = Math.min(PAYOUT_CAP, BASE_PAYOUT_PCT * (1 + BOOST_PER_WIN * s));
+  return Number(pct.toFixed(4));
 }
 
 export default function Dice() {
@@ -65,9 +66,9 @@ export default function Dice() {
   const [streak, setStreak] = useState(0);
   const currentMultiplier = Number((baseMultiplier * (1 + 0.05 * streak)).toFixed(2));
 
-  // UI payout display = 90% of bet
-// Use effectivePayoutPct for the card:
-const displayPayout = Number((bet * effectivePayoutPct).toFixed(2));
+  // Use effective payout % for the card (derived from streak)
+  const effectivePayoutPct = calcEffectivePayoutPct(streak);
+  const displayPayout = Number((bet * effectivePayoutPct).toFixed(2));
 
   // keep your previous 1–6 mapping so server stays happy
   const sliderToGuess = (t) => {
@@ -156,13 +157,13 @@ const displayPayout = Number((bet * effectivePayoutPct).toFixed(2));
     }, 90);
 
     try {
-      // send mode/threshold so backend uses new dice path
+      // send mode/threshold/streak so backend uses new dice path with streak boost
       const guessForServer = sliderToGuess(threshold);
-const res = await games.dice(
-  stake,
-  guessForServer,
-  { mode: modeOver ? "over" : "under", threshold, streak } // <-- add streak
-);
+      const res = await games.dice(
+        stake,
+        guessForServer,
+        { mode: modeOver ? "over" : "under", threshold, streak }
+      );
 
       try { clearInterval(spin); } catch {}
       const final = Number(res?.details?.roll) || Math.floor(Math.random() * 6) + 1;
