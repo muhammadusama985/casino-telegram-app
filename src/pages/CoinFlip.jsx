@@ -1,101 +1,96 @@
-// src/pages/FlipCoin.jsx
-import { useEffect, useState } from "react";
-import { telegramAuth, getBalance, games } from "../api"; // same trio you use in MainLayout
+// src/pages/Coinflip.jsx
+import { useEffect, useMemo, useState } from "react";
+import { telegramAuth, getBalance, games } from "../api";
 
-// ---------- helpers ----------
-function toNum(v) {
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+import flipSound from "../assets/diceRoll.mp3"; // reuse
+import winSound from "../assets/win.mp3";
+import loseSound from "../assets/lose.mp3";
+
+// helpers
+const fmt = (n) =>
+  Number(n).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+function formatCoins(v) {
   const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+  if (!Number.isFinite(n)) return "0";
+  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
-const fmtCoins = (n) =>
-  Number.isFinite(Number(n)) ? Number(n).toLocaleString("en-US") : "0";
-const clampInt = (v, min, max) => {
-  const n = Math.floor(Number(v || 0));
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max ?? n, n));
-};
 
-export default function FlipCoin() {
-  // ---- coins managed with the EXACT logic you use in MainLayout ----
+// === Streak boost config (UI-only multiplier behavior) ===
+const STREAK_BOOST_PER_WIN = 0.05;   // +5% per consecutive win
+const TRAIL_LEN = 10;
+
+export default function Coinflip() {
+  // ----- session / balance -----
   const [coins, setCoins] = useState(0);
 
-  // ---- UI state ----
+  // ----- UI / game state -----
   const [bet, setBet] = useState(1);
-  const [pick, setPick] = useState("H"); // 'H' or 'T'
-  const [result, setResult] = useState("");
+
+  // Base coef (server multiplier). We boost visually based on streak.
+  const [baseCoef, setBaseCoef] = useState(1.95);
+
+  // Effective coef shown = baseCoef * (1 + 0.05*streak)
+  const [streak, setStreak] = useState(0);
+  const effectiveCoef = useMemo(
+    () => Number((baseCoef * (1 + STREAK_BOOST_PER_WIN * streak)).toFixed(2)),
+    [baseCoef, streak]
+  );
+
+  const [round, setRound] = useState(1);
+  const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?")); // top row bubbles
   const [flipping, setFlipping] = useState(false);
+  const [resultMsg, setResultMsg] = useState("");
 
-  // coin visual state
-  const [animating, setAnimating] = useState(false);
-  const [face, setFace] = useState("H"); // which side is facing front at rest
+  // potential profit shown in the orange "Take" bar (UI-only; uses effectiveCoef)
+  const potentialProfit = useMemo(() => {
+    const p = Math.max(0, Number(bet || 0)) * Math.max(0, effectiveCoef - 1);
+    return Math.floor(p * 100) / 100;
+  }, [bet, effectiveCoef]);
 
-  // ---------- BALANCE BOOTSTRAP (same flow as your MainLayout) ----------
+  // ---------- balance bootstrap ----------
   useEffect(() => {
     let stopPolling = () => {};
-
     (async () => {
       try {
-        // 1) Login → returns user object (u)
         const u = await telegramAuth();
-
-        // Show DB coins from login payload ONLY if provided as a finite number
-        if (Number.isFinite(Number(u?.coins))) {
-          const initial = toNum(u.coins);
-          setCoins((prev) => (initial !== prev ? initial : prev));
-        }
-
-        // 2) Confirm from backend once (now that x-user-id is set)
+        if (Number.isFinite(+u?.coins)) setCoins((c) => (+u.coins !== c ? +u.coins : c));
         try {
-          const c = await getBalance(); // returns a Number
-          if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
-        } catch {
-          /* ignore single bad read */
-        }
-
-        // 3) Start polling ONLY AFTER login succeeded
+          const b = await getBalance();
+          if (Number.isFinite(b)) setCoins((c) => (b !== c ? b : c));
+        } catch {}
         stopPolling = (() => {
           let alive = true;
           (function tick() {
             setTimeout(async () => {
               if (!alive) return;
               try {
-                const c = await getBalance();
-                if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
-              } catch {
-                /* ignore failed poll; do not set 0 */
-              } finally {
+                const b = await getBalance();
+                if (Number.isFinite(b)) setCoins((c) => (b !== c ? b : c));
+              } catch {} finally {
                 if (alive) tick();
               }
             }, 4000);
           })();
-          return () => {
-            alive = false;
-          };
+          return () => { alive = false; };
         })();
       } catch (e) {
-        console.error("[FlipCoin] telegramAuth failed:", e);
+        console.error("[Coinflip] telegramAuth failed:", e);
       }
     })();
+    return () => { stopPolling?.(); };
+  }, []);
 
-    return () => {
-      stopPolling?.();
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 🔔 Same refresh hooks as MainLayout (event + tab visibility)
   useEffect(() => {
     const refresh = async () => {
       try {
-        const c = await getBalance();
-        if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
-      } catch {
-        /* ignore errors so we don't overwrite with 0 */
-      }
+        const b = await getBalance();
+        if (Number.isFinite(b)) setCoins((c) => (b !== c ? b : c));
+      } catch {}
     };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
     window.addEventListener("balance:refresh", refresh);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -104,47 +99,59 @@ export default function FlipCoin() {
     };
   }, []);
 
-  // ---------- flip / bet ----------
-  const onFlip = async () => {
-    const stake = clampInt(bet, 1);
-    if (stake <= 0) return alert("Enter a valid bet (>= 1).");
+  // ---------- actions ----------
+  const placeBet = async (side) => {
+    if (flipping) return;
+    const stake = Math.max(1, Math.floor(Number(bet || 0)));
+    if (!Number.isFinite(stake) || stake <= 0) return alert("Enter a valid bet (>= 1).");
     if (Number(coins) < stake) return alert("Not enough coins.");
 
-    setResult("");
     setFlipping(true);
-    setAnimating(true); // start CSS animation
+    setResultMsg("");
+    try { new Audio(flipSound).play().catch(() => {}); } catch {}
 
-    const start = Date.now();
     try {
-      // Server decides outcome (RTP-aware) and updates Mongo balance
-      const res = await games.coinflip(stake, pick); // { result, payout, newBalance, details:{pick, landed, pWin, m} }
+const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
 
-      // ensure animation feels good (at least ~900ms)
-      const minMs = 900;
-      const elapsed = Date.now() - start;
-      if (elapsed < minMs) {
-        await new Promise((r) => setTimeout(r, minMs - elapsed));
-      }
+      // Sync base coef from engine if it reports details.m (so "default" is accurate)
+      const m = Number(res?.details?.m);
+      if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
-      // stop animation and show the actual landed side
-      const landed = res?.details?.landed === "T" ? "T" : "H";
-      setAnimating(false);
-      setFace(landed);
-
-      // Apply server truth immediately
       if (Number.isFinite(res?.newBalance)) {
         setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
       }
 
-      // 🔴 KEY CHANGE: decide win/lose by comparing your pick with the landed side
-      const isWin = landed === pick;
-      if (isWin) {
-        setResult(`🎉 You Win! +${res?.payout ?? 0}`);
+      // Use landed from backend to paint bubbles with 'H' or 'T'
+      const landed = (res?.details?.landed === "T") ? "T" : "H";
+
+      // advance round number
+      setRound((r) => r + 1);
+
+      if (res?.result === "win") {
+        // fill bubbles with H/T for consecutive wins
+        setTrail((prev) => {
+          const next = [landed, ...prev];
+          return next.slice(0, TRAIL_LEN);
+        });
+        // increase streak -> raises shown multiplier
+        setStreak((s) => s + 1);
+
+        const profit = Math.max(0, (res.payout ?? 0) - stake);
+        const msg = `🎉 You Win! +${fmt(profit)}`;
+        setResultMsg(msg);
+        try { new Audio(winSound).play().catch(() => {}); } catch {}
+        alert(msg);
       } else {
-        setResult(`❌ You Lose! -${stake}`);
+        // reset on loss: multiplier back to default and clear bubbles
+        setStreak(0);
+        setTrail(Array(TRAIL_LEN).fill("?"));
+
+        const msg = `❌ You Lose! -${fmt(stake)}`;
+        setResultMsg(msg);
+        try { new Audio(loseSound).play().catch(() => {}); } catch {}
+        alert(msg);
       }
 
-      // Notify the rest of the app to refresh too
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
       const msg = String(e?.message || "");
@@ -157,173 +164,158 @@ export default function FlipCoin() {
     }
   };
 
-  // ---------- UI ----------
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-zinc-900 to-black px-4 py-10 text-white">
-      {/* local styles for the coin flip */}
-      <style>{`
-        .coin-scene { perspective: 900px; }
-        .coin {
-          width: 120px; height: 120px;
-          position: relative;
-          transform-style: preserve-3d;
-          border-radius: 9999px;
-        }
-        .coin.animate {
-          animation: coinflip 0.6s linear infinite;
-        }
-        @keyframes coinflip {
-          0%   { transform: rotateY(0deg) }
-          100% { transform: rotateY(1800deg) }
-        }
-        .coin-face {
-          position: absolute; inset: 0;
-          display: grid; place-items: center;
-          border-radius: 9999px;
-          backface-visibility: hidden;
-          font-weight: 800; font-size: 2rem; letter-spacing: 0.04em;
-        }
-        .coin-front {
-          background: radial-gradient(circle at 30% 30%, #fde68a, #d97706 60%, #92400e 95%);
-          color: #111827;
-          transform: rotateY(0deg) translateZ(1px);
-          box-shadow: inset 0 0 20px rgba(0,0,0,0.25);
-        }
-        .coin-back {
-          background: radial-gradient(circle at 30% 30%, #a7f3d0, #059669 60%, #065f46 95%);
-          color: #081016;
-          transform: rotateY(180deg) translateZ(1px);
-          box-shadow: inset 0 0 20px rgba(0,0,0,0.25);
-        }
-      `}</style>
-
-      <div className="max-w-xl mx-auto">
-        <h1 className="text-4xl font-extrabold mb-2 text-center">
-          🪙 Flip&nbsp;<span className="text-yellow-400">Coin</span>
-        </h1>
-        <p className="text-center text-zinc-400 mb-6">
-          Pick Heads or Tails, set your stake, and flip. RTP tuned server-side.
-        </p>
-
-        <div className="text-2xl mb-6 text-center font-mono text-zinc-300">
-          Balance: <span className="text-yellow-500">{fmtCoins(toNum(coins))} COIN</span>
-        </div>
-
-        {/* Controls */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {/* Pick */}
-          <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800 shadow-inner">
-            <div className="text-sm font-semibold text-zinc-300 mb-2">Your Pick</div>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setPick("H")}
-                className={`h-12 rounded-xl font-semibold transition ${
-                  pick === "H"
-                    ? "bg-yellow-500 text-black shadow"
-                    : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-                }`}
-              >
-                Heads
-              </button>
-              <button
-                onClick={() => setPick("T")}
-                className={`h-12 rounded-xl font-semibold transition ${
-                  pick === "T"
-                    ? "bg-emerald-500 text-black shadow"
-                    : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-                }`}
-              >
-                Tails
-              </button>
-            </div>
-          </div>
-
-          {/* Bet */}
-          <div className="bg-zinc-900/50 p-4 rounded-xl border border-zinc-800 shadow-inner md:col-span-2">
-            <div className="text-sm font-semibold text-zinc-300 mb-2">Bet (coins)</div>
-            <div className="flex items-center gap-3">
-              <input
-                type="number"
-                min="1"
-                value={bet}
-                onChange={(e) => setBet(clampInt(e.target.value, 1))}
-                className="text-black w-full px-3 py-2 rounded bg-white font-bold"
-              />
-              <div className="flex gap-2">
-                {[10, 50, 100].map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setBet(n)}
-                    className="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-200 hover:bg-zinc-700 text-sm"
-                  >
-                    {n}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setBet(Math.max(1, Math.floor(coins)))}
-                  className="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-200 hover:bg-zinc-700 text-sm"
-                >
-                  MAX
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Coin visual */}
-        <div className="coin-scene mx-auto mb-8 grid place-items-center">
-          <div
-            className={`coin ${animating ? "animate" : ""}`}
-            style={{
-              transform:
-                animating
-                  ? undefined
-                  : face === "H"
-                  ? "rotateY(0deg)"
-                  : "rotateY(180deg)",
-              transition: animating ? "none" : "transform 340ms ease-out",
-            }}
-          >
-            <div className="coin-face coin-front">H</div>
-            <div className="coin-face coin-back">T</div>
-          </div>
-        </div>
-
-        {/* Flip button */}
-        <div className="text-center">
-          <button
-            onClick={onFlip}
-            disabled={flipping}
-            className={`px-6 py-3 rounded-2xl font-bold text-lg shadow-md transition-all duration-200 ${
-              flipping
-                ? "bg-yellow-300 text-black opacity-70 cursor-not-allowed"
-                : "bg-gradient-to-r from-yellow-500 to-amber-400 hover:from-yellow-400 hover:to-amber-300 text-black"
-            }`}
-          >
-            {flipping ? "Flipping..." : `Flip ${pick === "H" ? "Heads" : "Tails"}`}
-          </button>
-        </div>
-
-        {/* Result */}
-        {result && (
-          <div
-            className={`mt-6 px-6 py-4 text-center rounded-xl font-semibold text-lg ${
-              result.includes("Win")
-                ? "bg-green-600 text-white shadow-lg"
-                : result.includes("Lose")
-                ? "bg-red-600 text-white shadow-lg"
-                : "bg-zinc-800 text-white"
-            }`}
-          >
-            {result}
-          </div>
-        )}
-
-        {/* Hints */}
-        <div className="mt-6 text-center text-xs text-zinc-500">
-          Multiplier & RTP are enforced server-side. Outcomes are decided on the backend.
+    <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
+      {/* ===== Coins header (same as Dice) ===== */}
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="text-sm">
+          <span className="opacity-70 mr-2">Coins: </span>
+          <span className="font-bold">{formatCoins(coins)}</span>
         </div>
       </div>
+
+      {/* top progress bubbles: show '?' or 'H'/'T' for win streak */}
+      <div className="flex items-center justify-center gap-3 px-4 pt-2">
+        {trail.map((ch, i) => (
+          <div
+            key={i}
+            className={`w-8 h-8 rounded-full border-2 ${ch === "?" ? "border-dashed border-white/30" : "border-emerald-400/70"} flex items-center justify-center text-sm`}
+          >
+            <span className={`${ch === "?" ? "opacity-80" : "font-bold"}`}>{ch}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* main coin / coef row */}
+      <div className="flex items-center justify-between px-6 mt-4">
+        <div className="text-left">
+          <div className="text-2xl font-bold leading-none">{round}</div>
+          <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
+        </div>
+
+        {/* center coin */}
+        <div
+          className={`relative w-40 h-40 rounded-full mx-4 flex items-center justify-center transition-transform duration-500 ${
+            flipping ? "animate-spin-slow" : ""
+          }`}
+          style={{
+            boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
+            background:
+              "radial-gradient(60% 60% at 50% 40%, #FFD76A 0%, #FFA928 55%, #E37B00 100%)",
+          }}
+        >
+          <div className="w-28 h-28 rounded-full bg-white/15 flex items-center justify-center">
+            <div className="text-5xl font-black text-[#FFDF86] drop-shadow-[0_2px_0_rgba(0,0,0,0.4)]">$</div>
+          </div>
+        </div>
+
+        <div className="text-right">
+          <div className="text-2xl font-extrabold leading-none">x{effectiveCoef.toFixed(2)}</div>
+          <div className="uppercase tracking-wider text-white/60 text-sm">Coef</div>
+        </div>
+      </div>
+
+      {/* buttons: Heads / Tails */}
+      <div className="px-4 mt-6 grid grid-cols-2 gap-3">
+        <button
+          disabled={flipping}
+          onClick={() => placeBet("H")}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
+            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <MiniCoin />
+            <span className="text-lg font-semibold tracking-wide">HEADS</span>
+          </div>
+        </button>
+        <button
+          disabled={flipping}
+          onClick={() => placeBet("T")}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
+            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <MiniCoin />
+            <span className="text-lg font-semibold tracking-wide">TAILS</span>
+          </div>
+        </button>
+      </div>
+
+      {/* bet row */}
+      <div className="px-4 mt-6">
+        <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
+          <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
+            <button
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+            >−</button>
+            <div className="text-center">
+              <span className="text-3xl font-extrabold">{fmt(bet)}</span>
+             
+            </div>
+            <button
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+            >+</button>
+          </div>
+
+          {/* orange take bar */}
+          <div className="mt-4">
+            <div
+              className="w-full rounded-xl py-3 text-center font-semibold"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(255,165,0,0.25) 0%, rgba(255,120,0,0.35) 100%)",
+              }}
+            >
+              <div className="text-lg">
+                {fmt(potentialProfit)} 
+              </div>
+              <div className="text-sm opacity-60 -mt-1">Take</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* result toast */}
+      {resultMsg && (
+        <div className="px-4 mt-4">
+          <div
+            className={`rounded-xl px-4 py-3 text-center font-semibold ${
+              resultMsg.includes("Win")
+                ? "bg-emerald-600/30 text-emerald-200"
+                : "bg-rose-600/30 text-rose-200"
+            }`}
+          >
+            {resultMsg}
+          </div>
+        </div>
+      )}
+
+      {/* safe area spacer */}
+      <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
+
+      {/* slow spin keyframe */}
+      <style>{`
+        @keyframes spin-slow { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+        .animate-spin-slow { animation: spin-slow 0.9s linear infinite; }
+      `}</style>
     </div>
+  );
+}
+
+/* little gradient coin used on the buttons */
+function MiniCoin() {
+  return (
+    <span
+      className="inline-block w-7 h-7 rounded-full"
+      style={{
+        background:
+          "radial-gradient(60% 60% at 50% 40%, #FFD76A 0%, #FFA928 55%, #E37B00 100%)",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+      }}
+    />
   );
 }
