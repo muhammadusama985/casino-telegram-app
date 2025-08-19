@@ -132,16 +132,30 @@ export const games = {
     return api("/games/bet", { method: "POST", body: { game, stakeCoins: stake, input } });
   },
 
-  // --- Convenience wrappers (use these in components) ---
-
   /** Coinflip: pick 'H' or 'T' */
   coinflip(stakeCoins, pick = "H") {
     return this.bet({ game: "coinflip", stakeCoins, input: { pick } });
   },
 
-  /** Dice: pick 1..6 */
-  dice(stakeCoins, pick = 3) {
-    return this.bet({ game: "dice", stakeCoins, input: { pick } });
+  /**
+   * Dice wrapper — supports BOTH legacy and new over/under mode.
+   *
+   * Usage examples:
+   *   games.dice(5, 3)                                       // legacy pick 1..6
+   *   games.dice(5, { mode: 'over', threshold: 42 })         // new mode, no legacy pick
+   *   games.dice(5, 3, { mode: 'under', threshold: 70 })     // send both (ok)
+   */
+  dice(stakeCoins, a2, a3) {
+    const input = {};
+    if (a2 && typeof a2 === "object") {
+      Object.assign(input, a2);               // { mode, threshold, ... }
+    } else if (a2 !== undefined) {
+      input.pick = a2;                        // legacy pick 1..6
+    }
+    if (a3 && typeof a3 === "object") {
+      Object.assign(input, a3);               // merge mode/threshold if passed as 3rd arg
+    }
+    return this.bet({ game: "dice", stakeCoins, input });
   },
 
   /** Slot: no input */
@@ -234,7 +248,3 @@ export async function getBalance() {
   if (!Number.isFinite(num)) throw new Error("bad-balance");
   return num;                                  // <- ALWAYS a number
 }
-
-
-
-
