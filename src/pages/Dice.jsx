@@ -38,8 +38,7 @@ export default function Dice() {
   // win chance (for display only)
   const winChance = Math.max(1, Math.min(99, modeOver ? 100 - threshold : threshold));
 
-  // ❗ Make base multiplier STICKY: compute once, not tied to over/under or slider
-  // Default uses initial state: threshold=42, over => winChance ≈ 58% → ~1.60x with 7% edge
+  // STICKY base multiplier: not tied to slider/toggle; only win-streak changes it
   const [baseMultiplier] = useState(() => {
     const initialWinChance = Math.max(1, Math.min(99, 100 - 42)); // 58
     return Number(((100 / initialWinChance) * 0.93).toFixed(2));  // ≈ 1.60
@@ -49,7 +48,7 @@ export default function Dice() {
   const [streak, setStreak] = useState(0);
   const currentMultiplier = Number((baseMultiplier * (1 + 0.05 * streak)).toFixed(2));
 
-  // UI payout display = 90% of bet (per request)
+  // UI payout display = 90% of bet (per your request)
   const displayPayout = Number((bet * 0.90).toFixed(2));
 
   // keep your previous 1–6 mapping so server stays happy
@@ -152,13 +151,17 @@ export default function Dice() {
       }
 
       if (res?.result === "win") {
-        setStreak((s) => s + 1);            // increase streak → multiplier grows
-        setResult(`🎉 You Win! +${res.payout}`);
+        setStreak((s) => s + 1); // increase streak → multiplier grows
+        const msg = `🎉 You Win! +${res.payout}`;
+        setResult(msg);
         try { new Audio(winSound).play().catch(() => {}); } catch {}
+        alert(msg); // requested alert on win
       } else {
-        setStreak(0);                        // reset on loss → back to base multiplier
-        setResult(`❌ You Lose! -${stake}`);
+        setStreak(0); // reset on loss
+        const msg = `❌ You Lose! -${stake}`;
+        setResult(msg);
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
+        alert(msg); // requested alert on loss
       }
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
@@ -213,7 +216,7 @@ export default function Dice() {
               className="absolute left-0 right-0 top-[-8px] bottom-[-8px] opacity-0 cursor-pointer"
             />
 
-            {/* labels 0 and 100 only (50 removed) */}
+            {/* labels 0 and 100 only */}
             <div className="mt-2 flex justify-between text-xs opacity-70">
               <span>0</span><span>100</span>
             </div>
@@ -271,24 +274,28 @@ export default function Dice() {
         {/* Bet amount card */}
         <div className="mt-4 rounded-2xl bg-[#0C1A3A] border border-white/10 p-4">
           <div className="text-xs opacity-70 mb-2">BET AMOUNT</div>
-          <div className="flex items-center gap-3">
+
+          {/* Responsive + / input / + row */}
+          <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
             <button
               onClick={() => setBet((b) => Math.max(1, b - 1))}
-              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none shrink-0"
               aria-label="Decrease bet"
             >−</button>
+
             <input
               type="number"
               inputMode="numeric"
               min="1"
               value={bet}
               onChange={(e) => setBet(Math.max(1, Number(e.target.value || 1)))}
-              className="flex-1 text-center text-2xl font-bold rounded-md bg-black/60 border border-white/10 py-2 px-3"
+              className="w-full min-w-0 text-center text-2xl font-bold rounded-md bg-black/60 border border-white/10 py-2 px-3"
               aria-label="Bet amount"
             />
+
             <button
               onClick={() => setBet((b) => b + 1)}
-              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none shrink-0"
               aria-label="Increase bet"
             >+</button>
           </div>
