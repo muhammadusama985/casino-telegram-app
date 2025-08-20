@@ -36,27 +36,31 @@ const SYMBOL_EMOJI = {
   clover: "🍀",
 
   // specials
-  scatter: "🍭",      // lollipop
-  bomb: "💣",         // multiplier bomb
+  scatter: "🍭", // lollipop
+  bomb: "💣",    // multiplier bomb
 };
 
 function asEmoji(val) {
-  return typeof val === "string" ? val : "🍬";
+  if (!val) return "🍬";
+  if (typeof val === "string") {
+    // If server sends keys like "banana", map to emoji; if it sends emoji, show as-is
+    const key = val.trim();
+    if (key.length === 1 || [...key].length === 1) return key; // already an emoji
+    return SYMBOL_EMOJI[key] || "🍬";
+  }
+  return "🍬";
 }
-
-
-
 
 // simple color classes per “family”
 function bgClassFor(sym) {
   const key = String(sym).toLowerCase();
-  if (key.includes("bomb")) return "from-amber-400 to-rose-400";
-  if (key.includes("scatter") || key.includes("lollipop")) return "from-pink-400 to-rose-400";
-  if (key.includes("grape")) return "from-violet-500 to-purple-500";
-  if (key.includes("watermelon")) return "from-emerald-500 to-emerald-600";
-  if (key.includes("banana") || key.includes("lemon")) return "from-yellow-400 to-amber-400";
-  if (key.includes("apple") || key.includes("cherry") || key.includes("red")) return "from-rose-500 to-pink-500";
-  if (key.includes("diamond") || key.includes("blue")) return "from-sky-500 to-blue-600";
+  if (key.includes("💣") || key.includes("bomb")) return "from-amber-400 to-rose-400";
+  if (key.includes("🍭") || key.includes("scatter") || key.includes("lollipop")) return "from-pink-400 to-rose-400";
+  if (key.includes("🍇") || key.includes("grape")) return "from-violet-500 to-purple-500";
+  if (key.includes("🍉") || key.includes("watermelon")) return "from-emerald-500 to-emerald-600";
+  if (key.includes("🍌") || key.includes("🍋") || key.includes("banana") || key.includes("lemon")) return "from-yellow-400 to-amber-400";
+  if (key.includes("🍎") || key.includes("🍒") || key.includes("apple") || key.includes("cherry") || key.includes("red")) return "from-rose-500 to-pink-500";
+  if (key.includes("💎") || key.includes("diamond") || key.includes("blue")) return "from-sky-500 to-blue-600";
   return "from-indigo-500 to-blue-500";
 }
 
@@ -74,7 +78,7 @@ export default function SlotBonanza() {
   const [winToast, setWinToast] = useState("");
   const [freeSpinsLeft, setFreeSpinsLeft] = useState(0);
   const [lastSpinWin, setLastSpinWin] = useState(0);
-  const [sumBombs, setSumBombs] = useState(0);
+  const [sumBombs, setSumBombs] = useState(0); // Bonanza-style: SUM of multipliers within the spin
 
   // animation helpers
   const cascadeQueueRef = useRef([]);
@@ -83,7 +87,7 @@ export default function SlotBonanza() {
   // precompute whether we’re in bonus (display only)
   const inBonus = freeSpinsLeft > 0;
 
-  /* ----------- bootstrap balance (same pattern as other pages) ----------- */
+  /* ----------- bootstrap balance (like your Dice/Coinflip) ----------- */
   useEffect(() => {
     let stopPolling = () => {};
     (async () => {
@@ -97,6 +101,7 @@ export default function SlotBonanza() {
           const c = await getBalance();
           if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
         } catch {}
+        // polling
         stopPolling = (() => {
           let alive = true;
           (function tick() {
@@ -154,18 +159,17 @@ export default function SlotBonanza() {
     try {
       // Server calculates results; we just animate and display
       const res = await games.slot(stake);
-      
 
+      // Optional debug alert in Telegram WebApp
       if (window.Telegram?.WebApp?.showAlert) {
-  const d = res?.details || {};
-  const row0 = d.cascades?.[0]?.grid?.[0] || [];
-  window.Telegram.WebApp.showAlert(`Src: ${
-    Array.isArray(d.cascades) && d.cascades[0]?.grid ? 'server' : 'fallback'
-  }\nrow0: ${JSON.stringify(row0).slice(0, 180)}...`);
-}
+        const d = res?.details || {};
+        const row0 = d.cascades?.[0]?.grid?.[0] || [];
+        window.Telegram.WebApp.showAlert(`Src: ${
+          Array.isArray(d.cascades) && d.cascades[0]?.grid ? 'server' : 'fallback'
+        }\nrow0: ${JSON.stringify(row0).slice(0, 180)}...`);
+      }
 
-
-      // Update balance first if provided
+      // Update balance first if provided (server truth)
       if (Number.isFinite(res?.newBalance)) {
         setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
       }
@@ -184,7 +188,7 @@ export default function SlotBonanza() {
         setFreeSpinsLeft(Number(d.freeSpinsLeft));
       }
 
-      // total multiplier (within a single paid/free spin) – if server sends it
+      // total multiplier (within a single paid/free spin) – SUM of bombs (Bonanza behavior)
       if (Number.isFinite(d.multiplierTotal)) {
         setSumBombs(Number(d.multiplierTotal));
       } else if (Array.isArray(d.multipliersApplied)) {
@@ -239,31 +243,24 @@ export default function SlotBonanza() {
     }
 
     // mark cleared cells if provided, to animate fade
-    const cleared = new Set(
-      (next.cleared || []).map(([r, c]) => `${r}:${c}`)
-    );
+    const cleared = new Set((next.cleared || []).map(([r, c]) => `${r}:${c}`));
 
     // render grid (with fade class for cleared)
-// render grid (with fade class for cleared)
-setGrid(
-  g.map((row, r) =>
-    row.map((cell, c) => {
-      // unwrap various shapes into a plain emoji string or null
-      let v = cell;
-      if (v && typeof v === "object") {
-        if ("v" in v) v = v.v;            // from normalizeGrid old/new
-        else if ("sym" in v) v = v.sym;   // server bomb objects { sym:'💣', mult:12 }
-      }
-      return {
-        v,
-        cleared: cleared.has(`${r}:${c}`),
-      };
-    })
-  )
-);
+    setGrid(
+      g.map((row, r) =>
+        row.map((cell, c) => {
+          // unwrap various shapes into a plain string (emoji or key) or null
+          let v = cell;
+          if (v && typeof v === "object") {
+            if ("v" in v) v = v.v;          // from normalizeGrid old/new
+            else if ("sym" in v) v = v.sym; // server bomb objects { sym:'💣', mult:12 }
+          }
+          return { v, cleared: cleared.has(`${r}:${c}`) };
+        })
+      )
+    );
 
-
-    // accumulate multipliers shown during this cascade (if any)
+    // accumulate multipliers shown during this cascade (if any) — Bonanza sums bombs
     if (Array.isArray(next.bombs) && next.bombs.length) {
       setSumBombs((s) => s + next.bombs.reduce((a, b) => a + Number(b || 0), 0));
     }
@@ -341,12 +338,18 @@ setGrid(
           </div>
 
           <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <button onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) * 2))}
-              className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm min-h-[40px]">2X</button>
-            <button onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) * 5))}
-              className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm min-h-[40px]">5X</button>
-            <button onClick={() => setBet((_) => Math.max(1, Math.floor(coins)))}
-              className="px-3 py-2 rounded bg-[#1F5EFF] text-white text-sm min-h-[40px]">MAX</button>
+            <button
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) * 2))}
+              className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm min-h-[40px]"
+            >2X</button>
+            <button
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) * 5))}
+              className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm min-h-[40px]"
+            >5X</button>
+            <button
+              onClick={() => setBet((_) => Math.max(1, Math.floor(coins)))}
+              className="px-3 py-2 rounded bg-[#1F5EFF] text-white text-sm min-h-[40px]"
+            >MAX</button>
           </div>
         </div>
 
@@ -356,7 +359,9 @@ setGrid(
             onClick={spin}
             disabled={spinning}
             className={`w-full max-w-xs py-4 rounded-xl text-xl font-bold shadow-md min-h-[48px] ${
-              spinning ? "bg-fuchsia-300 text-black/80 cursor-not-allowed" : "bg-gradient-to-r from-fuchsia-500 to-violet-600 text-white hover:brightness-110 active:scale-[0.99]"
+              spinning
+                ? "bg-fuchsia-300 text-black/80 cursor-not-allowed"
+                : "bg-gradient-to-r from-fuchsia-500 to-violet-600 text-white hover:brightness-110 active:scale-[0.99]"
             }`}
           >
             {spinning ? "Spinning..." : "SPIN"}
@@ -366,11 +371,13 @@ setGrid(
         {/* toast */}
         {winToast && (
           <div className="mb-6">
-            <div className={`rounded-xl px-4 py-3 text-center font-semibold ${
-              winToast.includes("Win")
-                ? "bg-emerald-600/30 text-emerald-200"
-                : "bg-slate-600/30 text-slate-200"
-            }`}>
+            <div
+              className={`rounded-xl px-4 py-3 text-center font-semibold ${
+                winToast.includes("Win")
+                  ? "bg-emerald-600/30 text-emerald-200"
+                  : "bg-slate-600/30 text-slate-200"
+              }`}
+            >
               {winToast}
             </div>
           </div>
@@ -388,17 +395,23 @@ function Cell({ value, cleared }) {
   const bg = bgClassFor(String(value || ""));
 
   return (
-    <div className={`relative w-full rounded-xl overflow-hidden border border-white/10
-                     bg-gradient-to-br ${bg} shadow-inner
-                     ${cleared ? "animate-ping-fast" : ""}`}
-         style={{ paddingBottom: "100%" /* square */ }}>
+    <div
+      className={`relative w-full rounded-xl overflow-hidden border border-white/10
+                  bg-gradient-to-br ${bg} shadow-inner
+                  ${cleared ? "animate-ping-fast" : ""}`}
+      style={{ paddingBottom: "100%" /* square */ }}
+    >
       <div className="absolute inset-0 flex items-center justify-center">
         <span className="text-2xl md:text-3xl drop-shadow-[0_2px_0_rgba(0,0,0,0.25)]">
           {emoji}
         </span>
       </div>
       <style>{`
-        @keyframes ping-fast { 0% { transform: scale(1); opacity: 1; } 70% { transform: scale(1.15); opacity: .6; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes ping-fast {
+          0% { transform: scale(1); opacity: 1; }
+          70% { transform: scale(1.15); opacity: .6; }
+          100% { transform: scale(1); opacity: 1; }
+        }
         .animate-ping-fast { animation: ping-fast 0.35s ease-in-out; }
       `}</style>
     </div>
@@ -409,7 +422,7 @@ function InfoCard({ label, value, accent = "emerald" }) {
   const bg =
     accent === "emerald" ? "bg-emerald-400/15 border-emerald-300/30" :
     accent === "amber"   ? "bg-amber-400/15 border-amber-300/30"   :
-    "bg-fuchsia-400/15 border-fuchsia-300/30";
+                           "bg-fuchsia-400/15 border-fuchsia-300/30";
   return (
     <div className={`rounded-xl px-3 py-2 border ${bg}`}>
       <div className="text-[10px] uppercase tracking-wider opacity-70">{label}</div>
@@ -427,8 +440,14 @@ function emptyGrid() {
   );
 }
 
+/**
+ * Accepts many shapes from server:
+ * - 2D strings/emoji
+ * - 2D objects with { v: '🍌' } or { sym: 'bomb', mult: 10 } -> we use 'sym' (may be emoji or key)
+ * Returns a 2D array with plain values (emoji or key) or null.
+ */
 function normalizeGrid(g) {
-  if (!Array.isArray(g) || !Array.isArray(g[0])) return emptyGrid().map(row => row.map(c => null));
+  if (!Array.isArray(g) || !Array.isArray(g[0])) return emptyGrid().map(row => row.map(() => null));
 
   const R = 5, C = 6;
   const out = [];
@@ -439,13 +458,14 @@ function normalizeGrid(g) {
     for (let c = 0; c < Math.min(C, row.length); c++) {
       let cell = row[c];
 
-      // unwrap known shapes to a plain emoji string or null
+      // unwrap known shapes to a plain string or null
       if (cell && typeof cell === "object") {
-        if ("v" in cell) cell = cell.v;        // already-wrapped shape
-        else if ("sym" in cell) cell = cell.sym; // server bomb { sym:'💣', mult }
+        if ("v" in cell) cell = cell.v;          // already-wrapped shape
+        else if ("sym" in cell) cell = cell.sym; // server bomb { sym:'💣' or 'bomb', mult }
       }
 
-      newRow.push((typeof cell === "string") ? cell : null);
+      // Accept emoji or server keys; render translation later in asEmoji()
+      newRow.push(typeof cell === "string" ? cell : null);
     }
     while (newRow.length < C) newRow.push(null);
     out.push(newRow);
@@ -454,12 +474,9 @@ function normalizeGrid(g) {
   return out;
 }
 
-
-
 function randomGrid() {
   const EMOJIS = ["🍌","🍇","🍉","🍑","🍎","🍒","💎","🍭","💣"];
   return Array.from({ length: 5 }, () =>
     Array.from({ length: 6 }, () => EMOJIS[Math.floor(Math.random() * EMOJIS.length)])
   );
 }
-
