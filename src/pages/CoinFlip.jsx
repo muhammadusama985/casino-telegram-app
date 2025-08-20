@@ -2,11 +2,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { telegramAuth, getBalance, games } from "../api";
 
-import flipSound from "../assets/diceRoll.mp3"; // reuse
+import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
 
-// helpers
+// format helpers
 const fmt = (n) =>
   Number(n).toLocaleString(undefined, {
     minimumFractionDigits: 0,
@@ -18,39 +18,36 @@ function formatCoins(v) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-// === Streak boost config (UI-only multiplier behavior) ===
-const STREAK_BOOST_PER_WIN = 0.05;   // +5% per consecutive win
+const STREAK_BOOST_PER_WIN = 0.05; // UI-only boost per consecutive win
 const TRAIL_LEN = 10;
 
 export default function Coinflip() {
-  // ----- session / balance -----
+  // balance
   const [coins, setCoins] = useState(0);
 
-  // ----- UI / game state -----
+  // game state
   const [bet, setBet] = useState(1);
-
-  // Base coef (server multiplier). We boost visually based on streak.
-  const [baseCoef, setBaseCoef] = useState(1.95);
-
-  // Effective coef shown = baseCoef * (1 + 0.05*streak)
+  const [baseCoef, setBaseCoef] = useState(1.95); // default shown coef
   const [streak, setStreak] = useState(0);
+  const [round, setRound] = useState(1);
+  const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?"));
+  const [flipping, setFlipping] = useState(false);
+  const [resultMsg, setResultMsg] = useState("");
+  const [face, setFace] = useState("H"); // H->$, T->€
+
+  // coefficient shown: base when no streak; boosted when streak > 0
   const effectiveCoef = useMemo(
-    () => Number((baseCoef * (1 + STREAK_BOOST_PER_WIN * streak)).toFixed(2)),
+    () => Number((baseCoef * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak))).toFixed(2)),
     [baseCoef, streak]
   );
 
-  const [round, setRound] = useState(1);
-  const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?")); // top row bubbles
-  const [flipping, setFlipping] = useState(false);
-  const [resultMsg, setResultMsg] = useState("");
-
-  // potential profit shown in the orange "Take" bar (UI-only; uses effectiveCoef)
+  // the orange "Take" bar — you asked for 90% of bet to be added on win
   const potentialProfit = useMemo(() => {
-    const p = Math.max(0, Number(bet || 0)) * Math.max(0, effectiveCoef - 1);
+    const p = Math.max(0, Number(bet || 0)) * 0.90; // always 90%
     return Math.floor(p * 100) / 100;
-  }, [bet, effectiveCoef]);
+  }, [bet]);
 
-  // ---------- balance bootstrap ----------
+  /* ---------- balance bootstrap ---------- */
   useEffect(() => {
     let stopPolling = () => {};
     (async () => {
@@ -99,7 +96,7 @@ export default function Coinflip() {
     };
   }, []);
 
-  // ---------- actions ----------
+  /* ---------- actions ---------- */
   const placeBet = async (side) => {
     if (flipping) return;
     const stake = Math.max(1, Math.floor(Number(bet || 0)));
@@ -108,41 +105,38 @@ export default function Coinflip() {
 
     setFlipping(true);
     setResultMsg("");
+    setFace(side); // show chosen side while flipping
     try { new Audio(flipSound).play().catch(() => {}); } catch {}
 
     try {
-const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
+      const res = await games.coinflip(stake, side === "H" ? "H" : "T");
 
-      // Sync base coef from engine if it reports details.m (so "default" is accurate)
+      // sync default coef from engine if provided (not required)
       const m = Number(res?.details?.m);
       if (Number.isFinite(m) && m > 0) setBaseCoef(m);
+
+      const landed = (res?.details?.landed === "T") ? "T" : "H";
+      setFace(landed);
 
       if (Number.isFinite(res?.newBalance)) {
         setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
       }
 
-      // Use landed from backend to paint bubbles with 'H' or 'T'
-      const landed = (res?.details?.landed === "T") ? "T" : "H";
-
-      // advance round number
       setRound((r) => r + 1);
 
       if (res?.result === "win") {
-        // fill bubbles with H/T for consecutive wins
-        setTrail((prev) => {
-          const next = [landed, ...prev];
-          return next.slice(0, TRAIL_LEN);
-        });
-        // increase streak -> raises shown multiplier
+        // add H/T into leftmost bubble and grow streak
+        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN));
         setStreak((s) => s + 1);
 
-        const profit = Math.max(0, (res.payout ?? 0) - stake);
+        // We credit profit-only in backend; res.payout already equals profit (e.g., 4.50)
+        const profit = Number(res?.payout || 0);
         const msg = `🎉 You Win! +${fmt(profit)}`;
         setResultMsg(msg);
         try { new Audio(winSound).play().catch(() => {}); } catch {}
         alert(msg);
       } else {
-        // reset on loss: multiplier back to default and clear bubbles
+        // loss: reset streak → coef back to default 1.95; clear trail
         setStreak(0);
         setTrail(Array(TRAIL_LEN).fill("?"));
 
@@ -166,7 +160,7 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
 
   return (
     <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
-      {/* ===== Coins header (same as Dice) ===== */}
+      {/* Coins header (match Dice) */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="text-sm">
           <span className="opacity-70 mr-2">Coins: </span>
@@ -174,7 +168,7 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
         </div>
       </div>
 
-      {/* top progress bubbles: show '?' or 'H'/'T' for win streak */}
+      {/* top bubbles */}
       <div className="flex items-center justify-center gap-3 px-4 pt-2">
         {trail.map((ch, i) => (
           <div
@@ -186,14 +180,14 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
         ))}
       </div>
 
-      {/* main coin / coef row */}
+      {/* coin + coef */}
       <div className="flex items-center justify-between px-6 mt-4">
         <div className="text-left">
           <div className="text-2xl font-bold leading-none">{round}</div>
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin */}
+        {/* center coin: $ for H, € for T */}
         <div
           className={`relative w-40 h-40 rounded-full mx-4 flex items-center justify-center transition-transform duration-500 ${
             flipping ? "animate-spin-slow" : ""
@@ -205,17 +199,21 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
           }}
         >
           <div className="w-28 h-28 rounded-full bg-white/15 flex items-center justify-center">
-            <div className="text-5xl font-black text-[#FFDF86] drop-shadow-[0_2px_0_rgba(0,0,0,0.4)]">$</div>
+            <div className="text-5xl font-black text-[#FFDF86] drop-shadow-[0_2px_0_rgba(0,0,0,0.4)]">
+              {face === "T" ? "€" : "$"}
+            </div>
           </div>
         </div>
 
         <div className="text-right">
-          <div className="text-2xl font-extrabold leading-none">x{effectiveCoef.toFixed(2)}</div>
+          <div className="text-2xl font-extrabold leading-none">
+            x{effectiveCoef.toFixed(2)}
+          </div>
           <div className="uppercase tracking-wider text-white/60 text-sm">Coef</div>
         </div>
       </div>
 
-      {/* buttons: Heads / Tails */}
+      {/* choose H/T */}
       <div className="px-4 mt-6 grid grid-cols-2 gap-3">
         <button
           disabled={flipping}
@@ -225,7 +223,7 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
           }`}
         >
           <div className="flex items-center gap-3">
-            <MiniCoin />
+            <MiniCoin symbol="$" />
             <span className="text-lg font-semibold tracking-wide">HEADS</span>
           </div>
         </button>
@@ -237,13 +235,13 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
           }`}
         >
           <div className="flex items-center gap-3">
-            <MiniCoin />
+            <MiniCoin symbol="€" />
             <span className="text-lg font-semibold tracking-wide">TAILS</span>
           </div>
         </button>
       </div>
 
-      {/* bet row */}
+      {/* bet + take */}
       <div className="px-4 mt-6">
         <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
           <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
@@ -253,7 +251,7 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
             >−</button>
             <div className="text-center">
               <span className="text-3xl font-extrabold">{fmt(bet)}</span>
-             
+              <span className="ml-2 opacity-60">1WT</span>
             </div>
             <button
               onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
@@ -261,7 +259,6 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
             >+</button>
           </div>
 
-          {/* orange take bar */}
           <div className="mt-4">
             <div
               className="w-full rounded-xl py-3 text-center font-semibold"
@@ -271,7 +268,7 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
               }}
             >
               <div className="text-lg">
-                {fmt(potentialProfit)} 
+                {fmt(potentialProfit)} <span className="opacity-70">1WT</span>
               </div>
               <div className="text-sm opacity-60 -mt-1">Take</div>
             </div>
@@ -294,10 +291,8 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
         </div>
       )}
 
-      {/* safe area spacer */}
       <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
 
-      {/* slow spin keyframe */}
       <style>{`
         @keyframes spin-slow { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
         .animate-spin-slow { animation: spin-slow 0.9s linear infinite; }
@@ -306,16 +301,19 @@ const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
   );
 }
 
-/* little gradient coin used on the buttons */
-function MiniCoin() {
+function MiniCoin({ symbol = "$" }) {
   return (
     <span
-      className="inline-block w-7 h-7 rounded-full"
+      className="inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold"
       style={{
         background:
           "radial-gradient(60% 60% at 50% 40%, #FFD76A 0%, #FFA928 55%, #E37B00 100%)",
         boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+        color: "#402A00",
       }}
-    />
+      aria-hidden="true"
+    >
+      {symbol}
+    </span>
   );
 }
