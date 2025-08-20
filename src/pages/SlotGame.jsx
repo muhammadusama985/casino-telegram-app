@@ -42,9 +42,16 @@ const SYMBOL_EMOJI = {
 
 function asEmoji(sym) {
   if (!sym) return "🍬";
-  if (sym.length === 1) return sym; // already an emoji (1 char)
-  return SYMBOL_EMOJI[sym] || "🍬";
+  const s = String(sym).trim();
+
+  // If the string already contains an emoji, use it as-is.
+  // \p{Extended_Pictographic} reliably matches emoji code points.
+  if (/\p{Extended_Pictographic}/u.test(s)) return s;
+
+  // Otherwise, map known symbol keys to emojis.
+  return SYMBOL_EMOJI[s] || "🍬";
 }
+
 
 // simple color classes per “family”
 function bgClassFor(sym) {
