@@ -169,6 +169,8 @@ export const games = {
     return this.bet({ game: "slot", stakeCoins });
   },
 
+  
+
   /** Crash: choose a cashout multiplier (e.g. 1.8) */
   crash(stakeCoins, cashoutX = 1.8) {
     return this.bet({ game: "crash", stakeCoins, input: { cashoutX } });

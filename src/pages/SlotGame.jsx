@@ -42,15 +42,34 @@ const SYMBOL_EMOJI = {
 
 function asEmoji(sym) {
   if (!sym) return "🍬";
+
+  // If we accidentally get objects, unwrap {sym}
+  if (typeof sym === "object" && sym !== null) {
+    if ("sym" in sym && typeof sym.sym === "string") return sym.sym;
+    sym = String(sym);
+  }
+
   const s = String(sym).trim();
 
-  // If the string already contains an emoji, use it as-is.
-  // \p{Extended_Pictographic} reliably matches emoji code points.
-  if (/\p{Extended_Pictographic}/u.test(s)) return s;
+  // Prefer a safe “known emoji” set over regex property escapes (some webviews choke)
+  const KNOWN = new Set([
+    "🍌","🍇","🍉","🍑","🍎","🍒","💎","🍭","💣",
+    // also map fallbacks you defined
+    "💠","💚","❤️","💜","🍀",
+  ]);
+  if (KNOWN.has(s)) return s;
 
-  // Otherwise, map known symbol keys to emojis.
-  return SYMBOL_EMOJI[s] || "🍬";
+  // If server sent our textual keys (banana, grapes, etc.)
+  if (SYMBOL_EMOJI[s]) return SYMBOL_EMOJI[s];
+
+  // Last resort: try to detect a pictograph (may fail in older engines)
+  try {
+    if (/\p{Extended_Pictographic}/u.test(s)) return s;
+  } catch { /* ignore if engine lacks Unicode property escapes */ }
+
+  return "🍬";
 }
+
 
 
 // simple color classes per “family”
@@ -160,6 +179,16 @@ export default function SlotBonanza() {
     try {
       // Server calculates results; we just animate and display
       const res = await games.slot(stake);
+      
+
+      if (window.Telegram?.WebApp?.showAlert) {
+  const d = res?.details || {};
+  const row0 = d.cascades?.[0]?.grid?.[0] || [];
+  window.Telegram.WebApp.showAlert(`Src: ${
+    Array.isArray(d.cascades) && d.cascades[0]?.grid ? 'server' : 'fallback'
+  }\nrow0: ${JSON.stringify(row0).slice(0, 180)}...`);
+}
+
 
       // Update balance first if provided
       if (Number.isFinite(res?.newBalance)) {
@@ -410,25 +439,59 @@ function emptyGrid() {
 }
 
 function normalizeGrid(g) {
-  // Accept either array of arrays of strings/emojis, or already-wrapped {v,cleared}
-  if (!Array.isArray(g)) return emptyGrid();
-  const rows = g.length;
-  const cols = Array.isArray(g[0]) ? g[0].length : 0;
-  if (!rows || !cols) return emptyGrid();
+  // Accept array of arrays of:
+  //  - strings (emoji),
+  //  - objects like { sym:"💣", mult:12 }, or
+  //  - already-wrapped { v: ... , cleared? }
+  if (!Array.isArray(g) || !Array.isArray(g[0])) return emptyGrid();
 
-  return g.slice(0, 5).map((row, r) =>
-    (row || []).slice(0, 6).map((cell) =>
-      typeof cell === "object" && cell !== null && ("v" in cell)
-        ? { v: cell.v, cleared: !!cell.cleared }
-        : { v: cell, cleared: false }
-    )
-  );
+  const R = 5, C = 6;
+  const out = [];
+
+  for (let r = 0; r < Math.min(R, g.length); r++) {
+    const row = g[r] || [];
+    const newRow = [];
+    for (let c = 0; c < Math.min(C, row.length); c++) {
+      const cell = row[c];
+
+      // Already in {v, cleared} form
+      if (cell && typeof cell === "object" && "v" in cell) {
+        newRow.push({ v: cell.v, cleared: !!cell.cleared });
+        continue;
+      }
+
+      // Server-style bomb/scatter/regular: { sym, mult? }
+      if (cell && typeof cell === "object" && "sym" in cell) {
+        newRow.push({ v: cell.sym, cleared: false }); // we only render the emoji
+        continue;
+      }
+
+      // Plain emoji string
+      if (typeof cell === "string") {
+        newRow.push({ v: cell, cleared: false });
+        continue;
+      }
+
+      // Fallback
+      newRow.push({ v: null, cleared: false });
+    }
+
+    // pad if row is short
+    while (newRow.length < C) newRow.push({ v: null, cleared: false });
+    out.push(newRow);
+  }
+
+  // pad if total rows < R
+  while (out.length < R) out.push(Array.from({ length: C }, () => ({ v: null, cleared: false })));
+
+  return out;
 }
+
 
 function randomGrid() {
-  // fallback client grid if server didn’t send one
-  const keys = Object.keys(SYMBOL_EMOJI);
+  const EMOJIS = ["🍌","🍇","🍉","🍑","🍎","🍒","💎","🍭","💣"];
   return Array.from({ length: 5 }, () =>
-    Array.from({ length: 6 }, () => keys[Math.floor(Math.random() * keys.length)])
+    Array.from({ length: 6 }, () => EMOJIS[Math.floor(Math.random() * EMOJIS.length)])
   );
 }
+
