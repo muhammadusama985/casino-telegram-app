@@ -160,14 +160,7 @@ export default function SlotBonanza() {
       // Server calculates results; we just animate and display
       const res = await games.slot(stake);
 
-      // Optional debug alert in Telegram WebApp
-      if (window.Telegram?.WebApp?.showAlert) {
-        const d = res?.details || {};
-        const row0 = d.cascades?.[0]?.grid?.[0] || [];
-        window.Telegram.WebApp.showAlert(`Src: ${
-          Array.isArray(d.cascades) && d.cascades[0]?.grid ? 'server' : 'fallback'
-        }\nrow0: ${JSON.stringify(row0).slice(0, 180)}...`);
-      }
+ 
 
       // Update balance first if provided (server truth)
       if (Number.isFinite(res?.newBalance)) {
