@@ -165,9 +165,20 @@ export const games = {
   },
 
   /** Slot: no input */
-  slot(stakeCoins) {
-    return this.bet({ game: "slot", stakeCoins });
-  },
+ 
+/** Slot (Sweet-Bonanza style): can accept optional input (e.g., seeds, bonus flags) */
+slot(stakeCoins, input = {}) {
+  return this.bet({ game: "slot", stakeCoins, input });
+},
+
+/** Optional: pass provably-fair seeds without changing call sites elsewhere */
+slotWithSeeds(stakeCoins, { serverSeed, clientSeed, nonce, round } = {}) {
+  return this.bet({
+    game: "slot",
+    stakeCoins,
+    input: { seeds: { serverSeed, clientSeed, nonce, round } },
+  });
+},
 
   /** Crash: choose a cashout multiplier (e.g. 1.8) */
   crash(stakeCoins, cashoutX = 1.8) {

@@ -1,58 +1,101 @@
-// src/pages/Slot.jsx
-import { useEffect, useMemo, useState } from "react";
+// src/pages/SlotBonanza.jsx
+import { useEffect, useMemo, useRef, useState } from "react";
 import { telegramAuth, getBalance, games } from "../api";
 
-// ---------- helpers ----------
+import spinSfx from "../assets/diceRoll.mp3"; // reuse your sfx
+import winSfx from "../assets/win.mp3";
+import loseSfx from "../assets/lose.mp3";
+
+/* ----------------- helpers ----------------- */
 function toNum(v) {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
-const fmtCoins = (n) =>
-  Number.isFinite(Number(n)) ? Number(n).toLocaleString("en-US") : "0";
-const clampInt = (v, min, max) => {
-  const n = Math.floor(Number(v || 0));
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max ?? n, n));
+function fmt(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return "0";
+  return x.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+// Fallback symbol → emoji map (used if server returns string keys)
+// If server already returns emojis, we just render them as-is.
+const SYMBOL_EMOJI = {
+  banana: "🍌",
+  grapes: "🍇",
+  watermelon: "🍉",
+  plum: "🍑",
+  apple: "🍎",
+  peach: "🍑",
+  lemon: "🍋",
+  candyBlue: "💠",
+  candyGreen: "💚",
+  candyRed: "❤️",
+  candyPurple: "💜",
+  diamond: "💎",
+  clover: "🍀",
+
+  // specials
+  scatter: "🍭",      // lollipop
+  bomb: "💣",         // multiplier bomb
 };
 
-export default function Slot() {
-  // ---- coins managed with the SAME logic you use elsewhere ----
+function asEmoji(sym) {
+  if (!sym) return "🍬";
+  if (sym.length === 1) return sym; // already an emoji (1 char)
+  return SYMBOL_EMOJI[sym] || "🍬";
+}
+
+// simple color classes per “family”
+function bgClassFor(sym) {
+  const key = String(sym).toLowerCase();
+  if (key.includes("bomb")) return "from-amber-400 to-rose-400";
+  if (key.includes("scatter") || key.includes("lollipop")) return "from-pink-400 to-rose-400";
+  if (key.includes("grape")) return "from-violet-500 to-purple-500";
+  if (key.includes("watermelon")) return "from-emerald-500 to-emerald-600";
+  if (key.includes("banana") || key.includes("lemon")) return "from-yellow-400 to-amber-400";
+  if (key.includes("apple") || key.includes("cherry") || key.includes("red")) return "from-rose-500 to-pink-500";
+  if (key.includes("diamond") || key.includes("blue")) return "from-sky-500 to-blue-600";
+  return "from-indigo-500 to-blue-500";
+}
+
+/* ------------- main component ------------- */
+export default function SlotBonanza() {
+  // balance
   const [coins, setCoins] = useState(0);
 
-  // ---- slot UI state ----
-  const symbols = useMemo(() => ["🍒", "🍋", "🔔", "⭐", "7️⃣", "💎", "🍀", "🍇"], []);
-  const [bet, setBet] = useState(10);
+  // betting
+  const [bet, setBet] = useState(1);
+
+  // spin state
   const [spinning, setSpinning] = useState(false);
-  const [result, setResult] = useState(""); // UI text: win/lose
-  const [payout, setPayout] = useState(0);
-  const [lastMult, setLastMult] = useState(null); // e.g., 2x, 10x, etc.
+  const [grid, setGrid] = useState(() => emptyGrid());
+  const [winToast, setWinToast] = useState("");
+  const [freeSpinsLeft, setFreeSpinsLeft] = useState(0);
+  const [lastSpinWin, setLastSpinWin] = useState(0);
+  const [sumBombs, setSumBombs] = useState(0);
 
-  // reels: each is an array of 3 visible symbols
-  const [reelA, setReelA] = useState(["🍒", "🍋", "🔔"]);
-  const [reelB, setReelB] = useState(["⭐", "7️⃣", "💎"]);
-  const [reelC, setReelC] = useState(["🍀", "🍇", "🍒"]);
+  // animation helpers
+  const cascadeQueueRef = useRef([]);
+  const cascadeTimerRef = useRef(null);
 
-  // ---------- BALANCE BOOTSTRAP (same flow as your MainLayout) ----------
+  // precompute whether we’re in bonus (display only)
+  const inBonus = freeSpinsLeft > 0;
+
+  /* ----------- bootstrap balance (same pattern as other pages) ----------- */
   useEffect(() => {
     let stopPolling = () => {};
-
     (async () => {
       try {
-        // 1) Login
         const u = await telegramAuth();
         if (Number.isFinite(Number(u?.coins))) {
           const initial = toNum(u.coins);
           setCoins((prev) => (initial !== prev ? initial : prev));
         }
-
-        // 2) Confirm from backend once
         try {
           const c = await getBalance();
           if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
         } catch {}
-
-        // 3) Start polling
         stopPolling = (() => {
           let alive = true;
           (function tick() {
@@ -61,27 +104,20 @@ export default function Slot() {
               try {
                 const c = await getBalance();
                 if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
-              } catch {
-              } finally {
+              } catch {} finally {
                 if (alive) tick();
               }
             }, 4000);
           })();
-          return () => {
-            alive = false;
-          };
+          return () => { alive = false; };
         })();
       } catch (e) {
-        console.error("[Slot] telegramAuth failed:", e);
+        console.error("[SlotBonanza] telegramAuth failed:", e);
       }
     })();
+    return () => { stopPolling?.(); };
+  }, []);
 
-    return () => {
-      stopPolling?.();
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 🔔 Same refresh hooks as elsewhere (event + tab visibility)
   useEffect(() => {
     const refresh = async () => {
       try {
@@ -100,211 +136,292 @@ export default function Slot() {
     };
   }, []);
 
-  // ---------- reel helpers ----------
-  const randSymbol = () => symbols[Math.floor(Math.random() * symbols.length)];
-  const randomColumn = () => [randSymbol(), randSymbol(), randSymbol()];
-
-  // simulate reel spin visuals while backend decides result
-  const startSpinVisual = () => {
-    setResult("");
-    setPayout(0);
-    setLastMult(null);
-    setSpinning(true);
-  };
-  const stopSpinVisualWithRandoms = () => {
-    setReelA(randomColumn());
-    setReelB(randomColumn());
-    setReelC(randomColumn());
-    setSpinning(false);
-  };
-
-  // ---------- spin / bet ----------
-  const onSpin = async () => {
-    const stake = clampInt(bet, 1);
-    if (stake <= 0) return alert("Enter a valid bet (>= 1).");
+  /* ------------------- spin flow ------------------- */
+  const spin = async () => {
+    if (spinning) return;
+    const stake = Math.max(1, Math.floor(Number(bet || 0)));
+    if (!Number.isFinite(stake) || stake <= 0) return alert("Enter a valid bet (>= 1).");
     if (Number(coins) < stake) return alert("Not enough coins.");
 
-    startSpinVisual();
+    setSpinning(true);
+    setWinToast("");
+    setLastSpinWin(0);
+    setSumBombs(0);
 
-    // keep the reels "moving" by just refreshing symbols periodically
-    let visualTimer = setInterval(() => {
-      setReelA(randomColumn());
-      setReelB(randomColumn());
-      setReelC(randomColumn());
-    }, 90);
+    try { new Audio(spinSfx).play().catch(() => {}); } catch {}
 
-    const startedAt = Date.now();
     try {
-      // Server outcome (RTP aware). Expect: { result, payout, newBalance, details:{ multiplier, factor, eM } }
-      // Use games.slot(stake) helper if you added it; otherwise: games.bet({game:'slot', stakeCoins: stake})
-      const res = (typeof games.slot === "function")
-        ? await games.slot(stake)
-        : await games.bet({ game: "slot", stakeCoins: stake });
+      // Server calculates results; we just animate and display
+      const res = await games.slot(stake);
 
-      // Ensure minimum spin time for feel
-      const minMs = 1000;
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < minMs) {
-        await new Promise((r) => setTimeout(r, minMs - elapsed));
-      }
-
-      try { clearInterval(visualTimer); } catch {}
-      visualTimer = null;
-
-      // Land reels visually (random, purely cosmetic)
-      stopSpinVisualWithRandoms();
-
-      // Update balance from server
+      // Update balance first if provided
       if (Number.isFinite(res?.newBalance)) {
         setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
       }
 
-      // Show result text and payout/multiplier if any
-      const mult = Number(res?.details?.multiplier);
-      if (res?.result === "win" && Number.isFinite(res?.payout) && res.payout > 0) {
-        setPayout(res.payout);
-        if (Number.isFinite(mult) && mult > 0) setLastMult(mult);
-        setResult(`🎉 WIN +${res.payout}${Number.isFinite(mult) ? `  (x${mult})` : ""}`);
-      } else {
-        setResult(`❌ Lose -${stake}`);
+      const d = res?.details || {};
+      // cascades: [{ grid:[[]], cleared:[[r,c]...], stepWin:number, bombs:[2,5], multiplierForStep:number }]
+      const cascades = Array.isArray(d.cascades) && d.cascades.length > 0
+        ? d.cascades
+        : [{ grid: d.grid || randomGrid(), stepWin: res?.payout || 0 }];
+
+      // free spins: track if awarded / remaining
+      if (Number.isFinite(d.freeSpinsAwarded) && d.freeSpinsAwarded > 0) {
+        setFreeSpinsLeft((x) => x + Number(d.freeSpinsAwarded || 0));
+      }
+      if (Number.isFinite(d.freeSpinsLeft)) {
+        setFreeSpinsLeft(Number(d.freeSpinsLeft));
       }
 
-      // Notify app-wide listeners
+      // total multiplier (within a single paid/free spin) – if server sends it
+      if (Number.isFinite(d.multiplierTotal)) {
+        setSumBombs(Number(d.multiplierTotal));
+      } else if (Array.isArray(d.multipliersApplied)) {
+        const sum = d.multipliersApplied.reduce((a, b) => a + Number(b || 0), 0);
+        setSumBombs(sum);
+      }
+
+      // animate cascades sequentially
+      cascadeQueueRef.current = cascades.slice(0);
+      stepCascade();
+
+      // outcome
+      const gotWin = Number(res?.payout || 0) > 0;
+      setLastSpinWin(Number(res?.payout || 0));
+
+      if (gotWin) {
+        const msg = `🎉 Spin Win +${fmt(res.payout)}`;
+        setWinToast(msg);
+        try { new Audio(winSfx).play().catch(() => {}); } catch {}
+      } else {
+        const msg = `🙈 No win`;
+        setWinToast(msg);
+        try { new Audio(loseSfx).play().catch(() => {}); } catch {}
+      }
+
+      // notify other screens to refresh
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
-      console.error("[Slot] spin error:", e);
       const msg = String(e?.message || "");
       if (msg.includes("insufficient-funds")) alert("Not enough coins.");
       else if (msg.includes("min-stake")) alert("Bet is below minimum.");
       else if (msg.includes("max-stake")) alert("Bet exceeds maximum.");
       else alert("Spin failed. Try again.");
     } finally {
-      try { clearInterval(visualTimer); } catch {}
-      setSpinning(false);
+      // let cascade animation complete before enabling again
+      setTimeout(() => setSpinning(false), 400);
     }
   };
 
-  // ---------- UI ----------
+  // run each cascade step with a small delay & flash clears
+  function stepCascade() {
+    clearTimeout(cascadeTimerRef.current);
+    const next = cascadeQueueRef.current.shift();
+    if (!next) return;
+
+    const g = normalizeGrid(next.grid);
+    const hadGrid = g.length && g[0].length;
+    if (!hadGrid) {
+      // if malformed, just skip to next
+      cascadeTimerRef.current = setTimeout(stepCascade, 120);
+      return;
+    }
+
+    // mark cleared cells if provided, to animate fade
+    const cleared = new Set(
+      (next.cleared || []).map(([r, c]) => `${r}:${c}`)
+    );
+
+    // render grid (with fade class for cleared)
+    setGrid(g.map((row, r) => row.map((cell, c) => ({
+      v: cell,
+      cleared: cleared.has(`${r}:${c}`),
+    }))));
+
+    // accumulate multipliers shown during this cascade (if any)
+    if (Array.isArray(next.bombs) && next.bombs.length) {
+      setSumBombs((s) => s + next.bombs.reduce((a, b) => a + Number(b || 0), 0));
+    }
+
+    cascadeTimerRef.current = setTimeout(stepCascade, 420); // move to next cascade after a beat
+  }
+
+  // clear any pending timers on unmount
+  useEffect(() => () => clearTimeout(cascadeTimerRef.current), []);
+
+  /* ------------------- computed UI labels ------------------- */
+  const betLabel = useMemo(() => `${fmt(bet)} 1WT`, [bet]);
+  const bonusPill = inBonus ? (
+    <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-amber-400/20 text-amber-200 border border-amber-300/30">
+      FREE SPINS: {freeSpinsLeft}
+    </span>
+  ) : null;
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-zinc-900 to-black px-4 py-10 text-white">
-      <style>{`
-        .reel {
-          background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-          border-radius: 1rem;
-          border: 1px solid rgba(255,255,255,0.08);
-          box-shadow: inset 0 0 24px rgba(0,0,0,0.35);
-        }
-        .cell {
-          height: 74px;
-          display: grid;
-          place-items: center;
-          font-size: 2rem;
-        }
-        .panel {
-          background: linear-gradient(180deg, rgba(250,204,21,0.12), rgba(250,204,21,0.02));
-          border: 1px solid rgba(250,204,21,0.25);
-          border-radius: 1rem;
-        }
-      `}</style>
-
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-4xl font-extrabold mb-2 text-center">
-          🎰 <span className="text-yellow-400">Slots</span>
-        </h1>
-        <p className="text-center text-zinc-400 mb-6">
-          Spin the reels. Server enforces RTP. Payouts are credited automatically.
-        </p>
-
-        {/* Balance */}
-        <div className="text-2xl mb-6 text-center font-mono text-zinc-300">
-          Balance: <span className="text-yellow-500">{fmtCoins(toNum(coins))} COIN</span>
+    <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
+      {/* Coins header (like Dice/Coinflip) */}
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="text-sm">
+          <span className="opacity-70 mr-2">Coins:</span>
+          <span className="font-bold">{fmt(coins)}</span>
+          {bonusPill}
         </div>
+        {sumBombs > 0 && (
+          <div className="text-xs px-2 py-1 rounded-full bg-emerald-400/15 border border-emerald-300/30">
+            Multiplier Sum: x{fmt(sumBombs)}
+          </div>
+        )}
+      </div>
 
-        {/* Reels */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="reel p-2">
-            {reelA.map((s, i) => (
-              <div key={`a-${i}`} className="cell">{s}</div>
-            ))}
+      {/* Slot frame */}
+      <div className="max-w-md mx-auto px-4 w-full">
+        <div className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#0F1734] to-[#0B1020] p-3 shadow-xl">
+          {/* grid 6x5 (responsive square cells) */}
+          <div className="grid grid-cols-6 gap-2">
+            {grid.flatMap((row, r) =>
+              row.map((cell, c) => (
+                <Cell key={`${r}-${c}`} value={cell?.v} cleared={cell?.cleared} />
+              ))
+            )}
           </div>
-          <div className="reel p-2">
-            {reelB.map((s, i) => (
-              <div key={`b-${i}`} className="cell">{s}</div>
-            ))}
-          </div>
-          <div className="reel p-2">
-            {reelC.map((s, i) => (
-              <div key={`c-${i}`} className="cell">{s}</div>
-            ))}
+
+          {/* info row below grid */}
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <InfoCard label="Last Win" value={`+${fmt(lastSpinWin)}`} accent="emerald" />
+            <InfoCard label="Free Spins" value={fmt(freeSpinsLeft)} accent="amber" />
+            <InfoCard label="Bomb Sum" value={`x${fmt(sumBombs)}`} accent="fuchsia" />
           </div>
         </div>
 
-        {/* Bet panel */}
-        <div className="panel p-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <div className="text-sm font-semibold text-zinc-300 mb-2">Bet (coins)</div>
-              <input
-                type="number"
-                min="1"
-                value={bet}
-                onChange={(e) => setBet(clampInt(e.target.value, 1))}
-                className="text-black w-full px-3 py-2 rounded bg-white font-bold"
-              />
+        {/* bet controls */}
+        <div className="mt-5 rounded-2xl bg-[#12182B] border border-white/10 p-4">
+          <div className="text-xs opacity-70 mb-2">BET AMOUNT</div>
+
+          <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
+            <button
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+              aria-label="Decrease bet"
+            >−</button>
+
+            <div className="text-center">
+              <span className="text-3xl font-extrabold">{betLabel}</span>
             </div>
-            <div className="flex gap-2">
-              {[10, 50, 100].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setBet(n)}
-                  className="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-200 hover:bg-zinc-700 text-sm"
-                >
-                  {n}
-                </button>
-              ))}
-              <button
-                onClick={() => setBet(Math.max(1, Math.floor(coins)))}
-                className="px-3 py-2 rounded-lg bg-zinc-800 text-zinc-200 hover:bg-zinc-700 text-sm"
-              >
-                MAX
-              </button>
-            </div>
+
+            <button
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+              aria-label="Increase bet"
+            >+</button>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            <button onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) * 2))}
+              className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm min-h-[40px]">2X</button>
+            <button onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) * 5))}
+              className="px-3 py-2 rounded bg-black/40 border border-white/10 text-sm min-h-[40px]">5X</button>
+            <button onClick={() => setBet((_) => Math.max(1, Math.floor(coins)))}
+              className="px-3 py-2 rounded bg-[#1F5EFF] text-white text-sm min-h-[40px]">MAX</button>
           </div>
         </div>
 
         {/* Spin button */}
-        <div className="text-center">
+        <div className="mt-6 flex justify-center pb-10">
           <button
-            onClick={onSpin}
+            onClick={spin}
             disabled={spinning}
-            className={`px-6 py-3 rounded-2xl font-bold text-lg shadow-md transition-all duration-200 ${
-              spinning
-                ? "bg-yellow-300 text-black opacity-70 cursor-not-allowed"
-                : "bg-gradient-to-r from-yellow-500 to-amber-400 hover:from-yellow-400 hover:to-amber-300 text-black"
+            className={`w-full max-w-xs py-4 rounded-xl text-xl font-bold shadow-md min-h-[48px] ${
+              spinning ? "bg-fuchsia-300 text-black/80 cursor-not-allowed" : "bg-gradient-to-r from-fuchsia-500 to-violet-600 text-white hover:brightness-110 active:scale-[0.99]"
             }`}
           >
-            {spinning ? "Spinning..." : "Spin"}
+            {spinning ? "Spinning..." : "SPIN"}
           </button>
         </div>
 
-        {/* Result banner */}
-        {result && (
-          <div
-            className={`mt-6 px-6 py-4 text-center rounded-xl font-semibold text-lg ${
-              result.startsWith("🎉")
-                ? "bg-green-600 text-white shadow-lg"
-                : "bg-red-600 text-white shadow-lg"
-            }`}
-          >
-            {result}
+        {/* toast */}
+        {winToast && (
+          <div className="mb-6">
+            <div className={`rounded-xl px-4 py-3 text-center font-semibold ${
+              winToast.includes("Win")
+                ? "bg-emerald-600/30 text-emerald-200"
+                : "bg-slate-600/30 text-slate-200"
+            }`}>
+              {winToast}
+            </div>
           </div>
         )}
-
-        {/* Footer hint */}
-        <div className="mt-6 text-center text-xs text-zinc-500">
-          Results & multiplier come from server. Visual reels are cosmetic.
-        </div>
       </div>
     </div>
+  );
+}
+
+/* ------------- subcomponents ------------- */
+
+// Single grid cell with square aspect + tiny animation when “cleared”
+function Cell({ value, cleared }) {
+  const emoji = asEmoji(value);
+  const bg = bgClassFor(String(value || ""));
+
+  return (
+    <div className={`relative w-full rounded-xl overflow-hidden border border-white/10
+                     bg-gradient-to-br ${bg} shadow-inner
+                     ${cleared ? "animate-ping-fast" : ""}`}
+         style={{ paddingBottom: "100%" /* square */ }}>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-2xl md:text-3xl drop-shadow-[0_2px_0_rgba(0,0,0,0.25)]">
+          {emoji}
+        </span>
+      </div>
+      <style>{`
+        @keyframes ping-fast { 0% { transform: scale(1); opacity: 1; } 70% { transform: scale(1.15); opacity: .6; } 100% { transform: scale(1); opacity: 1; } }
+        .animate-ping-fast { animation: ping-fast 0.35s ease-in-out; }
+      `}</style>
+    </div>
+  );
+}
+
+function InfoCard({ label, value, accent = "emerald" }) {
+  const bg =
+    accent === "emerald" ? "bg-emerald-400/15 border-emerald-300/30" :
+    accent === "amber"   ? "bg-amber-400/15 border-amber-300/30"   :
+    "bg-fuchsia-400/15 border-fuchsia-300/30";
+  return (
+    <div className={`rounded-xl px-3 py-2 border ${bg}`}>
+      <div className="text-[10px] uppercase tracking-wider opacity-70">{label}</div>
+      <div className="text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
+
+/* ------------- grid helpers (defensive) ------------- */
+
+function emptyGrid() {
+  // 5 rows × 6 cols
+  return Array.from({ length: 5 }, () =>
+    Array.from({ length: 6 }, () => ({ v: null, cleared: false }))
+  );
+}
+
+function normalizeGrid(g) {
+  // Accept either array of arrays of strings/emojis, or already-wrapped {v,cleared}
+  if (!Array.isArray(g)) return emptyGrid();
+  const rows = g.length;
+  const cols = Array.isArray(g[0]) ? g[0].length : 0;
+  if (!rows || !cols) return emptyGrid();
+
+  return g.slice(0, 5).map((row, r) =>
+    (row || []).slice(0, 6).map((cell) =>
+      typeof cell === "object" && cell !== null && ("v" in cell)
+        ? { v: cell.v, cleared: !!cell.cleared }
+        : { v: cell, cleared: false }
+    )
+  );
+}
+
+function randomGrid() {
+  // fallback client grid if server didn’t send one
+  const keys = Object.keys(SYMBOL_EMOJI);
+  return Array.from({ length: 5 }, () =>
+    Array.from({ length: 6 }, () => keys[Math.floor(Math.random() * keys.length)])
   );
 }
