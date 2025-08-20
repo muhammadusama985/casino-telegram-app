@@ -18,8 +18,10 @@ function formatCoins(v) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-const STREAK_BOOST_PER_WIN = 0.05; // UI-only boost per consecutive win
-const TRAIL_LEN = 10;
+const STREAK_BOOST_PER_WIN = 0.05;   // UI-only boost per consecutive win (must match backend cfg)
+const BASE_PAYOUT_PCT       = 0.90;  // 90% profit baseline (must match backend cfg)
+const PAYOUT_CAP            = 1.0;   // cap profit at 100% of stake (must match backend cfg)
+const TRAIL_LEN             = 10;
 
 export default function Coinflip() {
   // balance
@@ -35,17 +37,26 @@ export default function Coinflip() {
   const [resultMsg, setResultMsg] = useState("");
   const [face, setFace] = useState("H"); // H->$, T->€
 
+
+
+
   // coefficient shown: base when no streak; boosted when streak > 0
   const effectiveCoef = useMemo(
     () => Number((baseCoef * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak))).toFixed(2)),
     [baseCoef, streak]
   );
 
-  // the orange "Take" bar — you asked for 90% of bet to be added on win
+  // EFFECTIVE payout% that will be CREDITED on win (matches backend: 0.90 * (1 + 0.05*streak), capped)
+  const effectivePayoutPct = useMemo(() => {
+    const boosted = BASE_PAYOUT_PCT * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak));
+    return Math.min(PAYOUT_CAP, Math.max(0.01, Number(boosted)));
+  }, [streak]);
+
+  // “Take” bar shows the PROFIT (not total return)
   const potentialProfit = useMemo(() => {
-    const p = Math.max(0, Number(bet || 0)) * 0.90; // always 90%
-    return Math.floor(p * 100) / 100;
-  }, [bet]);
+    const stake = Math.max(0, Number(bet || 0));
+    return Math.floor((stake * effectivePayoutPct + Number.EPSILON) * 100) / 100;
+  }, [bet, effectivePayoutPct]);
 
   /* ---------- balance bootstrap ---------- */
   useEffect(() => {
@@ -109,9 +120,11 @@ export default function Coinflip() {
     try { new Audio(flipSound).play().catch(() => {}); } catch {}
 
     try {
-      const res = await games.coinflip(stake, side === "H" ? "H" : "T");
+      // IMPORTANT: send streak so backend boosts payout (and credits more on win)
+    const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
 
-      // sync default coef from engine if provided (not required)
+
+      // sync default coef from engine if provided (optional)
       const m = Number(res?.details?.m);
       if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
@@ -125,18 +138,18 @@ export default function Coinflip() {
       setRound((r) => r + 1);
 
       if (res?.result === "win") {
-        // add H/T into leftmost bubble and grow streak
+        // put H/T into trail and grow streak
         setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN));
         setStreak((s) => s + 1);
 
-        // We credit profit-only in backend; res.payout already equals profit (e.g., 4.50)
+        // Backend returns profit-only in res.payout (decimal-safe); show exactly that
         const profit = Number(res?.payout || 0);
         const msg = `🎉 You Win! +${fmt(profit)}`;
         setResultMsg(msg);
         try { new Audio(winSound).play().catch(() => {}); } catch {}
         alert(msg);
       } else {
-        // loss: reset streak → coef back to default 1.95; clear trail
+        // loss → reset streak (UI coef returns to base), clear trail
         setStreak(0);
         setTrail(Array(TRAIL_LEN).fill("?"));
 

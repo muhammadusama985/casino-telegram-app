@@ -134,9 +134,14 @@ export const games = {
 
   /** Coinflip: pick 'H' or 'T' */
   // new (accept optional extraInput and merge it):
-coinflip(stakeCoins, pick = "H", extraInput = {}) {
-  return this.bet({ game: "coinflip", stakeCoins, input: { pick, ...extraInput } });
-},
+ /** Coinflip: pick 'H' or 'T' and pass optional extras (e.g., { streak }) */
+  coinflip(stakeCoins, pick = "H", extraInput = {}) {
+    return this.bet({
+      game: "coinflip",
+      stakeCoins,
+      input: { pick, ...extraInput },
+    });
+  },
 
   /**
    * Dice wrapper — supports BOTH legacy and new over/under mode.
