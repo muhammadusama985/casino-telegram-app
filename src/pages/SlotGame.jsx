@@ -272,7 +272,7 @@ export default function SlotBonanza() {
   useEffect(() => () => clearTimeout(cascadeTimerRef.current), []);
 
   /* ------------------- computed UI labels ------------------- */
-  const betLabel = useMemo(() => `${fmt(bet)} 1WT`, [bet]);
+  const betLabel = useMemo(() => `${fmt(bet)} `, [bet]);
   const bonusPill = inBonus ? (
     <span className="ml-2 px-2 py-0.5 rounded-full text-xs bg-amber-400/20 text-amber-200 border border-amber-300/30">
       FREE SPINS: {freeSpinsLeft}
