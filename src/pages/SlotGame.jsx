@@ -40,35 +40,10 @@ const SYMBOL_EMOJI = {
   bomb: "💣",         // multiplier bomb
 };
 
-function asEmoji(sym) {
-  if (!sym) return "🍬";
-
-  // If we accidentally get objects, unwrap {sym}
-  if (typeof sym === "object" && sym !== null) {
-    if ("sym" in sym && typeof sym.sym === "string") return sym.sym;
-    sym = String(sym);
-  }
-
-  const s = String(sym).trim();
-
-  // Prefer a safe “known emoji” set over regex property escapes (some webviews choke)
-  const KNOWN = new Set([
-    "🍌","🍇","🍉","🍑","🍎","🍒","💎","🍭","💣",
-    // also map fallbacks you defined
-    "💠","💚","❤️","💜","🍀",
-  ]);
-  if (KNOWN.has(s)) return s;
-
-  // If server sent our textual keys (banana, grapes, etc.)
-  if (SYMBOL_EMOJI[s]) return SYMBOL_EMOJI[s];
-
-  // Last resort: try to detect a pictograph (may fail in older engines)
-  try {
-    if (/\p{Extended_Pictographic}/u.test(s)) return s;
-  } catch { /* ignore if engine lacks Unicode property escapes */ }
-
-  return "🍬";
+function asEmoji(val) {
+  return typeof val === "string" ? val : "🍬";
 }
+
 
 
 
@@ -269,10 +244,24 @@ export default function SlotBonanza() {
     );
 
     // render grid (with fade class for cleared)
-    setGrid(g.map((row, r) => row.map((cell, c) => ({
-      v: cell,
-      cleared: cleared.has(`${r}:${c}`),
-    }))));
+// render grid (with fade class for cleared)
+setGrid(
+  g.map((row, r) =>
+    row.map((cell, c) => {
+      // unwrap various shapes into a plain emoji string or null
+      let v = cell;
+      if (v && typeof v === "object") {
+        if ("v" in v) v = v.v;            // from normalizeGrid old/new
+        else if ("sym" in v) v = v.sym;   // server bomb objects { sym:'💣', mult:12 }
+      }
+      return {
+        v,
+        cleared: cleared.has(`${r}:${c}`),
+      };
+    })
+  )
+);
+
 
     // accumulate multipliers shown during this cascade (if any)
     if (Array.isArray(next.bombs) && next.bombs.length) {
@@ -439,11 +428,7 @@ function emptyGrid() {
 }
 
 function normalizeGrid(g) {
-  // Accept array of arrays of:
-  //  - strings (emoji),
-  //  - objects like { sym:"💣", mult:12 }, or
-  //  - already-wrapped { v: ... , cleared? }
-  if (!Array.isArray(g) || !Array.isArray(g[0])) return emptyGrid();
+  if (!Array.isArray(g) || !Array.isArray(g[0])) return emptyGrid().map(row => row.map(c => null));
 
   const R = 5, C = 6;
   const out = [];
@@ -452,40 +437,23 @@ function normalizeGrid(g) {
     const row = g[r] || [];
     const newRow = [];
     for (let c = 0; c < Math.min(C, row.length); c++) {
-      const cell = row[c];
+      let cell = row[c];
 
-      // Already in {v, cleared} form
-      if (cell && typeof cell === "object" && "v" in cell) {
-        newRow.push({ v: cell.v, cleared: !!cell.cleared });
-        continue;
+      // unwrap known shapes to a plain emoji string or null
+      if (cell && typeof cell === "object") {
+        if ("v" in cell) cell = cell.v;        // already-wrapped shape
+        else if ("sym" in cell) cell = cell.sym; // server bomb { sym:'💣', mult }
       }
 
-      // Server-style bomb/scatter/regular: { sym, mult? }
-      if (cell && typeof cell === "object" && "sym" in cell) {
-        newRow.push({ v: cell.sym, cleared: false }); // we only render the emoji
-        continue;
-      }
-
-      // Plain emoji string
-      if (typeof cell === "string") {
-        newRow.push({ v: cell, cleared: false });
-        continue;
-      }
-
-      // Fallback
-      newRow.push({ v: null, cleared: false });
+      newRow.push((typeof cell === "string") ? cell : null);
     }
-
-    // pad if row is short
-    while (newRow.length < C) newRow.push({ v: null, cleared: false });
+    while (newRow.length < C) newRow.push(null);
     out.push(newRow);
   }
-
-  // pad if total rows < R
-  while (out.length < R) out.push(Array.from({ length: C }, () => ({ v: null, cleared: false })));
-
+  while (out.length < R) out.push(Array.from({ length: C }, () => null));
   return out;
 }
+
 
 
 function randomGrid() {
