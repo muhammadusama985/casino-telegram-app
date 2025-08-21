@@ -279,45 +279,38 @@ function InfoCard({ label, value, accent = "emerald" }) {
 
 /** very lightweight SVG sparkline */
 /** Stylish, scrolling SVG sparkline with a start-plane and glow */
- function Sparkline({ points, color = "#7c3aed", height = 160 }) {
-   if (!points?.length) return null;
+function Sparkline({ points, color = "#7c3aed" }) {
+  if (!points?.length) return null;
 
-
- const W = 600, H = height; // use the passed height
-  const pad = 2;
+  const W = 600, H = 160;     // more headroom; if you must keep 96, change here
+  const pad = 4;
   const WINDOW_SEC = 8;
 
-  // camera window (no scroll until filled)
+  // camera window
   const maxT = Math.max(...points.map(p => p[0]), 0);
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  // visible slice (+tiny buffer)
+  // visible slice
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // y-scale from current visible values (log to use height nicely)
+  // y-scale (log) over visible values
   const visVals = visible.map(p => Math.max(1.00001, p[1]));
-  const vMin = Math.min(...visVals);
-  const vMax = Math.max(...visVals);
-  const logMin = Math.log(vMin);
-  const logMax = Math.log(Math.max(vMin + 1e-6, vMax));
+  const vMin = Math.min(...visVals), vMax = Math.max(...visVals);
+  const logMin = Math.log(vMin), logMax = Math.log(Math.max(vMin + 1e-6, vMax));
 
-  const sx = (t) => {
-    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);
-    return pad + (W - 2 * pad) * Math.min(1, Math.max(0, u));
-  };
-  const syRaw = (x) => {
+  const sx = (t) => pad + (W - 2 * pad) * Math.min(1, Math.max(0, (t - t0) / Math.max(1e-6, WINDOW_SEC)));
+  const sy = (x) => {
     const lx = Math.log(Math.max(1.00001, x));
     const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin));
     return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // sample value at any time (linear) using full history
+  // linear sample at any time
   function sampleAt(tTarget) {
     const all = points;
-    const tMin = all[0][0], tMax2 = all[all.length - 1][0];
-    if (tTarget <= tMin) return { t: tMin, x: all[0][1] };
-    if (tTarget >= tMax2) return { t: tMax2, x: all[all.length - 1][1] };
+    if (tTarget <= all[0][0]) return { t: all[0][0], x: all[0][1] };
+    if (tTarget >= all[all.length - 1][0]) return { t: all[all.length - 1][0], x: all[all.length - 1][1] };
     let i = 1;
     while (i < all.length && all[i][0] < tTarget) i++;
     const [t1, v1] = all[i - 1], [t2, v2] = all[i];
@@ -325,53 +318,53 @@ function InfoCard({ label, value, accent = "emerald" }) {
     return { t: tTarget, x: v1 + a * (v2 - v1) };
   }
 
-  // plane at the head of the visible window
+  // start anchored to left edge at the window boundary
+  const start = sampleAt(t0);
+  const startX = pad;
+  const startY = sy(start.x);
+
+  // map only points inside the window
+  const inWin = points.filter(([t]) => t >= t0);
+  const mapped = inWin.map(([t, x]) => [sx(t), sy(x)]);
+
+  // --- build path with an explicit "lift-off" before smoothing ---
+  // this prevents the first control handle from dragging a long flat baseline.
+  let d = `M${startX},${startY}`;
+  if (mapped.length) {
+    const [x1, y1] = mapped[0];
+    const dx = Math.max(8, (x1 - startX) * 0.25);        // small horizontal nudge
+    const dy = Math.max(10, Math.abs(y1 - startY) * 0.35); // up-tilt (SVG y- goes up)
+    const liftX = startX + dx;
+    const liftY = startY - dy;
+
+    // straight lift-off segment, then to the first real point
+    d += ` L${liftX},${liftY} L${x1},${y1}`;
+
+    // smooth the rest with Catmull-Rom → Bézier
+    for (let i = 1; i < mapped.length - 1; i++) {
+      const p0 = mapped[i - 1];
+      const p1 = mapped[i];
+      const p2 = mapped[i + 1];
+      const p3 = mapped[Math.min(mapped.length - 1, i + 2)];
+
+      const c1x = p1[0] + (p2[0] - (p0?.[0] ?? p1[0])) / 6;
+      const c1y = p1[1] + (p2[1] - (p0?.[1] ?? p1[1])) / 6;
+      const c2x = p2[0] - ((p3?.[0] ?? p2[0]) - p1[0]) / 6;
+      const c2y = p2[1] - ((p3?.[1] ?? p2[1]) - p1[1]) / 6;
+
+      d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+    }
+  }
+
+  // plane at head
   const tHead = visible[visible.length - 1][0];
   const head = sampleAt(tHead);
   const planeX = sx(head.t);
-  const planeY = syRaw(head.x);
+  const planeY = sy(head.x);
 
-  // 🚫 baseline fix:
-  //   start X stays at left edge,
-  //   start Y is the value *at the current left boundary* (t0),
-  //   so the path lifts immediately instead of running flat.
-  const startAtLeft = sampleAt(t0);
-  const startX = pad;
-  const startY = syRaw(startAtLeft.x);
-
-  // draw only points within the window (t ≥ t0) up to the plane
-  const ptsInWin = points.filter(([t]) => t >= t0 && t <= head.t + 1e-6);
-  const pathPts = [
-    [startX, startY],
-    ...ptsInWin.map(([t, x]) => [sx(t), syRaw(x)]),
-  ];
-
-  // smooth curve (Catmull–Rom → cubic Bézier); pad ends to keep anchor rigid
-  function toSmoothPath(pts) {
-    if (pts.length < 2) return "";
-    if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
-    const p = [pts[0], ...pts, pts[pts.length - 1]];
-    let d = `M${p[0][0]},${p[0][1]}`;
-    for (let i = 0; i < p.length - 2; i++) {
-      const p0 = p[Math.max(0, i - 1)];
-      const p1 = p[i];
-      const p2 = p[i + 1];
-      const p3 = p[i + 2];
-      const c1x = p1[0] + (p2[0] - p0[0]) / 6;
-      const c1y = p1[1] + (p2[1] - p0[1]) / 6;
-      const c2x = p2[0] - (p3[0] - p1[0]) / 6;
-      const c2y = p2[1] - (p3[1] - p1[1]) / 6;
-      d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
-    }
-    return d;
-  }
-  const d = toSmoothPath(pathPts);
-
-  // plane banking angle (based on local slope)
+  // banking angle
   const prev = sampleAt(Math.max(t0, head.t - 0.08));
-  const dx = sx(head.t) - sx(prev.t);
-  const dy = syRaw(head.x) - syRaw(prev.x);
-  const angleDeg = (Math.atan2(-(dy), dx) * 180) / Math.PI;
+  const angleDeg = (Math.atan2(-(sy(head.x) - sy(prev.x)), (sx(head.t) - sx(prev.t))) * 180) / Math.PI;
 
   const gradId = "spark-grad";
   const glowId = "spark-glow";
@@ -381,10 +374,7 @@ function InfoCard({ label, value, accent = "emerald" }) {
       <defs>
         <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="6" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
         <linearGradient id={gradId} x1="0%" y1="0%" x2="100%">
           <stop offset="0%"  stopColor={color} stopOpacity="0.45" />
@@ -393,7 +383,6 @@ function InfoCard({ label, value, accent = "emerald" }) {
         </linearGradient>
       </defs>
 
-      {/* curved, glow trail (starts at left edge; no flat baseline) */}
       <path
         d={d}
         fill="none"
@@ -404,7 +393,6 @@ function InfoCard({ label, value, accent = "emerald" }) {
         filter={`url(#${glowId})`}
       />
 
-      {/* head marker + plane */}
       <circle cx={planeX} cy={planeY} r={7.5} fill={color} opacity="0.98" />
       <text
         transform={`translate(${planeX}, ${planeY - 13}) rotate(${angleDeg})`}
@@ -418,6 +406,7 @@ function InfoCard({ label, value, accent = "emerald" }) {
     </svg>
   );
 }
+
 
 
 
