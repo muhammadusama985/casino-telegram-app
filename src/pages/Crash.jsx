@@ -281,39 +281,40 @@ function InfoCard({ label, value, accent = "emerald" }) {
 function Sparkline({ points, color = "#7c3aed" }) {
   if (!points?.length) return null;
 
-  const W = 600, H = 600;
-  const pad = 8;
-  const WINDOW_SEC = 8; // pan only after this fills
+  // SVG viewport (parent div is h-24 ≈ 96px; we'll squeeze max out of it)
+  const W = 600, H = 96;
+  const pad = 4;            // tighter padding -> more vertical room
+  const WINDOW_SEC = 8;     // pan only after this fills
 
-  // latest time
+  // latest time and left-edge of moving window
   const maxT = Math.max(...points.map(p => p[0]), 0);
-  // camera: no scroll until window fills; then follow the last WINDOW_SEC
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  // takeoff time (first point) — we keep the trail attached to this start
-  const tStart = points[0][0] ?? 0;
-
-  // visible slice (small buffer to avoid pop)
+  // visible slice (+ tiny buffer to avoid pop)
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // y-scale (log) from what’s currently visible so tall climbs still fit
-  const maxX = Math.max(...visible.map(p => p[1])) || 1.00001;
-  const logMax = Math.log(Math.max(2, maxX));
+  // --- Y SCALING: use log over current visible [min,max] so it fills height ---
+  const visVals = visible.map(p => Math.max(1.00001, p[1]));
+  const vMin = Math.min(...visVals);
+  const vMax = Math.max(...visVals);
+  const logMin = Math.log(vMin);
+  const logMax = Math.log(Math.max(vMin + 1e-6, vMax));
 
   const sx = (t) => {
-    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC); // 0..1 across current window
+    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);     // 0..1 across window
     return pad + (W - 2 * pad) * Math.min(1, Math.max(0, u));
   };
   const sy = (x) => {
-    const ly = Math.log(Math.max(1.00001, x));
-    const ny = ly / (logMax || 1);
+    const lx = Math.log(Math.max(1.00001, x));
+    // normalize to [0,1] using current visible range
+    const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin));
     return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // linear sampler: value at any time t
+  // sample value at arbitrary time (linear interpolation) using full history
   function sampleAt(tTarget) {
-    const all = points; // use full history for clean start anchoring
+    const all = points;
     const tMin = all[0][0];
     const tMax = all[all.length - 1][0];
     if (tTarget <= tMin) return { t: tMin, x: all[0][1] };
@@ -332,25 +333,39 @@ function Sparkline({ points, color = "#7c3aed" }) {
   const planeX = sx(head.t);
   const planeY = sy(head.x);
 
-  // --- TRAIL ---
-  // Always start trail from the TAKEOFF time. If takeoff scrolled out,
-  // we clamp its x to the left edge so the line never “leaves” its start.
-  const startSample = sampleAt(Math.max(tStart, t0)); // y at current left boundary or takeoff
-  const startX = (tStart < t0) ? pad : sx(startSample.t); // hard-left when scrolled
+  // anchor trail to takeoff. If takeoff scrolled out, keep it pegged to left edge.
+  const tStart = points[0][0] ?? 0;
+  const startSample = sampleAt(Math.max(tStart, t0));
+  const startX = (tStart < t0) ? pad : sx(startSample.t);
   const startY = sy(startSample.x);
 
-  // Build path from anchored start → all points up to the plane (head)
+  // path points from anchored start → all original points up to the plane
   const uptoHead = points.filter(([t]) => t <= head.t + 1e-6);
-  let d = `M${startX.toFixed(1)},${startY.toFixed(1)}`;
-  for (let i = 0; i < uptoHead.length; i++) {
-    const [t, x] = uptoHead[i];
-    // points before current window still map to < pad; clamp so tail stays pegged to left
-    const X = Math.max(pad, sx(t));
-    const Y = sy(x);
-    d += ` L${X.toFixed(1)},${Y.toFixed(1)}`;
-  }
+  const pathPts = [[startX, startY], ...uptoHead.map(([t, x]) => [Math.max(pad, sx(t)), sy(x)])];
 
-  // slope near head → rotate plane to match (for that “banking” feel)
+  // --- Smooth curve (Catmull-Rom → cubic Bézier) ---
+  function pathCatmullRomToBezier(pts) {
+    if (pts.length < 2) return "";
+    if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
+    const segs = [];
+    segs.push(`M${pts[0][0]},${pts[0][1]}`);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(pts.length - 1, i + 2)];
+      // Catmull-Rom to Bezier
+      const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+      const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+      const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+      const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      segs.push(`C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`);
+    }
+    return segs.join(" ");
+  }
+  const d = pathCatmullRomToBezier(pathPts);
+
+  // rotate plane with slope for a “banking” feel
   const prev = sampleAt(Math.max(tStart, head.t - 0.08));
   const dx = sx(head.t) - sx(prev.t);
   const dy = sy(head.x) - sy(prev.x);
@@ -363,46 +378,43 @@ function Sparkline({ points, color = "#7c3aed" }) {
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full">
       <defs>
         <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="blur" />
+          <feGaussianBlur stdDeviation="5" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
         <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%"  stopColor={color} stopOpacity="0.4" />
-          <stop offset="60%" stopColor={color} stopOpacity="0.9" />
+          <stop offset="0%"  stopColor={color} stopOpacity="0.45" />
+          <stop offset="60%" stopColor={color} stopOpacity="0.95" />
           <stop offset="100%" stopColor={color} stopOpacity="1" />
         </linearGradient>
       </defs>
 
-      {/* trail from the anchored start to the plane (never disconnects) */}
+      {/* curvy trail from anchored start to plane (never disconnects) */}
       <path
         d={d}
         fill="none"
         stroke={`url(#${gradId})`}
-        strokeWidth="5.5"           
+        strokeWidth={6.5}               // thicker for visibility
         strokeLinecap="round"
         strokeLinejoin="round"
         filter={`url(#${glowId})`}
       />
 
-      {/* head marker (brighter/larger) */}
-      <circle cx={planeX} cy={planeY} r="6" fill={color} opacity="0.98" />
+      {/* head marker */}
+      <circle cx={planeX} cy={planeY} r={7} fill={color} opacity="0.98" />
 
-      {/* bigger plane, rotated with slope */}
+      {/* larger plane, rotated with slope; nudge up a bit so it doesn't cover the dot */}
       <text
         transform={`translate(${planeX}, ${planeY - 12}) rotate(${angleDeg})`}
-        fontSize="30"                /* larger plane as requested */
+        fontSize={32}
         textAnchor="middle"
         dominantBaseline="central"
-        style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.7))" }}
+        style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.75))" }}
       >
         ✈️
       </text>
     </svg>
   );
 }
-
-
-
