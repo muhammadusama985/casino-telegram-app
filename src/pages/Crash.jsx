@@ -283,30 +283,18 @@ function Sparkline({ points, color = "#7c3aed" }) {
   if (!points?.length) return null;
 
   const W = 600, H = 96;
-  const pad = 4;
+  const pad = 2;
   const WINDOW_SEC = 8;
 
-  // anchor the very first pixel for the whole round
-  const anchorRef = useRef(null);
-  if (!anchorRef.current || points.length === 1) {
-    anchorRef.current = {
-      xPx: pad,
-      yPx: null,
-      tStart: points[0][0] ?? 0,
-      vStart: points[0][1] ?? 1.0,
-    };
-  }
-  const { xPx: startXPx, tStart, vStart } = anchorRef.current;
-
-  // camera window (no scroll until full; then follow last WINDOW_SEC)
+  // camera window (no scroll until filled)
   const maxT = Math.max(...points.map(p => p[0]), 0);
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  // visible slice (+ tiny buffer)
+  // visible slice (+tiny buffer)
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // y-scale from current VISIBLE values (log range to use height nicely)
+  // y-scale from current visible values (log to use height nicely)
   const visVals = visible.map(p => Math.max(1.00001, p[1]));
   const vMin = Math.min(...visVals);
   const vMax = Math.max(...visVals);
@@ -323,7 +311,7 @@ function Sparkline({ points, color = "#7c3aed" }) {
     return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // sample any time (linear) using full history (for stable start height)
+  // sample value at any time (linear) using full history
   function sampleAt(tTarget) {
     const all = points;
     const tMin = all[0][0], tMax2 = all[all.length - 1][0];
@@ -336,35 +324,38 @@ function Sparkline({ points, color = "#7c3aed" }) {
     return { t: tTarget, x: v1 + a * (v2 - v1) };
   }
 
-  // head/plane at latest visible time
+  // plane at the head of the visible window
   const tHead = visible[visible.length - 1][0];
   const head = sampleAt(tHead);
+  const planeX = sx(head.t);
+  const planeY = syRaw(head.x);
 
-  // lock the start Y pixel once per round (prevents any “tail slide”)
-  const startYPxCurrent = syRaw(anchorRef.current.vStart);
-  if (anchorRef.current.yPx == null) {
-    anchorRef.current.yPx = startYPxCurrent;
-  }
-  const startYPx = anchorRef.current.yPx;
+  // 🚫 baseline fix:
+  //   start X stays at left edge,
+  //   start Y is the value *at the current left boundary* (t0),
+  //   so the path lifts immediately instead of running flat.
+  const startAtLeft = sampleAt(t0);
+  const startX = pad;
+  const startY = syRaw(startAtLeft.x);
 
-  // === KEY FIX: only include points inside the window ===
-  // We draw from the fixed anchor → points with t >= t0 → head.
-  const uptoHeadVisible = points.filter(([t]) => t >= t0 && t <= head.t + 1e-6);
-
-  // assemble path points (no pre-window samples = no bottom-line snap)
+  // draw only points within the window (t ≥ t0) up to the plane
+  const ptsInWin = points.filter(([t]) => t >= t0 && t <= head.t + 1e-6);
   const pathPts = [
-    [startXPx, startYPx], // fixed left anchor
-    ...uptoHeadVisible.map(([t, x]) => [sx(t), syRaw(x)]),
+    [startX, startY],
+    ...ptsInWin.map(([t, x]) => [sx(t), syRaw(x)]),
   ];
 
-  // Catmull–Rom → cubic Bézier, duplicate first 2 points to keep anchor rigid
+  // smooth curve (Catmull–Rom → cubic Bézier); pad ends to keep anchor rigid
   function toSmoothPath(pts) {
     if (pts.length < 2) return "";
     if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
-    const p = [pts[0], pts[0], ...pts, pts[pts.length - 1]]; // pad ends
-    let d = `M${p[1][0]},${p[1][1]}`;
-    for (let i = 1; i < p.length - 2; i++) {
-      const p0 = p[i - 1], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2];
+    const p = [pts[0], ...pts, pts[pts.length - 1]];
+    let d = `M${p[0][0]},${p[0][1]}`;
+    for (let i = 0; i < p.length - 2; i++) {
+      const p0 = p[Math.max(0, i - 1)];
+      const p1 = p[i];
+      const p2 = p[i + 1];
+      const p3 = p[i + 2];
       const c1x = p1[0] + (p2[0] - p0[0]) / 6;
       const c1y = p1[1] + (p2[1] - p0[1]) / 6;
       const c2x = p2[0] - (p3[0] - p1[0]) / 6;
@@ -375,11 +366,11 @@ function Sparkline({ points, color = "#7c3aed" }) {
   }
   const d = toSmoothPath(pathPts);
 
-  // plane pixel + banking angle
-  const planeX = sx(head.t);
-  const planeY = syRaw(head.x);
-  const prev = sampleAt(Math.max(tStart, head.t - 0.08));
-  const angleDeg = (Math.atan2(-(syRaw(head.x) - syRaw(prev.x)), (sx(head.t) - sx(prev.t))) * 180) / Math.PI;
+  // plane banking angle (based on local slope)
+  const prev = sampleAt(Math.max(t0, head.t - 0.08));
+  const dx = sx(head.t) - sx(prev.t);
+  const dy = syRaw(head.x) - syRaw(prev.x);
+  const angleDeg = (Math.atan2(-(dy), dx) * 180) / Math.PI;
 
   const gradId = "spark-grad";
   const glowId = "spark-glow";
@@ -401,7 +392,7 @@ function Sparkline({ points, color = "#7c3aed" }) {
         </linearGradient>
       </defs>
 
-      {/* curved, glow trail (anchored; never touches a baseline) */}
+      {/* curved, glow trail (starts at left edge; no flat baseline) */}
       <path
         d={d}
         fill="none"
@@ -426,5 +417,6 @@ function Sparkline({ points, color = "#7c3aed" }) {
     </svg>
   );
 }
+
 
 
