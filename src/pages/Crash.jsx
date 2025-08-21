@@ -182,9 +182,9 @@ export default function Crash() {
             </div>
 
             {/* Sparkline */}
-            <div className="mt-6 h-24 w-full">
-              <Sparkline points={points} color="#7c3aed" />
-            </div>
+          <div className="mt-6 h-40 md:h-48 w-full">
+ <Sparkline points={points} color="#7c3aed" height={160} />
+  </div>
 
             {/* Info row */}
             <div className="mt-6 grid grid-cols-3 gap-2 text-center">
@@ -279,10 +279,11 @@ function InfoCard({ label, value, accent = "emerald" }) {
 
 /** very lightweight SVG sparkline */
 /** Stylish, scrolling SVG sparkline with a start-plane and glow */
-function Sparkline({ points, color = "#7c3aed" }) {
-  if (!points?.length) return null;
+ function Sparkline({ points, color = "#7c3aed", height = 160 }) {
+   if (!points?.length) return null;
 
-  const W = 600, H = 96;
+
+ const W = 600, H = height; // use the passed height
   const pad = 2;
   const WINDOW_SEC = 8;
 
