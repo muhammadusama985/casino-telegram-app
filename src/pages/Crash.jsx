@@ -1,8 +1,8 @@
-// Crash.jsx — JS/JSX (no TS). Uses src/api.js: games.crash() + getBalance().
-// Live-growing line behind a nose-locked plane. New Bet UI per screenshot.
+// Crash.jsx — JS/JSX (no TS). Uses src/api.js: games.crash() + getBalance() + telegramAuth().
+// Live-growing line behind a nose-locked plane. Bet UI per your screenshot.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { games, getBalance } from "../api";
+import { games, getBalance, telegramAuth } from "../api";
 
 /******************** UTILS ********************/
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -13,6 +13,17 @@ const fmt = (n, dp = 2) =>
     maximumFractionDigits: dp,
   });
 
+// requested helpers
+const toNum = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+const clampInt = (v, min, max) => {
+  const n = Math.floor(Number(v || 0));
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max ?? n, n));
+};
+
 /******************** MAIN ********************/
 export default function Crash() {
   // wallet (server truth)
@@ -21,7 +32,7 @@ export default function Crash() {
   const [err, setErr] = useState("");
 
   // user inputs
-  const [bet, setBet] = useState(1000);       // screenshot shows 1,000.00
+  const [bet, setBet] = useState(1000);       // matches screenshot
   const [autoCashout, setAutoCashout] = useState("1.80"); // required for server-driven crash
 
   // round state
@@ -53,7 +64,62 @@ export default function Crash() {
     ro.observe(el); return () => ro.disconnect();
   }, []);
 
-  // initial balance
+  /* ===== Your Telegram auth + polling block (added verbatim, adapted to balance/setBalance) ===== */
+  useEffect(() => {
+    let stopPolling = () => {};
+    (async () => {
+      try {
+        const u = await telegramAuth();
+        if (Number.isFinite(Number(u?.coins))) {
+          const initial = toNum(u.coins);
+          setBalance((prev) => (initial !== prev ? initial : prev));
+        }
+        try {
+          const c = await getBalance();
+          if (Number.isFinite(c)) setBalance((prev) => (c !== prev ? c : prev));
+        } catch {}
+        stopPolling = (() => {
+          let alive = true;
+          (function tick() {
+            setTimeout(async () => {
+              if (!alive) return;
+              try {
+                const c = await getBalance();
+                if (Number.isFinite(c)) setBalance((prev) => (c !== prev ? c : prev));
+              } catch {} finally {
+                if (alive) tick();
+              }
+            }, 4000);
+          })();
+          return () => { alive = false; };
+        })();
+      } catch (e) {
+        console.error(" telegramAuth failed:", e);
+      }
+    })();
+    return () => { stopPolling?.(); };
+  }, []);
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const c = await getBalance();
+        if (Number.isFinite(c)) setBalance((prev) => (c !== prev ? c : prev));
+      } catch {}
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("balance:refresh", refresh);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("balance:refresh", refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+  /* ===== end Telegram auth block ===== */
+
+  // initial balance (kept; harmless alongside polling/auth)
   useEffect(() => {
     (async () => {
       try {
@@ -385,7 +451,7 @@ export default function Crash() {
           </div>
 
           <div className="tip">
-            Uses your <b>src/api.js</b> → <code>games.crash</code> and <code>getBalance</code>. No TS.
+            Uses your <b>src/api.js</b> → <code>telegramAuth</code>, <code>games.crash</code>, and <code>getBalance</code>. No TS.
           </div>
         </div>
       </div>
