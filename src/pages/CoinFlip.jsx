@@ -37,6 +37,9 @@ export default function Coinflip() {
   const [resultMsg, setResultMsg] = useState("");
   const [face, setFace] = useState("H"); // H->$, T->€
 
+
+
+
   // coefficient shown: base when no streak; boosted when streak > 0
   const effectiveCoef = useMemo(
     () => Number((baseCoef * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak))).toFixed(2)),
@@ -55,7 +58,7 @@ export default function Coinflip() {
     return Math.floor((stake * effectivePayoutPct + Number.EPSILON) * 100) / 100;
   }, [bet, effectivePayoutPct]);
 
-  // balance bootstrap (unchanged)
+  /* ---------- balance bootstrap ---------- */
   useEffect(() => {
     let stopPolling = () => {};
     (async () => {
@@ -118,7 +121,8 @@ export default function Coinflip() {
 
     try {
       // IMPORTANT: send streak so backend boosts payout (and credits more on win)
-      const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
+    const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
+
 
       // sync default coef from engine if provided (optional)
       const m = Number(res?.details?.m);
@@ -169,22 +173,11 @@ export default function Coinflip() {
 
   return (
     <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
-      {/* Coins header with Back button */}
+      {/* Coins header (match Dice) */}
       <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => (window.history.length > 1 ? window.history.back() : (window.location.href = "/"))}
-            aria-label="Back"
-            className="w-9 h-9 rounded-md border border-white/10 bg-white/5 flex items-center justify-center active:scale-95"
-          >
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
-          <div className="text-sm">
-            <span className="opacity-70 mr-2">Coins: </span>
-            <span className="font-bold">{formatCoins(coins)}</span>
-          </div>
+        <div className="text-sm">
+          <span className="opacity-70 mr-2">Coins: </span>
+          <span className="font-bold">{formatCoins(coins)}</span>
         </div>
       </div>
 
@@ -207,43 +200,20 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin: $ for H (front), € for T (back) */}
+        {/* center coin: $ for H, € for T */}
         <div
-          className={`relative w-40 h-40 mx-4 [perspective:800px] ${
-            flipping ? "flip-anim" : face === "T" ? "show-back" : "show-front"
+          className={`relative w-40 h-40 rounded-full mx-4 flex items-center justify-center transition-transform duration-500 ${
+            flipping ? "animate-spin-slow" : ""
           }`}
+          style={{
+            boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
+            background:
+              "radial-gradient(60% 60% at 50% 40%, #FFD76A 0%, #FFA928 55%, #E37B00 100%)",
+          }}
         >
-          <div className="coin3d">
-            {/* FRONT = HEADS = $ */}
-            <div
-              className="coin-face coin-front rounded-full flex items-center justify-center"
-              style={{
-                boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
-                background:
-                  "radial-gradient(60% 60% at 50% 40%, #FFD76A 0%, #FFA928 55%, #E37B00 100%)",
-              }}
-            >
-              <div className="w-28 h-28 rounded-full bg-white/15 flex items-center justify-center">
-                <div className="text-5xl font-black text-[#FFDF86] drop-shadow-[0_2px_0_rgba(0,0,0,0.4)]">
-                  $
-                </div>
-              </div>
-            </div>
-
-            {/* BACK = TAILS = € */}
-            <div
-              className="coin-face coin-back rounded-full flex items-center justify-center"
-              style={{
-                boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
-                background:
-                  "radial-gradient(60% 60% at 50% 40%, #FFD76A 0%, #FFA928 55%, #E37B00 100%)",
-              }}
-            >
-              <div className="w-28 h-28 rounded-full bg-white/15 flex items-center justify-center">
-                <div className="text-5xl font-black text-[#FFDF86] drop-shadow-[0_2px_0_rgba(0,0,0,0.4)]">
-                  €
-                </div>
-              </div>
+          <div className="w-28 h-28 rounded-full bg-white/15 flex items-center justify-center">
+            <div className="text-5xl font-black text-[#FFDF86] drop-shadow-[0_2px_0_rgba(0,0,0,0.4)]">
+              {face === "T" ? "€" : "$"}
             </div>
           </div>
         </div>
@@ -337,31 +307,8 @@ export default function Coinflip() {
       <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
 
       <style>{`
-        /* 3D coin flip: shows $ while front, € while back */
-        .coin3d {
-          position: relative;
-          width: 100%;
-          height: 100%;
-          transform-style: preserve-3d;
-          transition: transform .45s cubic-bezier(.2,.7,.2,1);
-        }
-        .coin-face {
-          position: absolute;
-          inset: 0;
-          border-radius: 9999px;
-          backface-visibility: hidden;
-          -webkit-backface-visibility: hidden;
-        }
-        .coin-front { transform: rotateY(0deg) translateZ(1px); }
-        .coin-back  { transform: rotateY(180deg) translateZ(1px); }
-
-        /* continuous flip while waiting for server */
-        .flip-anim .coin3d { animation: coin-flip 0.9s linear infinite; }
-        @keyframes coin-flip { from { transform: rotateY(0deg);} to { transform: rotateY(360deg);} }
-
-        /* settle orientation after result */
-        .show-front .coin3d { transform: rotateY(0deg); }
-        .show-back  .coin3d { transform: rotateY(180deg); }
+        @keyframes spin-slow { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+        .animate-spin-slow { animation: spin-slow 0.9s linear infinite; }
       `}</style>
     </div>
   );
