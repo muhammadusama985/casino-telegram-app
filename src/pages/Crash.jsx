@@ -64,7 +64,7 @@ export default function Crash() {
     ro.observe(el); return () => ro.disconnect();
   }, []);
 
-  /* ===== Your Telegram auth + polling block (added verbatim, adapted to balance/setBalance) ===== */
+  /* ===== Telegram auth + polling (your block; clears err on success) ===== */
   useEffect(() => {
     let stopPolling = () => {};
     (async () => {
@@ -73,10 +73,14 @@ export default function Crash() {
         if (Number.isFinite(Number(u?.coins))) {
           const initial = toNum(u.coins);
           setBalance((prev) => (initial !== prev ? initial : prev));
+          setErr(""); // clear stale error if balance loaded via auth
         }
         try {
           const c = await getBalance();
-          if (Number.isFinite(c)) setBalance((prev) => (c !== prev ? c : prev));
+          if (Number.isFinite(c)) {
+            setBalance((prev) => (c !== prev ? c : prev));
+            setErr(""); // clear on success
+          }
         } catch {}
         stopPolling = (() => {
           let alive = true;
@@ -85,7 +89,10 @@ export default function Crash() {
               if (!alive) return;
               try {
                 const c = await getBalance();
-                if (Number.isFinite(c)) setBalance((prev) => (c !== prev ? c : prev));
+                if (Number.isFinite(c)) {
+                  setBalance((prev) => (c !== prev ? c : prev));
+                  setErr(""); // clear on success
+                }
               } catch {} finally {
                 if (alive) tick();
               }
@@ -104,7 +111,10 @@ export default function Crash() {
     const refresh = async () => {
       try {
         const c = await getBalance();
-        if (Number.isFinite(c)) setBalance((prev) => (c !== prev ? c : prev));
+        if (Number.isFinite(c)) {
+          setBalance((prev) => (c !== prev ? c : prev));
+          setErr(""); // clear on success
+        }
       } catch {}
     };
     const onVisible = () => {
@@ -119,13 +129,14 @@ export default function Crash() {
   }, []);
   /* ===== end Telegram auth block ===== */
 
-  // initial balance (kept; harmless alongside polling/auth)
+  // initial balance (kept; now clears err on success)
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
         const bal = await getBalance();
         setBalance(round2(bal));
+        setErr(""); // clear if this succeeds
       } catch (e) {
         setErr("Failed to load balance. Make sure you're logged in.");
       } finally {
@@ -137,7 +148,10 @@ export default function Crash() {
   async function refreshBalanceSoft() {
     try {
       const bal = await getBalance();
-      if (Number.isFinite(bal)) setBalance(round2(bal));
+      if (Number.isFinite(bal)) {
+        setBalance(round2(bal));
+        setErr(""); // clear on success
+      }
     } catch { /* ignore */ }
   }
 
@@ -502,7 +516,7 @@ html, body, #root { height: 100%; background:#080A0F; }
 .wallet { color:#BAC7E3; }
 
 .wrap { max-width:1200px; margin:0 auto; padding:20px; display:grid; gap:18px; grid-template-columns:1.25fr 0.75fr; }
-@media (max-width:980px){ .wrap { grid-template-columns:1fr; } }
+@media (max-width:980px){ .wrap { grid-template-columns:1fr; padding:14px; } }
 
 .graph-card { border:1px solid #182033; border-radius:18px; overflow:hidden; background:radial-gradient(1200px 400px at 20% 0%, #0F1322 0%, #0A0D14 60%); }
 .graph-title { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid #161B26; }
@@ -514,6 +528,7 @@ html, body, #root { height: 100%; background:#080A0F; }
 @keyframes pulse { 0%{opacity:.6} 50%{opacity:1} 100%{opacity:.6} }
 
 .graph-area { position:relative; height:360px; }
+@media (max-width:600px){ .graph-area { height:260px; } }
 .fg-svg { position:absolute; inset:0; }
 .grid-line { stroke:#141A28; stroke-width:1; opacity:0.9; }
 .frame { fill:transparent; stroke:#22304A; stroke-width:1.2; }
@@ -524,6 +539,7 @@ html, body, #root { height: 100%; background:#080A0F; }
 .plane { transform-origin: 0 0; } /* rotate around NOSE */
 
 .seeds { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; padding:12px 16px; border-top:1px solid #161B26; font-size:12px; color:#98A6C8; }
+@media (max-width:600px){ .seeds { grid-template-columns:1fr; } }
 .seeds label { font-size:11px; opacity:.8; margin-bottom:4px; display:block; }
 .seeds code { display:block; padding:6px 8px; border:1px dashed #22304A; border-radius:8px; color:#C7D2FE; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .errorline { color:#FF8A98; padding:10px 16px; border-top:1px solid #2A1520; background:#140D11; }
@@ -537,16 +553,20 @@ html, body, #root { height: 100%; background:#080A0F; }
 .row.actions { margin-top:10px; }
 
 .bet-ui { display:grid; grid-template-columns: 1fr 220px; gap:16px; align-items:stretch; }
+@media (max-width:600px){ .bet-ui { grid-template-columns: 1fr; gap:12px; } }
 .bet-left { display:flex; flex-direction:column; gap:10px; }
 
 .amount-wrap { position:relative; display:grid; grid-template-columns: 1fr 72px; gap:0;
   background:#2A2E35; border:1px solid #22304A; border-radius:16px; padding:12px 14px; }
+@media (max-width:600px){ .amount-wrap { grid-template-columns: 1fr 56px; padding:10px 12px; } }
 .amount-input { width:100%; background:transparent; border:0; color:#E8EEFB; font-weight:800; font-size:18px; outline:none; letter-spacing:.2px; }
+@media (max-width:600px){ .amount-input { font-size:16px; } }
 .unit { align-self:center; justify-self:end; color:#9AA6BD; font-weight:700; opacity:.85; }
 .stepper { position:absolute; right:10px; top:50%; transform:translateY(-50%); display:flex; gap:12px; }
 .step { width:36px; height:36px; border-radius:12px; border:1px solid #394355; background:#1C222C; color:#D5DEEF; font-size:18px; font-weight:900; line-height:1;
   display:flex; align-items:center; justify-content:center; cursor:pointer; }
 .step:hover { background:#242C38; }
+@media (max-width:600px){ .step { width:32px; height:32px; } }
 
 .quick-row { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
 .quick { padding:12px 0; border-radius:14px; border:1px solid #22304A; background:#1B2029; color:#C7D2FE; font-weight:700; }
@@ -560,6 +580,7 @@ html, body, #root { height: 100%; background:#080A0F; }
 .bet-cta:hover { filter:brightness(1.06); }
 .bet-cta:active { transform:translateY(1px); }
 .bet-cta.disabled { opacity:.45; cursor:not-allowed; }
+@media (max-width:600px){ .bet-cta { height:72px; font-size:20px; } }
 .chev { margin-left:8px; opacity:.9; text-shadow:0 1px 0 rgba(255,255,255,.35); }
 
 .history-title { font-size:13px; color:#A8B3C9; margin-bottom:8px; }
@@ -568,4 +589,5 @@ html, body, #root { height: 100%; background:#080A0F; }
 .chip.low { color:#FF9EA8; } .chip.mid { color:#FFD28A; } .chip.high { color:#B7F7BD; }
 
 .tip { font-size:12px; color:#9AA6BD; }
+@media (max-width:600px){ .graph-title .mult { font-size:24px; } }
 `;
