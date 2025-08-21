@@ -188,8 +188,9 @@ export default function Coinflip() {
             key={i}
             className={`w-8 h-8 rounded-full border-2 ${ch === "?" ? "border-dashed border-white/30" : "border-emerald-400/70"} flex items-center justify-center text-sm`}
           >
-            <span className={`${ch === "?" ? "opacity-80" : "font-bold"}`}>{ch}</span>
-          </div>
+ <span className={`${ch === "?" ? "opacity-80" : "font-bold"}`}>
+   {ch === "?" ? "?" : ch === "T" ? "€" : "$"}
+ </span>          </div>
         ))}
       </div>
 
