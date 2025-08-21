@@ -232,9 +232,12 @@ export default function Crash() {
       cancelAnimationFrame(rafRef.current);
       if (cashoutAt != null) setPhase("cashed");
       else setPhase("crashed");
-      setHistory((h) => [round2(cashoutAt ?? bustPoint), ...h].slice(0, 14));
-       window.dispatchEvent(new Event("balance:refresh")); // trigger your listener
-     refreshBalanceSoft(); // instant fetch so the top bar updates now
+     setHistory((h) => [round2(cashoutAt ?? bustPoint), ...h].slice(0, 14));
+window.dispatchEvent(new CustomEvent("balance:refresh")); // Telegram/iOS-safe
+refreshBalanceSoft();                                     // immediate try
+setTimeout(refreshBalanceSoft, 200);                      // tiny retry to avoid DB lag
+return;
+
       return;
     }
     rafRef.current = requestAnimationFrame(tick);
@@ -455,20 +458,9 @@ export default function Crash() {
             )}
           </div>
 
-          <div className="card">
-            <div className="history-title">Recent results</div>
-            <div className="history">
-              {history.map((m, i) => (
-                <span key={i} className={`chip ${m <= 1.2 ? "low" : m <= 2 ? "mid" : "high"}`}>
-                  {fmt(m)}×
-                </span>
-              ))}
-            </div>
-          </div>
+       
 
-          <div className="tip">
-            Uses your <b>src/api.js</b> → <code>telegramAuth</code>, <code>games.crash</code>, and <code>getBalance</code>. No TS.
-          </div>
+         
         </div>
       </div>
 
@@ -496,13 +488,27 @@ function AirplaneNoseAtOrigin() {
 
 /******************** TOP BAR ********************/
 function TopBar({ balance }) {
+  const goBack = () => {
+    if (window.history.length > 1) window.history.back();
+    else window.location.href = "/"; // fallback if no history
+  };
+
   return (
     <div className="topbar">
-      <div className="brand"><span className="dot" /> Crash Arcade</div>
+      <div className="brand">
+        <button className="backBtn" onClick={goBack} aria-label="Back">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span className="dot" />
+        Crash Arcade
+      </div>
       <div className="wallet">Balance: <b>{fmt(balance)}</b></div>
     </div>
   );
 }
+
 
 /******************** CSS ********************/
 const css = `
@@ -589,6 +595,18 @@ html, body, #root { height: 100%; background:#080A0F; }
 .history { display:flex; flex-wrap:wrap; gap:8px; }
 .chip { border-radius:9999px; padding:6px 10px; font-weight:800; font-size:12px; border:1px solid #23314B; background:#0B1018; }
 .chip.low { color:#FF9EA8; } .chip.mid { color:#FFD28A; } .chip.high { color:#B7F7BD; }
+
+.backBtn{
+  display:flex; align-items:center; justify-content:center;
+  width:36px; height:36px; margin-right:8px;
+  border-radius:10px; border:1px solid #22304A;
+  background:#131826; color:#C7D2FE; cursor:pointer;
+  transition:filter .15s ease, background .15s ease;
+}
+.backBtn:hover{ background:#1A2030; filter:brightness(1.05); }
+.backBtn:active{ transform:translateY(1px); }
+.backBtn svg{ display:block; }
+
 
 .tip { font-size:12px; color:#9AA6BD; }
 @media (max-width:600px){ .graph-title .mult { font-size:24px; } }
