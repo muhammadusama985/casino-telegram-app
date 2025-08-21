@@ -280,32 +280,23 @@ function InfoCard({ label, value, accent = "emerald" }) {
 /** very lightweight SVG sparkline */
 /** Stylish, scrolling SVG sparkline with a start-plane and glow */
 /** Stylish, anchored, no-baseline Sparkline with scalable plane */
-/** Curved, wavy, anchored sparkline (plane scales; never hugs baseline) */
 function Sparkline({ points, color = "#7c3aed", height = 200 }) {
   if (!points?.length) return null;
 
-  // Viewport
+  // Viewport dims (width fixed; height configurable)
   const W = 600, H = height;
   const pad = 4;
-  const WINDOW_SEC = 8;
+  const WINDOW_SEC = 8; // camera window width in seconds
 
-  // Keep a safety margin from the floor so the line never rides the baseline
-  const FLOOR_MARGIN = 35; // px from bottom
-
-  // Wave styling (subtle but visible)
-  const WAVE_FREQ = 1.25;               // cycles per second of time axis
-  const WAVE_AMP_MIN = 6;               // px
-  const WAVE_AMP_MAX = 14;              // px (cap)
-
-  // Camera window
+  // --- camera window (no scroll until window fills) ---
   const maxT = Math.max(...points.map(p => p[0]), 0);
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  // Visible slice (+small buffer)
+  // visible slice (+tiny buffer to avoid popping)
   const visible = points.filter(([t]) => t >= t0 - 0.25);
-  if (!visible.length) return <svg viewBox={`0 0 {W} {H}`} className="w-full h-full" />;
+  if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // Y scale (log) off the visible values
+  // --- Y scaling (log) based on current visible data for good vertical use ---
   const visVals = visible.map(([, v]) => Math.max(1.00001, v));
   const vMin = Math.min(...visVals);
   const vMax = Math.max(...visVals);
@@ -316,15 +307,13 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
     const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);
     return pad + (W - 2 * pad) * Math.min(1, Math.max(0, u));
   };
-  const syBase = (x) => {
+  const sy = (x) => {
     const lx = Math.log(Math.max(1.00001, x));
     const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin));
-    // clamp with floor margin
-    const y = H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
-    return Math.min(y, H - pad - FLOOR_MARGIN);
+    return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // Linear sample at any time t
+  // linear interpolation sample at any time t
   function sampleAt(tTarget) {
     const all = points;
     const tMin = all[0][0], tMax2 = all[all.length - 1][0];
@@ -337,37 +326,28 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
     return { t: tTarget, x: v1 + a * (v2 - v1) };
   }
 
-  // Start anchored on left edge at current window start
+  // --- build the path ---
+  // start anchored to the left edge at the current window boundary
   const start = sampleAt(t0);
   const startX = pad;
-  const startY = syBase(start.x);
+  const startY = sy(start.x);
 
-  // Map only points inside the window and inject a wave on Y
+  // only draw points inside the window
   const inWin = points.filter(([t]) => t >= t0);
-  const mapped = inWin.map(([t, val]) => {
-    const xPx = sx(t);
-    const yBase = syBase(val);
-    // Wave amplitude grows slightly with multiplier but capped
-    const ampFactor = Math.min((Math.max(1, val) - 1) / 20, 1); // 0..1 around ~21x
-    const amp = WAVE_AMP_MIN + (WAVE_AMP_MAX - WAVE_AMP_MIN) * ampFactor;
-    const phase = 2 * Math.PI * WAVE_FREQ * (t - t0);
-    const yWave = yBase - amp * Math.sin(phase + 0.6); // slight phase bias
-    // Keep above floor margin
-    const yClamped = Math.min(yWave, H - pad - FLOOR_MARGIN);
-    return [xPx, yClamped];
-  });
+  const mapped = inWin.map(([t, x]) => [sx(t), sy(x)]);
 
-  // Path with a small lift-off to avoid any flat first segment
+  // start the d-string with a tiny upward "lift-off" to avoid flat baseline
   let d = `M${startX},${startY}`;
   if (mapped.length) {
     const [x1, y1] = mapped[0];
     const dx = Math.max(8, (x1 - startX) * 0.25);
     const dy = Math.max(10, Math.abs(y1 - startY) * 0.35);
     const liftX = startX + dx;
-    const liftY = Math.min(startY - dy, H - pad - FLOOR_MARGIN - 2);
+    const liftY = startY - dy;
+
     d += ` L${liftX},${liftY} L${x1},${y1}`;
 
-    // Smooth rest with Catmull–Rom → Bézier
+    // Catmull–Rom → cubic Bézier smoothing for the rest
     for (let i = 1; i < mapped.length - 1; i++) {
       const p0 = mapped[i - 1];
       const p1 = mapped[i];
@@ -383,27 +363,18 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
     }
   }
 
-  // Plane (head)
+  // plane (head) position and banking angle
   const tHead = visible[visible.length - 1][0];
   const head = sampleAt(tHead);
   const planeX = sx(head.t);
-  const planeY = syBase(head.x);
+  const planeY = sy(head.x);
 
-  // Bank with local slope (use waved Y at head time for continuity)
   const prev = sampleAt(Math.max(t0, head.t - 0.08));
-  // Recreate waved Ys for angle
-  const headPhase = 2 * Math.PI * WAVE_FREQ * (head.t - t0);
-  const prevPhase = 2 * Math.PI * WAVE_FREQ * (prev.t - t0);
-  const ampHead = WAVE_AMP_MIN + (WAVE_AMP_MAX - WAVE_AMP_MIN) * Math.min((Math.max(1, head.x) - 1) / 20, 1);
-  const ampPrev = WAVE_AMP_MIN + (WAVE_AMP_MAX - WAVE_AMP_MIN) * Math.min((Math.max(1, prev.x) - 1) / 20, 1);
-  const yHead = Math.min(syBase(head.x) - ampHead * Math.sin(headPhase + 0.6), H - pad - FLOOR_MARGIN);
-  const yPrev = Math.min(syBase(prev.x) - ampPrev * Math.sin(prevPhase + 0.6), H - pad - FLOOR_MARGIN);
+  const angleDeg = (Math.atan2(-(sy(head.x) - sy(prev.x)), (sx(head.t) - sx(prev.t))) * 180) / Math.PI;
 
-  const angleDeg = (Math.atan2(-(yHead - yPrev), (sx(head.t) - sx(prev.t))) * 180) / Math.PI;
-
-  // Plane size scales with multiplier (dramatic but bounded)
-  const baseSize = 34;
-  const scale = 1 + Math.min(head.x / 50, 1.5); // at 50x → 2.5x, capped
+  // size scales with multiplier (cap so it doesn’t explode)
+  const baseSize = 28;
+  const scale = 1 + Math.min(head.x / 50, 1.5); // at 50x → 2.5x, max 2.5x
   const planeSize = baseSize * scale;
 
   const gradId = "spark-grad";
@@ -426,7 +397,7 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
         </linearGradient>
       </defs>
 
-      {/* Wavy, smoothed, anchored trail */}
+      {/* Curved, glow trail that starts at the left edge and never snaps flat */}
       <path
         d={d}
         fill="none"
@@ -438,11 +409,11 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
       />
 
       {/* Head marker */}
-      <circle cx={planeX} cy={yHead} r={7.5} fill={color} opacity="0.98" />
+      <circle cx={planeX} cy={planeY} r={7.5} fill={color} opacity="0.98" />
 
-      {/* Plane — scaled & banked */}
+      {/* Plane emoji — scales with multiplier and banks with slope */}
       <text
-        transform={`translate(${planeX}, ${yHead - 13}) rotate(${angleDeg})`}
+        transform={`translate(${planeX}, ${planeY - 13}) rotate(${angleDeg})`}
         fontSize={planeSize}
         textAnchor="middle"
         dominantBaseline="central"
