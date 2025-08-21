@@ -284,75 +284,74 @@ function Sparkline({ points, color = "#7c3aed" }) {
 
   const W = 600, H = 96;
   const pad = 8;
+  const WINDOW_SEC = 8; // show up to 8s; pan only after this fills
 
-  // chart window keeps scrolling (like you asked earlier)
-  const WINDOW_SEC = 8;
-
-  // how far behind the head the plane targets AFTER takeoff (gives smooth motion)
-  const TRAIL_SEC = 1.0;
-
-  // compute scrolling window
+  // latest time
   const maxT = Math.max(...points.map(p => p[0]), 0);
-  const t0 = maxT - WINDOW_SEC; // scrolling start
 
-  // keep a tiny buffer so nothing pops at edges
+  // 🚗 camera logic: no scroll until window fills; then follow last WINDOW_SEC
+  const t0 = Math.max(0, maxT - WINDOW_SEC);
+
+  // visible slice (with tiny buffer to avoid popping)
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // y-scale (log) from visible
+  // y-scale on visible (log to keep steep climbs in frame)
   const maxX = Math.max(...visible.map(p => p[1])) || 1.00001;
   const logMax = Math.log(Math.max(2, maxX));
 
   const sx = (t) => {
-    const u = (t - t0) / WINDOW_SEC;       // 0..1 across moving window
-    const clamped = Math.min(1, Math.max(0, u));
-    return pad + (W - 2 * pad) * clamped;
+    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC); // 0..1 across current window
+    return pad + (W - 2 * pad) * Math.min(1, Math.max(0, u));
   };
   const sy = (x) => {
     const ly = Math.log(Math.max(1.00001, x));
-    const ny = ly / (logMax || 1);         // 0..1
+    const ny = ly / (logMax || 1);
     return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // linear sampler so we can place plane exactly where we want
-  function sampleValueAt(tTarget) {
+  // linear sampler so we can compute slope at the plane
+  function sampleAt(tTarget) {
     const tMin = visible[0][0];
     const tMax = visible[visible.length - 1][0];
-    if (tTarget <= tMin) return visible[0][1];
-    if (tTarget >= tMax) return visible[visible.length - 1][1];
+    if (tTarget <= tMin) return { x: visible[0][1], t: tMin };
+    if (tTarget >= tMax) return { x: visible[visible.length - 1][1], t: tMax };
     let i = 1;
     while (i < visible.length && visible[i][0] < tTarget) i++;
     const [t1, v1] = visible[i - 1];
     const [t2, v2] = visible[i];
     const a = (tTarget - t1) / Math.max(1e-6, (t2 - t1));
-    return v1 + a * (v2 - v1);
+    return { x: v1 + a * (v2 - v1), t: tTarget };
   }
 
-  // head (for reference)
-  const [tEnd, xEnd] = visible[visible.length - 1];
-  const headX = sx(tEnd), headY = sy(xEnd);
+  // plane flies at the HEAD (latest point)
+  const [tEnd] = visible[visible.length - 1];
+  const plane = sampleAt(tEnd);                 // { t, x }
+  const planeX = sx(plane.t);
+  const planeY = sy(plane.x);
 
-  // --- PLANE LOGIC ---
-  // Phase A (takeoff): for the first bit of time, force plane to sit at the hard-left edge.
-  // Phase B (cruise): once there's enough history, let it trail the head by TRAIL_SEC.
-  const haveRoom = (tEnd - t0) >= (TRAIL_SEC + 0.1);
-  const tPlane = haveRoom ? (tEnd - TRAIL_SEC) : (t0);   // trail or left edge
-  const vPlane = sampleValueAt(Math.max(visible[0][0], tPlane));
-
-  // exact leftmost pixel for takeoff so it’s truly at the left edge
-  const planeX = haveRoom ? sx(tPlane) : pad;
-  const planeY = sy(vPlane);
-
-  // draw the line ONLY up to where the plane has flown
-  const flown = visible.filter(([t]) => t <= tPlane + 1e-6);
-  const d = (flown.length ? flown : [[t0, vPlane]]).map(([t, x], i) => {
-    const X = haveRoom ? sx(t) : Math.max(pad, sx(t)); // keep within pad
+  // trail = path up to the plane only
+  const flown = visible.filter(([t]) => t <= plane.t + 1e-6);
+  const d = flown.map(([t, x], i) => {
+    const X = sx(t);
     const Y = sy(x);
     return `${i ? "L" : "M"}${X.toFixed(1)},${Y.toFixed(1)}`;
   }).join(" ");
 
+  // slope near the head → rotate plane to match
+  const dt = 0.08; // small step to estimate tangent
+  const prev = sampleAt(Math.max(t0, plane.t - dt));
+  const dx = sx(plane.t) - sx(prev.t);
+  const dy = sy(plane.x) - sy(prev.x);
+  // SVG y is downward, so invert for angle math
+  const angleDeg = (Math.atan2(-(dy), dx) * 180) / Math.PI;
+
   const gradId = "spark-grad";
   const glowId = "spark-glow";
+
+  // ensure the very first frame places the plane at the hard-left edge
+  // (when maxT≈0, sx(0) == pad)
+  // ✅ satisfied by t0 = 0 above
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full">
@@ -371,7 +370,7 @@ function Sparkline({ points, color = "#7c3aed" }) {
         </linearGradient>
       </defs>
 
-      {/* curve (only the flown segment) */}
+      {/* trail following the plane */}
       <path
         d={d}
         fill="none"
@@ -382,14 +381,13 @@ function Sparkline({ points, color = "#7c3aed" }) {
         filter={`url(#${glowId})`}
       />
 
-      {/* head dot stays (shows current multiplier visually) */}
-      <circle cx={headX} cy={headY} r="4.5" fill={color} opacity="0.95" />
+      {/* head marker (kept) */}
+      <circle cx={planeX} cy={planeY} r="4.5" fill={color} opacity="0.95" />
 
-      {/* ✈️ bigger plane; starts hard-left, then flies up-right */}
+      {/* ✈️ plane at the head, rotated with slope; starts hard-left and flies up-right */}
       <text
-        x={planeX}
-        y={planeY - 10}
-        fontSize="26"                 // a bit larger per your request
+        transform={`translate(${planeX}, ${planeY - 10}) rotate(${angleDeg})`}
+        fontSize="26"
         textAnchor="middle"
         dominantBaseline="central"
         style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))" }}
@@ -399,4 +397,5 @@ function Sparkline({ points, color = "#7c3aed" }) {
     </svg>
   );
 }
+
 
