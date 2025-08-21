@@ -233,6 +233,8 @@ export default function Crash() {
       if (cashoutAt != null) setPhase("cashed");
       else setPhase("crashed");
       setHistory((h) => [round2(cashoutAt ?? bustPoint), ...h].slice(0, 14));
+       window.dispatchEvent(new Event("balance:refresh")); // trigger your listener
+     refreshBalanceSoft(); // instant fetch so the top bar updates now
       return;
     }
     rafRef.current = requestAnimationFrame(tick);
