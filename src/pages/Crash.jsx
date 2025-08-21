@@ -281,20 +281,27 @@ function InfoCard({ label, value, accent = "emerald" }) {
 function Sparkline({ points, color = "#7c3aed" }) {
   if (!points?.length) return null;
 
-  // SVG viewport (parent div is h-24 ≈ 96px; we'll squeeze max out of it)
   const W = 600, H = 96;
-  const pad = 4;            // tighter padding -> more vertical room
-  const WINDOW_SEC = 8;     // pan only after this fills
+  const pad = 4;
+  const WINDOW_SEC = 8;
 
-  // latest time and left-edge of moving window
+  // --- pin the takeoff pixel for the entire round ---
+  // when you reset the round, points becomes [[0,1.0]] — use that moment to re-anchor
+  const anchorRef = React.useRef(null);
+  if (!anchorRef.current || points.length === 1) {
+    anchorRef.current = { xPx: pad, yPx: null, tStart: points[0][0] ?? 0, vStart: points[0][1] ?? 1.0 };
+  }
+  const { xPx: startXPx, tStart, vStart } = anchorRef.current;
+
+  // time window (camera pans only after it fills)
   const maxT = Math.max(...points.map(p => p[0]), 0);
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  // visible slice (+ tiny buffer to avoid pop)
+  // visible slice (+tiny buffer)
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // --- Y SCALING: use log over current visible [min,max] so it fills height ---
+  // dynamic y-scale over current visible window (so flight uses full height)
   const visVals = visible.map(p => Math.max(1.00001, p[1]));
   const vMin = Math.min(...visVals);
   const vMax = Math.max(...visVals);
@@ -302,27 +309,24 @@ function Sparkline({ points, color = "#7c3aed" }) {
   const logMax = Math.log(Math.max(vMin + 1e-6, vMax));
 
   const sx = (t) => {
-    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);     // 0..1 across window
+    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);
     return pad + (W - 2 * pad) * Math.min(1, Math.max(0, u));
   };
-  const sy = (x) => {
+  const syRaw = (x) => {
     const lx = Math.log(Math.max(1.00001, x));
-    // normalize to [0,1] using current visible range
     const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin));
     return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // sample value at arbitrary time (linear interpolation) using full history
+  // sample value at any t (linear)
   function sampleAt(tTarget) {
     const all = points;
-    const tMin = all[0][0];
-    const tMax = all[all.length - 1][0];
+    const tMin = all[0][0], tMax2 = all[all.length - 1][0];
     if (tTarget <= tMin) return { t: tMin, x: all[0][1] };
-    if (tTarget >= tMax) return { t: tMax, x: all[all.length - 1][1] };
+    if (tTarget >= tMax2) return { t: tMax2, x: all[all.length - 1][1] };
     let i = 1;
     while (i < all.length && all[i][0] < tTarget) i++;
-    const [t1, v1] = all[i - 1];
-    const [t2, v2] = all[i];
+    const [t1, v1] = all[i - 1], [t2, v2] = all[i];
     const a = (tTarget - t1) / Math.max(1e-6, (t2 - t1));
     return { t: tTarget, x: v1 + a * (v2 - v1) };
   }
@@ -330,46 +334,46 @@ function Sparkline({ points, color = "#7c3aed" }) {
   // plane flies at the head
   const tHead = visible[visible.length - 1][0];
   const head = sampleAt(tHead);
-  const planeX = sx(head.t);
-  const planeY = sy(head.x);
 
-  // anchor trail to takeoff. If takeoff scrolled out, keep it pegged to left edge.
-  const tStart = points[0][0] ?? 0;
-  const startSample = sampleAt(Math.max(tStart, t0));
-  const startX = (tStart < t0) ? pad : sx(startSample.t);
-  const startY = sy(startSample.x);
+  // --- hard-pinned takeoff pixel ---
+  // compute the *current* pixel for the start value (with today’s scale)…
+  const startYPxCurrent = syRaw(vStart);
+  // …if we haven’t locked the Y yet (first ticks), lock it now
+  if (anchorRef.current.yPx == null) {
+    anchorRef.current.yPx = startYPxCurrent;
+  }
+  const startYPx = anchorRef.current.yPx; // stays fixed across the whole round
 
-  // path points from anchored start → all original points up to the plane
+  // Path points from anchored start → all historical points up to the plane
   const uptoHead = points.filter(([t]) => t <= head.t + 1e-6);
-  const pathPts = [[startX, startY], ...uptoHead.map(([t, x]) => [Math.max(pad, sx(t)), sy(x)])];
+  const pathPts = [
+    [startXPx, startYPx], // fixed left anchor
+    ...uptoHead.map(([t, x]) => [Math.max(pad, sx(t)), syRaw(x)]),
+  ];
 
-  // --- Smooth curve (Catmull-Rom → cubic Bézier) ---
-  function pathCatmullRomToBezier(pts) {
+  // Smooth curve (Catmull-Rom → cubic Bézier), with duplicated first point
+  function toSmoothPath(pts) {
     if (pts.length < 2) return "";
     if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
-    const segs = [];
-    segs.push(`M${pts[0][0]},${pts[0][1]}`);
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[Math.max(0, i - 1)];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[Math.min(pts.length - 1, i + 2)];
-      // Catmull-Rom to Bezier
-      const c1x = p1[0] + (p2[0] - p0[0]) / 6;
-      const c1y = p1[1] + (p2[1] - p0[1]) / 6;
-      const c2x = p2[0] - (p3[0] - p1[0]) / 6;
-      const c2y = p2[1] - (p3[1] - p1[1]) / 6;
-      segs.push(`C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`);
+    const p = [pts[0], pts[0], ...pts.slice(1)]; // duplicate first to keep anchor from drifting
+    let d = `M${p[1][0]},${p[1][1]}`;
+    for (let i = 1; i < p.length - 2; i++) {
+      const p0 = p[i - 1], p1 = p[i], p2 = p[i + 1], p3 = p[i + 2];
+      const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+      const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+      d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
     }
-    return segs.join(" ");
+    return d;
   }
-  const d = pathCatmullRomToBezier(pathPts);
+  const d = toSmoothPath(pathPts);
 
-  // rotate plane with slope for a “banking” feel
+  // plane pixel & banking angle
+  const planeX = Math.max(pad, sx(head.t));
+  const planeY = syRaw(head.x);
   const prev = sampleAt(Math.max(tStart, head.t - 0.08));
-  const dx = sx(head.t) - sx(prev.t);
-  const dy = sy(head.x) - sy(prev.x);
-  const angleDeg = (Math.atan2(-(dy), dx) * 180) / Math.PI;
+  const dx = Math.max(pad, sx(head.t)) - Math.max(pad, sx(prev.t));
+  const dy = syRaw(head.x) - syRaw(prev.x);
+  const angleDeg = (Math.atan2(-dy, dx) * 180) / Math.PI;
 
   const gradId = "spark-grad";
   const glowId = "spark-glow";
@@ -378,7 +382,7 @@ function Sparkline({ points, color = "#7c3aed" }) {
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full">
       <defs>
         <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="5" result="blur" />
+          <feGaussianBlur stdDeviation="6" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
@@ -391,30 +395,31 @@ function Sparkline({ points, color = "#7c3aed" }) {
         </linearGradient>
       </defs>
 
-      {/* curvy trail from anchored start to plane (never disconnects) */}
+      {/* Curved, glow-thick trail that never leaves its takeoff pixel */}
       <path
         d={d}
         fill="none"
         stroke={`url(#${gradId})`}
-        strokeWidth={6.5}               // thicker for visibility
+        strokeWidth={7}             /* bigger, eye-catchy */
         strokeLinecap="round"
         strokeLinejoin="round"
         filter={`url(#${glowId})`}
       />
 
-      {/* head marker */}
-      <circle cx={planeX} cy={planeY} r={7} fill={color} opacity="0.98" />
+      {/* Head marker */}
+      <circle cx={planeX} cy={planeY} r={7.5} fill={color} opacity="0.98" />
 
-      {/* larger plane, rotated with slope; nudge up a bit so it doesn't cover the dot */}
+      {/* Larger plane, rotated with slope */}
       <text
-        transform={`translate(${planeX}, ${planeY - 12}) rotate(${angleDeg})`}
-        fontSize={32}
+        transform={`translate(${planeX}, ${planeY - 13}) rotate(${angleDeg})`}
+        fontSize={34}
         textAnchor="middle"
         dominantBaseline="central"
-        style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.75))" }}
+        style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))" }}
       >
         ✈️
       </text>
     </svg>
   );
 }
+
