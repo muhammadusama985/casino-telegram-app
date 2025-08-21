@@ -183,7 +183,7 @@ export default function Crash() {
 
             {/* Sparkline */}
           <div className="mt-6 h-40 md:h-48 w-full">
- <Sparkline points={points} color="#7c3aed" height={160} />
+ <Sparkline points={points} color="#7c3aed" height={200} />
   </div>
 
             {/* Info row */}
@@ -395,14 +395,14 @@ function Sparkline({ points, color = "#7c3aed" }) {
 
       <circle cx={planeX} cy={planeY} r={7.5} fill={color} opacity="0.98" />
       <text
-        transform={`translate(${planeX}, ${planeY - 13}) rotate(${angleDeg})`}
-        fontSize={34}
-        textAnchor="middle"
-        dominantBaseline="central"
-        style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))" }}
-      >
-        ✈️
-      </text>
+   transform={`translate(${planeX}, ${planeY - 12}) rotate(${angleDeg})`}
+   fontSize={planeSize}
+   textAnchor="middle"
+   dominantBaseline="central"
+   style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.7))" }}
+ >
+   ✈️
+ </text>
     </svg>
   );
 }
