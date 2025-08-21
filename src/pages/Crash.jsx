@@ -280,36 +280,38 @@ function InfoCard({ label, value, accent = "emerald" }) {
 /** very lightweight SVG sparkline */
 /** Stylish, scrolling SVG sparkline with a start-plane and glow */
 /** Stylish, anchored, no-baseline Sparkline with scalable plane */
-/** Parabolic, wavy, anchored sparkline with sliding background + scaling plane */
-function Sparkline({ points, color = "#7c3aed", height = 200 }) {
+/** Sparkline — live path (no dash tricks), sliding grid, anchored tail, curved + wavy lift.
+ *  Drop-in for your existing Crash.jsx. Do not change the rest of your file.
+ */
+function Sparkline({ points, color = "#7c3aed" }) {
   if (!points?.length) return null;
 
-  // Viewport
-  const W = 600, H = height;
-  const pad = 4;
-  const WINDOW_SEC = 8;
+  // Viewbox (kept close to your current)
+  const W = 600;         // width
+  const H = 200;         // taller so 50x+ never hugs the base
+  const pad = 10;
+  const WINDOW_SEC = 8;  // camera window width (keeps the ticker motion)
 
-  // Don't let the trail ride the floor
-  const FLOOR_MARGIN = 28;
+  // Slide the background grid downward for that “panel moves while plane climbs” feel
+  const gridGap = 14;
+  const slideRate = 36; // px/sec
 
-  // Wave (subtle)
+  // Keep a safety floor so the line never sticks to the baseline
+  const FLOOR = 30;
+
+  // Soft arc up from the start + a subtle wave
+  const ARC_BASE = 24;
+  const ARC_PER_X = 2.2;    // stronger arc as multiplier grows
+  const ARC_MAX = H * 0.45;
   const WAVE_FREQ = 1.15;
   const WAVE_AMP_MIN = 6;
   const WAVE_AMP_MAX = 14;
 
-  // Background parallax (downward slide)
-  const GRID_GAP = 14;
-  const SLIDE_RATE = 36;
-  const GRID_OPACITY = 0.14;
-
-  // Camera
+  // Camera: follow the last WINDOW_SEC seconds
   const maxT = Math.max(...points.map(p => p[0]), 0);
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  const visible = points.filter(([t]) => t >= t0 - 0.25);
-  if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
-
-  // Sample helpers
+  // Sample helper (linear) on the full series
   function sampleAt(tTarget) {
     const all = points;
     const tMin = all[0][0], tMax2 = all[all.length - 1][0];
@@ -322,84 +324,64 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
     return { t: tTarget, x: v1 + a * (v2 - v1) };
   }
 
-  // Head sample first (we use it to shape the parabola strength)
-  const tHead = visible[visible.length - 1][0];
-  const head = sampleAt(tHead);
-
   // Axes mapping
-  // Y uses log scale from what's visible to use headroom well
+  const sx = (t) => {
+    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);
+    return pad + (W - 2 * pad) * Math.min(1, Math.max(0, u));
+  };
+
+  // Use log scale but re-fit to the visible window so tall climbs still fit,
+  // then push everything up by an arc + wave and clamp above the floor.
+  const visible = points.filter(([t]) => t >= t0 - 0.25);
   const visVals = visible.map(([, v]) => Math.max(1.00001, v));
   const vMin = Math.min(...visVals);
   const vMax = Math.max(...visVals);
   const logMin = Math.log(vMin);
   const logMax = Math.log(Math.max(vMin + 1e-6, vMax));
-
-  const sx = (t) => {
-    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);
-    return pad + (W - 2 * pad) * Math.min(1, Math.max(0, u));
-  };
-  const syBase = (x) => {
-    const lx = Math.log(Math.max(1.00001, x));
-    const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin));
+  const syLog = (m) => {
+    const lx = Math.log(Math.max(1.00001, m));
+    const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin)); // 0..1
     const y = H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
-    return Math.min(y, H - pad - FLOOR_MARGIN);
+    return Math.min(y, H - pad - FLOOR);
   };
 
-  // ---------- Parabolic lift ----------
-  // We push the path upward with a quadratic offset that grows across the window,
-  // scaled by the current head multiplier (bigger x → more dramatic arc).
-  const ARC_BASE = 24;                         // px
-  const ARC_PER_X = 2.2;                       // extra px per 1x (soft)
-  const ARC_MAX = H * 0.45;                    // cap
+  // Head (current point) – drives arc strength and plane pose
+  const headT = visible[visible.length - 1][0];
+  const head = sampleAt(headT);
   const arcPixels = Math.min(ARC_MAX, ARC_BASE + ARC_PER_X * Math.max(0, head.x - 1));
-  const easeQuad = (u) => u * u;               // 0→1 quadratic
-  // ------------------------------------
+  const easeQuad = (u) => u * u;
 
-  // Build mapped points (inside window) with parabola + wave
-  const inWin = points.filter(([t]) => t >= t0);
-  const mapped = inWin.map(([t, val]) => {
-    const xPx = sx(t);
-
-    // base (log) y
-    let y = syBase(val);
-
-    // parabolic lift
-    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC); // 0..1 across window
+  // Map time→screen Y with arc + wave (+ floor clamp)
+  const sy = (t, m) => {
+    let y = syLog(m);
+    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);
     y -= arcPixels * easeQuad(Math.min(1, Math.max(0, u)));
-
-    // wave on top
-    const ampFactor = Math.min((Math.max(1, val) - 1) / 20, 1);
+    const ampFactor = Math.min((Math.max(1, m) - 1) / 20, 1);
     const amp = WAVE_AMP_MIN + (WAVE_AMP_MAX - WAVE_AMP_MIN) * ampFactor;
     const phase = 2 * Math.PI * WAVE_FREQ * (t - t0);
     y -= amp * Math.sin(phase + 0.6);
+    return Math.min(y, H - pad - FLOOR);
+  };
 
-    // keep above floor
-    y = Math.min(y, H - pad - FLOOR_MARGIN);
-    return [xPx, y];
-  });
+  // Build a smooth path up to the head; start with a “takeoff” cubic so there’s no flat baseline
+  const inWin = points.filter(([t]) => t >= t0);
+  const mapped = inWin.map(([t, m]) => [sx(t), sy(t, m)]);
 
-  // Left anchor at window start (also lifted so no flat baseline)
+  // Anchor point on the left edge at window start (also lifted so it’s not flat)
   const start = sampleAt(t0);
   const startX = pad;
-  let startY = syBase(start.x);
-  startY -= arcPixels * easeQuad(0); // 0, but keep for clarity
+  const startY = sy(t0, start.x);
 
-  // Path: start with a cubic that curves up (no straight segment), then CR-smoothing
   let d = `M${startX},${startY}`;
   if (mapped.length) {
     const [x1, y1] = mapped[0];
-
-    // control points for a nice "takeoff" arc (parabola-like)
-    const u1 = Math.min(1, Math.max(0, (inWin[0][0] - t0) / WINDOW_SEC));
-    const arc1 = arcPixels * easeQuad(u1);
     const c1x = startX + (x1 - startX) * 0.18;
-    const c1y = Math.min(startY - Math.max(12, arc1 * 0.6), H - pad - FLOOR_MARGIN - 2);
+    const c1y = Math.min(startY - Math.max(12, arcPixels * 0.6), H - pad - FLOOR - 2);
     const c2x = startX + (x1 - startX) * 0.55;
-    const c2y = Math.min(y1 - Math.max(8, arc1 * 0.25), H - pad - FLOOR_MARGIN - 2);
-
+    const c2y = Math.min(y1 - Math.max(8, arcPixels * 0.25), H - pad - FLOOR - 2);
     d += ` C${c1x},${c1y} ${c2x},${c2y} ${x1},${y1}`;
 
-    // Smooth rest with Catmull–Rom → Bezier
+    // Catmull–Rom → Bezier through the rest for a silky curve
     for (let i = 1; i < mapped.length - 1; i++) {
       const p0 = mapped[i - 1];
       const p1 = mapped[i];
@@ -413,34 +395,21 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
     }
   }
 
-  // Head (use same transforms for banking and position)
-  const headPhase = 2 * Math.PI * WAVE_FREQ * (head.t - t0);
-  const ampHead = WAVE_AMP_MIN + (WAVE_AMP_MAX - WAVE_AMP_MIN) * Math.min((Math.max(1, head.x) - 1) / 20, 1);
-  let yHead = syBase(head.x);
-  yHead -= arcPixels * easeQuad(1);            // full arc at the right edge
-  yHead -= ampHead * Math.sin(headPhase + 0.6);
-  yHead = Math.min(yHead, H - pad - FLOOR_MARGIN);
-
-  const prev = sampleAt(Math.max(t0, head.t - 0.08));
-  const prevPhase = 2 * Math.PI * WAVE_FREQ * (prev.t - t0);
-  const ampPrev = WAVE_AMP_MIN + (WAVE_AMP_MAX - WAVE_AMP_MIN) * Math.min((Math.max(1, prev.x) - 1) / 20, 1);
-  let yPrev = syBase(prev.x);
-  yPrev -= arcPixels * easeQuad(Math.min(1, Math.max(0, (prev.t - t0) / WINDOW_SEC)));
-  yPrev -= ampPrev * Math.sin(prevPhase + 0.6);
-  yPrev = Math.min(yPrev, H - pad - FLOOR_MARGIN);
-
+  // Plane pose (at the tip)
   const planeX = sx(head.t);
-  const planeY = yHead;
-  const angleDeg = (Math.atan2(-(yHead - yPrev), (sx(head.t) - sx(prev.t))) * 180) / Math.PI;
+  const planeY = sy(head.t, head.x);
+  const prev = sampleAt(Math.max(t0, head.t - WINDOW_SEC / 140));
+  const prevX = sx(prev.t);
+  const prevY = sy(prev.t, prev.x);
+  const angleDeg = (Math.atan2(planeY - prevY, planeX - prevX) * 180) / Math.PI;
 
-  // Plane scales with x
-  const baseSize = 28;
-  const scale = 1 + Math.min(head.x / 50, 1.5); // up to 2.5×
+  // Plane scales with multiplier for drama (capped)
+  const baseSize = 24;
+  const scale = 1 + Math.min(head.x / 50, 1.4); // up to ~2.4x
   const planeSize = baseSize * scale;
 
-  // Parallax slide offset
-  const elapsed = Math.max(0, tHead - t0);
-  const slideY = (SLIDE_RATE * elapsed) % GRID_GAP;
+  // Parallax slide amount for the grid
+  const slideY = (slideRate * Math.max(0, head.t - t0)) % gridGap;
 
   const gradId = "spark-grad";
   const glowId = "spark-glow";
@@ -460,17 +429,17 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
           <stop offset="60%" stopColor={color} stopOpacity="0.95" />
           <stop offset="100%" stopColor={color} stopOpacity="1" />
         </linearGradient>
-        <pattern id="bg-grid" width="8" height={GRID_GAP} patternUnits="userSpaceOnUse">
-          <line x1="0" y1={GRID_GAP - 0.5} x2="8" y2={GRID_GAP - 0.5} stroke="white" strokeOpacity={GRID_OPACITY} strokeWidth="1" />
+        <pattern id="bg-grid" width="10" height={gridGap} patternUnits="userSpaceOnUse">
+          <line x1="0" y1={gridGap - 0.5} x2="10" y2={gridGap - 0.5} stroke="white" strokeOpacity="0.12" strokeWidth="1" />
         </pattern>
       </defs>
 
-      {/* sliding background */}
+      {/* sliding background grid */}
       <g transform={`translate(0, ${slideY})`}>
-        <rect x="0" y={-GRID_GAP} width={W} height={H + GRID_GAP * 2} fill="url(#bg-grid)" />
+        <rect x="0" y={-gridGap} width={W} height={H + gridGap * 2} fill="url(#bg-grid)" />
       </g>
 
-      {/* curved, glowing trail */}
+      {/* trail */}
       <path
         d={d}
         fill="none"
@@ -481,12 +450,12 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
         filter={`url(#${glowId})`}
       />
 
-      {/* head marker */}
+      {/* head dot */}
       <circle cx={planeX} cy={planeY} r={7.5} fill={color} opacity="0.98" />
 
-      {/* plane */}
+      {/* plane — emoji rotated at the tangent, centered just above the trail */}
       <text
-        transform={`translate(${planeX}, ${planeY - 13}) rotate(${angleDeg})`}
+        transform={`translate(${planeX}, ${planeY - 12}) rotate(${angleDeg})`}
         fontSize={planeSize}
         textAnchor="middle"
         dominantBaseline="central"
@@ -497,6 +466,7 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
     </svg>
   );
 }
+
 
 
 
