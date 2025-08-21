@@ -290,7 +290,7 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
   const WINDOW_SEC = 8;
 
   // Keep a safety margin from the floor so the line never rides the baseline
-  const FLOOR_MARGIN = 28; // px from bottom
+  const FLOOR_MARGIN = 35; // px from bottom
 
   // Wave styling (subtle but visible)
   const WAVE_FREQ = 1.25;               // cycles per second of time axis
@@ -402,7 +402,7 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
   const angleDeg = (Math.atan2(-(yHead - yPrev), (sx(head.t) - sx(prev.t))) * 180) / Math.PI;
 
   // Plane size scales with multiplier (dramatic but bounded)
-  const baseSize = 28;
+  const baseSize = 34;
   const scale = 1 + Math.min(head.x / 50, 1.5); // at 50x → 2.5x, capped
   const planeSize = baseSize * scale;
 
