@@ -105,16 +105,11 @@ export default function Coinflip() {
   }, []);
 
   /* ---------- actions ---------- */
-
-
 const placeBet = async (side) => {
   if (flipping) return;
   const stake = Math.max(1, Math.floor(Number(bet || 0)));
   if (!Number.isFinite(stake) || stake <= 0) return alert("Enter a valid bet (>= 1).");
   if (Number(coins) < stake) return alert("Not enough coins.");
-
-  // helper: let the browser paint a frame before continuing
-  const nextFrame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
   setFlipping(true);
   setResultMsg("");
@@ -122,25 +117,15 @@ const placeBet = async (side) => {
   try { new Audio(flipSound).play().catch(() => {}); } catch {}
 
   try {
-    // send streak so backend can boost payout on win
     const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
 
-    // optional: sync base coef from engine
     const m = Number(res?.details?.m);
     if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
-    // final landed face from server
     const landed = (res?.details?.landed === "T") ? "T" : "H";
-
-    // stop spin and SHOW final face first
     setFace(landed);
-    setFlipping(false);
+    setFlipping(false); // ✅ stop spin NOW so the final face shows before the result
 
-    // ensure DOM paints the face before any blocking alert/result updates
-    await nextFrame();
-    await nextFrame();
-
-    // balance sync (if server returns it)
     if (Number.isFinite(res?.newBalance)) {
       setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
     }
@@ -150,18 +135,18 @@ const placeBet = async (side) => {
     if (res?.result === "win") {
       setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN));
       setStreak((s) => s + 1);
-      const profit = Number(res?.payout || 0); // profit-only from backend
+      const profit = Number(res?.payout || 0);
       const msg = `🎉 You Win! +${fmt(profit)}`;
       setResultMsg(msg);
       try { new Audio(winSound).play().catch(() => {}); } catch {}
-      alert(msg);
+      setTimeout(() => alert(msg), 0); // ✅ let React paint the landed face, then alert
     } else {
       setStreak(0);
       setTrail(Array(TRAIL_LEN).fill("?"));
       const msg = `❌ You Lose! -${fmt(stake)}`;
       setResultMsg(msg);
       try { new Audio(loseSound).play().catch(() => {}); } catch {}
-      alert(msg);
+      setTimeout(() => alert(msg), 0); // ✅ same reason
     }
 
     window.dispatchEvent(new Event("balance:refresh"));
@@ -172,10 +157,9 @@ const placeBet = async (side) => {
     else if (msg.includes("max-stake")) alert("Bet exceeds maximum.");
     else alert("Bet failed. Try again.");
   } finally {
-    setFlipping(false); // safety: in case we errored before turning it off
+    setFlipping(false); // harmless if already false
   }
 };
-
 
 
   return (
