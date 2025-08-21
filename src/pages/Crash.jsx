@@ -282,48 +282,67 @@ function InfoCard({ label, value, accent = "emerald" }) {
 function Sparkline({ points, color = "#7c3aed" }) {
   if (!points?.length) return null;
 
-  // Viewport + padding
   const W = 600, H = 96;
   const pad = 8;
-
-  // We always scroll a fixed window forward — ticker-tape style.
-  const WINDOW_SEC = 8;
+  const WINDOW_SEC = 8;        // visible window
+  const TRAIL_SEC = 1.2;       // plane trails head by this much (smooth motion)
 
   const maxT = Math.max(...points.map(p => p[0]), 0);
-  const t0 = maxT - WINDOW_SEC; // ❗ no clamp → constant left→right motion from time 0
+  const t0 = maxT - WINDOW_SEC; // constant scrolling window
 
-  // Keep a tiny buffer so the plane doesn't disappear at the exact edge
+  // keep a tiny buffer so the plane doesn’t pop at the edge
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // Y scale (log) from visible window
+  // Y scale (log) based on visible data
   const maxX = Math.max(...visible.map(p => p[1])) || 1.00001;
   const logMax = Math.log(Math.max(2, maxX));
 
-  // Map time to x across a fixed window so it ALWAYS scrolls
   const sx = (t) => {
-    const u = (t - t0) / WINDOW_SEC; // target 0..1 across the moving window
+    const u = (t - t0) / WINDOW_SEC;                      // 0..1 across moving window
     const clamped = Math.min(1, Math.max(0, u));
     return pad + (W - 2 * pad) * clamped;
   };
   const sy = (x) => {
     const ly = Math.log(Math.max(1.00001, x));
-    const ny = ly / (logMax || 1); // 0..1
+    const ny = ly / (logMax || 1);                         // 0..1
     return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // Path
+  // simple time→value sampler (linear interp between nearest points)
+  function sampleValueAt(tTarget) {
+    // ensure within bounds
+    const tMin = visible[0][0];
+    const tMax = visible[visible.length - 1][0];
+    if (tTarget <= tMin) return visible[0][1];
+    if (tTarget >= tMax) return visible[visible.length - 1][1];
+
+    // find surrounding points
+    let i = 1;
+    while (i < visible.length && visible[i][0] < tTarget) i++;
+    const [t1, v1] = visible[i - 1];
+    const [t2, v2] = visible[i];
+    const a = (tTarget - t1) / Math.max(1e-6, (t2 - t1));
+    return v1 + a * (v2 - v1);
+  }
+
+  // build the path
   const d = visible.map(([t, x], i) => {
     const X = sx(t);
     const Y = sy(x);
     return `${i ? "L" : "M"}${X.toFixed(1)},${Y.toFixed(1)}`;
   }).join(" ");
 
-  // Start plane & head dot
-  const [tStart, xStart] = visible[0];
+  // head (latest point)
   const [tEnd, xEnd] = visible[visible.length - 1];
-  const planeX = sx(tStart), planeY = sy(xStart);
-  const headX  = sx(tEnd),   headY  = sy(xEnd);
+  const headX = sx(tEnd), headY = sy(xEnd);
+
+  // ✈️ plane time:
+  // - at round start (small maxT), this clamps to t0 → left edge
+  // - as time grows, it smoothly trails the head by TRAIL_SEC
+  const tPlane = Math.max(t0, Math.min(tEnd, tEnd - TRAIL_SEC));
+  const vPlane = sampleValueAt(tPlane);
+  const planeX = sx(tPlane), planeY = sy(vPlane);
 
   const gradId = "spark-grad";
   const glowId = "spark-glow";
@@ -345,6 +364,7 @@ function Sparkline({ points, color = "#7c3aed" }) {
         </linearGradient>
       </defs>
 
+      {/* curve */}
       <path
         d={d}
         fill="none"
@@ -355,22 +375,20 @@ function Sparkline({ points, color = "#7c3aed" }) {
         filter={`url(#${glowId})`}
       />
 
-      {/* head */}
+      {/* head dot (shows where the line ends) */}
       <circle cx={headX} cy={headY} r="4.5" fill={color} opacity="0.95" />
 
-      {/* start-plane marks the left edge of the visible segment */}
+      {/* ✈️ plane: starts at left edge, then flies up-right along the curve */}
       <text
         x={planeX}
-        y={planeY}
-        fontSize="14"
+        y={planeY - 10}  // float above the line a bit
+        fontSize="24"     // slightly bigger as requested
         textAnchor="middle"
         dominantBaseline="central"
-        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }}
+        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))" }}
       >
         ✈️
       </text>
     </svg>
   );
 }
-
-
