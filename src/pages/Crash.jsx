@@ -1,5 +1,6 @@
 // src/pages/Crash.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo,useEffect, useRef, useState } from "react";
+
 import { telegramAuth, getBalance, games } from "../api";
 import spinSfx from "../assets/diceRoll.mp3";
 import winSfx from "../assets/win.mp3";
