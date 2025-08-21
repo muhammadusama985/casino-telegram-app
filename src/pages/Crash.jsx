@@ -281,7 +281,7 @@ function InfoCard({ label, value, accent = "emerald" }) {
 function Sparkline({ points, color = "#7c3aed" }) {
   if (!points?.length) return null;
 
-  const W = 600, H = 96;
+  const W = 600, H = 200;
   const pad = 8;
   const WINDOW_SEC = 8; // pan only after this fills
 
