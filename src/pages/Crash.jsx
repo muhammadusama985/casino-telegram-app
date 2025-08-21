@@ -112,7 +112,7 @@ export default function Crash() {
     const refresh = async () => {
       try {
         const c = await getBalance();
-        if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
+ if (Number.isFinite(c)) setBalance((prev) => (c !== prev ? c : prev));
       } catch {}
     };
     const onVisible = () => {
