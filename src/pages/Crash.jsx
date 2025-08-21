@@ -1,6 +1,5 @@
 // src/pages/Crash.jsx
-import React, { useMemo,useEffect, useRef, useState } from "react";
-
+import React, { useMemo, useEffect, useRef, useState } from "react";
 import { telegramAuth, getBalance, games } from "../api";
 import spinSfx from "../assets/diceRoll.mp3";
 import winSfx from "../assets/win.mp3";
@@ -24,7 +23,7 @@ export default function Crash() {
 
   const [currentX, setCurrentX] = useState(1.0);      // animated
   const [crashAt, setCrashAt] = useState(null);       // from backend
-  const [payout, setPayout] = useState(0);            // profit-only returned to UI (per your games.js)
+  const [payout, setPayout] = useState(0);            // profit-only returned to UI
   const [result, setResult] = useState("");           // 'win' | 'loss' | ''
 
   const [points, setPoints] = useState(() => [[0, 1.0]]); // sparkline points [time, x]
@@ -114,8 +113,8 @@ export default function Crash() {
         setCurrentX(capped);
         setPoints((p) => {
           const next = [...p, [t, capped]];
-          // keep last ~7s for a compact sparkline
-          while (next.length > 120) next.shift();
+          // keep last ~8s for the scrolling sparkline
+          while (next.length > 140) next.shift();
           return next;
         });
 
@@ -182,9 +181,9 @@ export default function Crash() {
             </div>
 
             {/* Sparkline */}
-          <div className="mt-6 h-40 md:h-48 w-full">
- <Sparkline points={points} color="#7c3aed" height={200} />
-  </div>
+            <div className="mt-6 h-40 md:h-48 w-full">
+              <Sparkline points={points} color="#7c3aed" />
+            </div>
 
             {/* Info row */}
             <div className="mt-6 grid grid-cols-3 gap-2 text-center">
@@ -277,41 +276,36 @@ function InfoCard({ label, value, accent = "emerald" }) {
   );
 }
 
-/** very lightweight SVG sparkline */
-/** Stylish, scrolling SVG sparkline with a start-plane and glow */
-/** Stylish, anchored, no-baseline Sparkline with scalable plane */
 /** Sparkline — live path (no dash tricks), sliding grid, anchored tail, curved + wavy lift.
- *  Drop-in for your existing Crash.jsx. Do not change the rest of your file.
+ *  Drop-in; uses your `points` [time, multiplier].
  */
 function Sparkline({ points, color = "#7c3aed" }) {
   if (!points?.length) return null;
 
-  // Viewbox (kept close to your current)
-  const W = 600;         // width
-  const H = 200;         // taller so 50x+ never hugs the base
+  // Viewbox
+  const W = 600;
+  const H = 200;      // taller so 50x+ stays clear of the base
   const pad = 10;
-  const WINDOW_SEC = 8;  // camera window width (keeps the ticker motion)
+  const WINDOW_SEC = 8;
 
-  // Slide the background grid downward for that “panel moves while plane climbs” feel
+  // Background grid slide (parallax)
   const gridGap = 14;
   const slideRate = 36; // px/sec
 
-  // Keep a safety floor so the line never sticks to the baseline
+  // Safety floor to avoid hugging the base
   const FLOOR = 30;
 
-  // Soft arc up from the start + a subtle wave
+  // Arc + wave styling (for that “video” feel)
   const ARC_BASE = 24;
-  const ARC_PER_X = 2.2;    // stronger arc as multiplier grows
+  const ARC_PER_X = 2.2;
   const ARC_MAX = H * 0.45;
   const WAVE_FREQ = 1.15;
   const WAVE_AMP_MIN = 6;
   const WAVE_AMP_MAX = 14;
 
-  // Camera: follow the last WINDOW_SEC seconds
   const maxT = Math.max(...points.map(p => p[0]), 0);
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  // Sample helper (linear) on the full series
   function sampleAt(tTarget) {
     const all = points;
     const tMin = all[0][0], tMax2 = all[all.length - 1][0];
@@ -324,14 +318,11 @@ function Sparkline({ points, color = "#7c3aed" }) {
     return { t: tTarget, x: v1 + a * (v2 - v1) };
   }
 
-  // Axes mapping
   const sx = (t) => {
     const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);
     return pad + (W - 2 * pad) * Math.min(1, Math.max(0, u));
   };
 
-  // Use log scale but re-fit to the visible window so tall climbs still fit,
-  // then push everything up by an arc + wave and clamp above the floor.
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   const visVals = visible.map(([, v]) => Math.max(1.00001, v));
   const vMin = Math.min(...visVals);
@@ -340,18 +331,16 @@ function Sparkline({ points, color = "#7c3aed" }) {
   const logMax = Math.log(Math.max(vMin + 1e-6, vMax));
   const syLog = (m) => {
     const lx = Math.log(Math.max(1.00001, m));
-    const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin)); // 0..1
+    const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin));
     const y = H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
     return Math.min(y, H - pad - FLOOR);
   };
 
-  // Head (current point) – drives arc strength and plane pose
   const headT = visible[visible.length - 1][0];
   const head = sampleAt(headT);
   const arcPixels = Math.min(ARC_MAX, ARC_BASE + ARC_PER_X * Math.max(0, head.x - 1));
   const easeQuad = (u) => u * u;
 
-  // Map time→screen Y with arc + wave (+ floor clamp)
   const sy = (t, m) => {
     let y = syLog(m);
     const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);
@@ -363,11 +352,9 @@ function Sparkline({ points, color = "#7c3aed" }) {
     return Math.min(y, H - pad - FLOOR);
   };
 
-  // Build a smooth path up to the head; start with a “takeoff” cubic so there’s no flat baseline
   const inWin = points.filter(([t]) => t >= t0);
   const mapped = inWin.map(([t, m]) => [sx(t), sy(t, m)]);
 
-  // Anchor point on the left edge at window start (also lifted so it’s not flat)
   const start = sampleAt(t0);
   const startX = pad;
   const startY = sy(t0, start.x);
@@ -381,7 +368,7 @@ function Sparkline({ points, color = "#7c3aed" }) {
     const c2y = Math.min(y1 - Math.max(8, arcPixels * 0.25), H - pad - FLOOR - 2);
     d += ` C${c1x},${c1y} ${c2x},${c2y} ${x1},${y1}`;
 
-    // Catmull–Rom → Bezier through the rest for a silky curve
+    // Catmull–Rom → Bezier for silky curve
     for (let i = 1; i < mapped.length - 1; i++) {
       const p0 = mapped[i - 1];
       const p1 = mapped[i];
@@ -395,7 +382,6 @@ function Sparkline({ points, color = "#7c3aed" }) {
     }
   }
 
-  // Plane pose (at the tip)
   const planeX = sx(head.t);
   const planeY = sy(head.t, head.x);
   const prev = sampleAt(Math.max(t0, head.t - WINDOW_SEC / 140));
@@ -403,12 +389,11 @@ function Sparkline({ points, color = "#7c3aed" }) {
   const prevY = sy(prev.t, prev.x);
   const angleDeg = (Math.atan2(planeY - prevY, planeX - prevX) * 180) / Math.PI;
 
-  // Plane scales with multiplier for drama (capped)
+  // Scale plane with multiplier (dramatic but capped)
   const baseSize = 24;
-  const scale = 1 + Math.min(head.x / 50, 1.4); // up to ~2.4x
+  const scale = 1 + Math.min(head.x / 50, 1.4);
   const planeSize = baseSize * scale;
 
-  // Parallax slide amount for the grid
   const slideY = (slideRate * Math.max(0, head.t - t0)) % gridGap;
 
   const gradId = "spark-grad";
@@ -453,7 +438,7 @@ function Sparkline({ points, color = "#7c3aed" }) {
       {/* head dot */}
       <circle cx={planeX} cy={planeY} r={7.5} fill={color} opacity="0.98" />
 
-      {/* plane — emoji rotated at the tangent, centered just above the trail */}
+      {/* plane */}
       <text
         transform={`translate(${planeX}, ${planeY - 12}) rotate(${angleDeg})`}
         fontSize={planeSize}
@@ -466,8 +451,3 @@ function Sparkline({ points, color = "#7c3aed" }) {
     </svg>
   );
 }
-
-
-
-
-
