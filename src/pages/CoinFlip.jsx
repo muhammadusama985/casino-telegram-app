@@ -451,11 +451,9 @@ export default function Coinflip() {
 
     setFlipping(true);
     setResultMsg("");
-    setFace(side); // show chosen side while flipping
+    // NOTE: do NOT set the face yet and do NOT pre-spin.
+    // We wait for backend, then do ONE deterministic flip to the landed side.
     try { new Audio(flipSound).play().catch(() => {}); } catch {}
-
-    // START: spin while waiting (non-deterministic show)
-    try { coinApiRef.current?.flip(null); } catch {}
 
     try {
       // IMPORTANT: send streak so backend boosts payout (and credits more on win)
@@ -466,9 +464,9 @@ export default function Coinflip() {
       if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
       const landed = (res?.details?.landed === "T") ? "T" : "H";
-      setFace(landed);
 
-      // RESOLVE: deterministic finish to the server result
+      // Single deterministic flip now that we know the result:
+      setFace(landed);
       try { coinApiRef.current?.flip(landed); } catch {}
 
       if (Number.isFinite(res?.newBalance)) {
@@ -478,18 +476,17 @@ export default function Coinflip() {
       setRound((r) => r + 1);
 
       if (res?.result === "win") {
-        // put H/T into trail and grow streak
+        // Win: put the landed side into the trail and grow streak
         setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN));
         setStreak((s) => s + 1);
 
-        // Backend returns profit-only in res.payout (decimal-safe); show exactly that
-        const profit = Number(res?.payout || 0);
+        const profit = Number(res?.payout || 0); // profit-only
         const msg = `🎉 You Win! +${fmt(profit)}`;
         setResultMsg(msg);
         try { new Audio(winSound).play().catch(() => {}); } catch {}
         alert(msg);
       } else {
-        // loss → reset streak (UI coef returns to base), clear trail
+        // Loss: no fill into trail (your rule); reset streak and show loss
         setStreak(0);
         setTrail(Array(TRAIL_LEN).fill("?"));
 
@@ -542,7 +539,7 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin replaced with 3D CSS coin (keeps same size footprint) */}
+        {/* center coin: 3D CSS coin, same footprint */}
         <div className="relative mx-4 flex items-center justify-center" style={{ width: 160, height: 160 }}>
           <Coin3D ref={coinApiRef} ariaFace={face} />
         </div>
@@ -656,30 +653,21 @@ function MiniCoin({ symbol = "$" }) {
 }
 
 /* ===================== 3D CSS COIN ===================== */
-/* Minimal, component-scoped version of the previously shared coin */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const coinRef = useRef(null);
 
   useImperativeHandle(ref, () => ({
-    /**
-     * Flip the coin.
-     * desired: 'H' | 'T' | null
-     *   - null => random-looking spin (used while waiting for server)
-     *   - 'H' or 'T' => deterministic finish to that side
-     */
-    flip(desired = null) {
+    // Flip exactly once to desired side ('H' or 'T'); no random pre-spin.
+    flip(desired) {
       const el = coinRef.current;
       if (!el) return;
 
-      // choose spins and final side
       const spins = Math.floor(5 + Math.random() * 5); // 5–9 full turns
       const yawStart = (Math.random() * 18 - 9).toFixed(2) + "deg";
       const yawEnd = (Math.random() * 32 - 16).toFixed(2) + "deg";
       const duration = Math.floor(1100 + Math.random() * 500); // 1.1–1.6s
 
-      const half = desired
-        ? desired === "T" ? 0.5 : 0
-        : Math.random() < 0.5 ? 0 : 0.5; // 0=heads, 0.5=tails
+      const half = desired === "T" ? 0.5 : 0; // deterministic finish
 
       el.style.setProperty("--spins", String(spins));
       el.style.setProperty("--half", String(half));
@@ -688,7 +676,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       el.style.setProperty("--yawEnd", yawEnd);
 
       el.classList.remove("coinflip-anim");
-      // reflow to restart animation
       // eslint-disable-next-line no-unused-expressions
       el.offsetWidth;
       el.classList.add("coinflip-anim");
@@ -703,7 +690,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         role="img"
         aria-label={ariaFace === "H" ? "Heads" : "Tails"}
         style={{
-          // size/thickness tuned to your 160×160 slot
           ['--size']: '160px',
           ['--thickness']: '12px',
         }}
@@ -713,7 +699,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         <div className="coinflip-shadow" aria-hidden />
       </div>
 
-      {/* Styles local to coin */}
       <style>{`
         :root {
           --coin-gold-1: #f4e3b1;
@@ -721,7 +706,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           --coin-gold-3: #b7913a;
           --coin-gold-4: #8e6b24;
         }
-
         .coinflip-coin {
           width: var(--size);
           height: var(--size);
@@ -746,7 +730,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
               rotateZ(3deg);
           }
         }
-
         .coinflip-face {
           position: absolute;
           inset: 0;
@@ -770,7 +753,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
                       linear-gradient(225deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
           transform: rotateX(180deg) translateZ(calc(var(--thickness) / 2));
         }
-        /* ridged edge illusion */
         .coinflip-coin::before {
           content: "";
           position: absolute;
@@ -798,7 +780,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           opacity: .7;
           pointer-events: none;
         }
-
         @media (prefers-reduced-motion: reduce) {
           .coinflip-coin.coinflip-anim { animation-duration: 0.01ms; }
         }
