@@ -280,7 +280,7 @@ function InfoCard({ label, value, accent = "emerald" }) {
 /** very lightweight SVG sparkline */
 /** Stylish, scrolling SVG sparkline with a start-plane and glow */
 /** Stylish, anchored, no-baseline Sparkline with scalable plane */
-/** Wavy, anchored crash sparkline with sliding background (parallax) + scaling plane */
+/** Parabolic, wavy, anchored sparkline with sliding background + scaling plane */
 function Sparkline({ points, color = "#7c3aed", height = 200 }) {
   if (!points?.length) return null;
 
@@ -289,28 +289,45 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
   const pad = 4;
   const WINDOW_SEC = 8;
 
-  // Keep some distance from the bottom
-  const FLOOR_MARGIN = 28; // px from bottom
+  // Don't let the trail ride the floor
+  const FLOOR_MARGIN = 28;
 
-  // Gentle wave params
-  const WAVE_FREQ = 1.25;          // cycles per second along time axis
+  // Wave (subtle)
+  const WAVE_FREQ = 1.15;
   const WAVE_AMP_MIN = 6;
   const WAVE_AMP_MAX = 14;
 
-  // Background sliding params (parallax)
-  const GRID_GAP = 14;             // px between grid lines
-  const SLIDE_RATE = 36;           // px per second (downwards)
+  // Background parallax (downward slide)
+  const GRID_GAP = 14;
+  const SLIDE_RATE = 36;
   const GRID_OPACITY = 0.14;
 
-  // --- camera window ---
+  // Camera
   const maxT = Math.max(...points.map(p => p[0]), 0);
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  // visible slice (+tiny buffer)
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // Y scaling (log) using visible values
+  // Sample helpers
+  function sampleAt(tTarget) {
+    const all = points;
+    const tMin = all[0][0], tMax2 = all[all.length - 1][0];
+    if (tTarget <= tMin) return { t: tMin, x: all[0][1] };
+    if (tTarget >= tMax2) return { t: tMax2, x: all[all.length - 1][1] };
+    let i = 1;
+    while (i < all.length && all[i][0] < tTarget) i++;
+    const [t1, v1] = all[i - 1], [t2, v2] = all[i];
+    const a = (tTarget - t1) / Math.max(1e-6, (t2 - t1));
+    return { t: tTarget, x: v1 + a * (v2 - v1) };
+  }
+
+  // Head sample first (we use it to shape the parabola strength)
+  const tHead = visible[visible.length - 1][0];
+  const head = sampleAt(tHead);
+
+  // Axes mapping
+  // Y uses log scale from what's visible to use headroom well
   const visVals = visible.map(([, v]) => Math.max(1.00001, v));
   const vMin = Math.min(...visVals);
   const vMax = Math.max(...visVals);
@@ -324,90 +341,106 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
   const syBase = (x) => {
     const lx = Math.log(Math.max(1.00001, x));
     const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin));
-    // SVG y grows downwards; clamp above the floor margin
     const y = H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
     return Math.min(y, H - pad - FLOOR_MARGIN);
   };
 
-  // Linear sample at any time t
-  function sampleAt(tTarget) {
-    const all = points;
-    const tMin = all[0][0], tMax2 = all[all.length - 1][0];
-    if (tTarget <= tMin) return { t: tMin, x: all[0][1] };
-    if (tTarget >= tMax2) return { t: tMax2, x: all[all.length - 1][1] };
-    let i = 1;
-    while (i < all.length && all[i][0] < tTarget) i++;
-    const [t1, v1] = all[i - 1], [t2, v2] = all[i];
-    const a = (tTarget - t1) / Math.max(1e-6, (t2 - t1));
-    return { t: tTarget, x: v1 + a * (v2 - v1) };
-  }
+  // ---------- Parabolic lift ----------
+  // We push the path upward with a quadratic offset that grows across the window,
+  // scaled by the current head multiplier (bigger x → more dramatic arc).
+  const ARC_BASE = 24;                         // px
+  const ARC_PER_X = 2.2;                       // extra px per 1x (soft)
+  const ARC_MAX = H * 0.45;                    // cap
+  const arcPixels = Math.min(ARC_MAX, ARC_BASE + ARC_PER_X * Math.max(0, head.x - 1));
+  const easeQuad = (u) => u * u;               // 0→1 quadratic
+  // ------------------------------------
 
-  // Start anchored on left edge at current window start
-  const start = sampleAt(t0);
-  const startX = pad;
-  const startY = syBase(start.x);
-
-  // Map only points inside the window and inject a wave on Y
+  // Build mapped points (inside window) with parabola + wave
   const inWin = points.filter(([t]) => t >= t0);
   const mapped = inWin.map(([t, val]) => {
     const xPx = sx(t);
-    const yB = syBase(val);
-    const ampFactor = Math.min((Math.max(1, val) - 1) / 20, 1); // grows with multiplier, capped
+
+    // base (log) y
+    let y = syBase(val);
+
+    // parabolic lift
+    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC); // 0..1 across window
+    y -= arcPixels * easeQuad(Math.min(1, Math.max(0, u)));
+
+    // wave on top
+    const ampFactor = Math.min((Math.max(1, val) - 1) / 20, 1);
     const amp = WAVE_AMP_MIN + (WAVE_AMP_MAX - WAVE_AMP_MIN) * ampFactor;
     const phase = 2 * Math.PI * WAVE_FREQ * (t - t0);
-    const yWave = yB - amp * Math.sin(phase + 0.6);
-    return [xPx, Math.min(yWave, H - pad - FLOOR_MARGIN)];
+    y -= amp * Math.sin(phase + 0.6);
+
+    // keep above floor
+    y = Math.min(y, H - pad - FLOOR_MARGIN);
+    return [xPx, y];
   });
 
-  // Build path with a small lift-off to avoid flat first segment
+  // Left anchor at window start (also lifted so no flat baseline)
+  const start = sampleAt(t0);
+  const startX = pad;
+  let startY = syBase(start.x);
+  startY -= arcPixels * easeQuad(0); // 0, but keep for clarity
+
+  // Path: start with a cubic that curves up (no straight segment), then CR-smoothing
   let d = `M${startX},${startY}`;
   if (mapped.length) {
     const [x1, y1] = mapped[0];
-    const dx = Math.max(8, (x1 - startX) * 0.25);
-    const dy = Math.max(10, Math.abs(y1 - startY) * 0.35);
-    const liftX = startX + dx;
-    const liftY = Math.min(startY - dy, H - pad - FLOOR_MARGIN - 2);
-    d += ` L${liftX},${liftY} L${x1},${y1}`;
 
-    // Catmull–Rom → cubic Bézier smoothing
+    // control points for a nice "takeoff" arc (parabola-like)
+    const u1 = Math.min(1, Math.max(0, (inWin[0][0] - t0) / WINDOW_SEC));
+    const arc1 = arcPixels * easeQuad(u1);
+    const c1x = startX + (x1 - startX) * 0.18;
+    const c1y = Math.min(startY - Math.max(12, arc1 * 0.6), H - pad - FLOOR_MARGIN - 2);
+    const c2x = startX + (x1 - startX) * 0.55;
+    const c2y = Math.min(y1 - Math.max(8, arc1 * 0.25), H - pad - FLOOR_MARGIN - 2);
+
+    d += ` C${c1x},${c1y} ${c2x},${c2y} ${x1},${y1}`;
+
+    // Smooth rest with Catmull–Rom → Bezier
     for (let i = 1; i < mapped.length - 1; i++) {
       const p0 = mapped[i - 1];
       const p1 = mapped[i];
       const p2 = mapped[i + 1];
       const p3 = mapped[Math.min(mapped.length - 1, i + 2)];
-      const c1x = p1[0] + (p2[0] - (p0?.[0] ?? p1[0])) / 6;
-      const c1y = p1[1] + (p2[1] - (p0?.[1] ?? p1[1])) / 6;
-      const c2x = p2[0] - ((p3?.[0] ?? p2[0]) - p1[0]) / 6;
-      const c2y = p2[1] - ((p3?.[1] ?? p2[1]) - p1[1]) / 6;
-      d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+      const c1x2 = p1[0] + (p2[0] - (p0?.[0] ?? p1[0])) / 6;
+      const c1y2 = p1[1] + (p2[1] - (p0?.[1] ?? p1[1])) / 6;
+      const c2x2 = p2[0] - ((p3?.[0] ?? p2[0]) - p1[0]) / 6;
+      const c2y2 = p2[1] - ((p3?.[1] ?? p2[1]) - p1[1]) / 6;
+      d += ` C${c1x2},${c1y2} ${c2x2},${c2y2} ${p2[0]},${p2[1]}`;
     }
   }
 
-  // Plane (head) + bank with local slope (using waved Y)
-  const tHead = visible[visible.length - 1][0];
-  const head = sampleAt(tHead);
+  // Head (use same transforms for banking and position)
   const headPhase = 2 * Math.PI * WAVE_FREQ * (head.t - t0);
   const ampHead = WAVE_AMP_MIN + (WAVE_AMP_MAX - WAVE_AMP_MIN) * Math.min((Math.max(1, head.x) - 1) / 20, 1);
-  const yHead = Math.min(syBase(head.x) - ampHead * Math.sin(headPhase + 0.6), H - pad - FLOOR_MARGIN);
+  let yHead = syBase(head.x);
+  yHead -= arcPixels * easeQuad(1);            // full arc at the right edge
+  yHead -= ampHead * Math.sin(headPhase + 0.6);
+  yHead = Math.min(yHead, H - pad - FLOOR_MARGIN);
 
   const prev = sampleAt(Math.max(t0, head.t - 0.08));
   const prevPhase = 2 * Math.PI * WAVE_FREQ * (prev.t - t0);
   const ampPrev = WAVE_AMP_MIN + (WAVE_AMP_MAX - WAVE_AMP_MIN) * Math.min((Math.max(1, prev.x) - 1) / 20, 1);
-  const yPrev = Math.min(syBase(prev.x) - ampPrev * Math.sin(prevPhase + 0.6), H - pad - FLOOR_MARGIN);
+  let yPrev = syBase(prev.x);
+  yPrev -= arcPixels * easeQuad(Math.min(1, Math.max(0, (prev.t - t0) / WINDOW_SEC)));
+  yPrev -= ampPrev * Math.sin(prevPhase + 0.6);
+  yPrev = Math.min(yPrev, H - pad - FLOOR_MARGIN);
 
   const planeX = sx(head.t);
   const planeY = yHead;
   const angleDeg = (Math.atan2(-(yHead - yPrev), (sx(head.t) - sx(prev.t))) * 180) / Math.PI;
 
-  // Plane size scales with multiplier
+  // Plane scales with x
   const baseSize = 28;
-  const scale = 1 + Math.min(head.x / 50, 1.5); // at 50x → 2.5x cap
+  const scale = 1 + Math.min(head.x / 50, 1.5); // up to 2.5×
   const planeSize = baseSize * scale;
 
-  // --- background parallax (grid sliding downward) ---
-  // slide distance based on elapsed time in the window
+  // Parallax slide offset
   const elapsed = Math.max(0, tHead - t0);
-  const slideY = (SLIDE_RATE * elapsed) % GRID_GAP; // wrap for endless scroll
+  const slideY = (SLIDE_RATE * elapsed) % GRID_GAP;
 
   const gradId = "spark-grad";
   const glowId = "spark-glow";
@@ -432,12 +465,12 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
         </pattern>
       </defs>
 
-      {/* Sliding background (parallax) */}
+      {/* sliding background */}
       <g transform={`translate(0, ${slideY})`}>
         <rect x="0" y={-GRID_GAP} width={W} height={H + GRID_GAP * 2} fill="url(#bg-grid)" />
       </g>
 
-      {/* Wavy, smoothed, anchored trail */}
+      {/* curved, glowing trail */}
       <path
         d={d}
         fill="none"
@@ -448,10 +481,10 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
         filter={`url(#${glowId})`}
       />
 
-      {/* Head marker */}
+      {/* head marker */}
       <circle cx={planeX} cy={planeY} r={7.5} fill={color} opacity="0.98" />
 
-      {/* Plane — scaled & banked */}
+      {/* plane */}
       <text
         transform={`translate(${planeX}, ${planeY - 13}) rotate(${angleDeg})`}
         fontSize={planeSize}
@@ -464,6 +497,7 @@ function Sparkline({ points, color = "#7c3aed", height = 200 }) {
     </svg>
   );
 }
+
 
 
 
