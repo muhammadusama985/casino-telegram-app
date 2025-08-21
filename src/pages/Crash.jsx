@@ -32,7 +32,7 @@ export default function Crash() {
   const [err, setErr] = useState("");
 
   // user inputs
-  const [bet, setBet] = useState(1000);       // matches screenshot
+  const [bet, setBet] = useState(1);       // matches screenshot
   const [autoCashout, setAutoCashout] = useState("1.80"); // required for server-driven crash
 
   // round state
