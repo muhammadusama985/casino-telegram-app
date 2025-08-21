@@ -277,20 +277,100 @@ function InfoCard({ label, value, accent = "emerald" }) {
 }
 
 /** very lightweight SVG sparkline */
+/** Stylish, scrolling SVG sparkline with a start-plane and glow */
+/** Stylish, constantly scrolling SVG sparkline with start-plane & glow */
 function Sparkline({ points, color = "#7c3aed" }) {
   if (!points?.length) return null;
-  const maxT = Math.max(...points.map(p => p[0])) || 1;
-  const maxX = Math.max(...points.map(p => p[1])) || 1;
-  const pad = 6;
+
+  // Viewport + padding
   const W = 600, H = 96;
-  const d = points.map(([t, x], i) => {
-    const px = pad + (W - 2*pad) * (t / Math.max(1, maxT));
-    const py = H - pad - (H - 2*pad) * (Math.log(x) / Math.log(Math.max(2, maxX)));
-    return `${i ? "L" : "M"}${px.toFixed(1)},${py.toFixed(1)}`;
+  const pad = 8;
+
+  // We always scroll a fixed window forward — ticker-tape style.
+  const WINDOW_SEC = 8;
+
+  const maxT = Math.max(...points.map(p => p[0]), 0);
+  const t0 = maxT - WINDOW_SEC; // ❗ no clamp → constant left→right motion from time 0
+
+  // Keep a tiny buffer so the plane doesn't disappear at the exact edge
+  const visible = points.filter(([t]) => t >= t0 - 0.25);
+  if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
+
+  // Y scale (log) from visible window
+  const maxX = Math.max(...visible.map(p => p[1])) || 1.00001;
+  const logMax = Math.log(Math.max(2, maxX));
+
+  // Map time to x across a fixed window so it ALWAYS scrolls
+  const sx = (t) => {
+    const u = (t - t0) / WINDOW_SEC; // target 0..1 across the moving window
+    const clamped = Math.min(1, Math.max(0, u));
+    return pad + (W - 2 * pad) * clamped;
+  };
+  const sy = (x) => {
+    const ly = Math.log(Math.max(1.00001, x));
+    const ny = ly / (logMax || 1); // 0..1
+    return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
+  };
+
+  // Path
+  const d = visible.map(([t, x], i) => {
+    const X = sx(t);
+    const Y = sy(x);
+    return `${i ? "L" : "M"}${X.toFixed(1)},${Y.toFixed(1)}`;
   }).join(" ");
+
+  // Start plane & head dot
+  const [tStart, xStart] = visible[0];
+  const [tEnd, xEnd] = visible[visible.length - 1];
+  const planeX = sx(tStart), planeY = sy(xStart);
+  const headX  = sx(tEnd),   headY  = sy(xEnd);
+
+  const gradId = "spark-grad";
+  const glowId = "spark-glow";
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full">
-      <path d={d} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+      <defs>
+        <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"  stopColor={color} stopOpacity="0.35" />
+          <stop offset="70%" stopColor={color} stopOpacity="0.85" />
+          <stop offset="100%" stopColor={color} stopOpacity="1" />
+        </linearGradient>
+      </defs>
+
+      <path
+        d={d}
+        fill="none"
+        stroke={`url(#${gradId})`}
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        filter={`url(#${glowId})`}
+      />
+
+      {/* head */}
+      <circle cx={headX} cy={headY} r="4.5" fill={color} opacity="0.95" />
+
+      {/* start-plane marks the left edge of the visible segment */}
+      <text
+        x={planeX}
+        y={planeY}
+        fontSize="14"
+        textAnchor="middle"
+        dominantBaseline="central"
+        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.5))" }}
+      >
+        ✈️
+      </text>
     </svg>
   );
 }
+
+
