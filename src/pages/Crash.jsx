@@ -284,40 +284,42 @@ function Sparkline({ points, color = "#7c3aed" }) {
 
   const W = 600, H = 96;
   const pad = 8;
-  const WINDOW_SEC = 8;        // visible window
-  const TRAIL_SEC = 1.2;       // plane trails head by this much (smooth motion)
 
+  // chart window keeps scrolling (like you asked earlier)
+  const WINDOW_SEC = 8;
+
+  // how far behind the head the plane targets AFTER takeoff (gives smooth motion)
+  const TRAIL_SEC = 1.0;
+
+  // compute scrolling window
   const maxT = Math.max(...points.map(p => p[0]), 0);
-  const t0 = maxT - WINDOW_SEC; // constant scrolling window
+  const t0 = maxT - WINDOW_SEC; // scrolling start
 
-  // keep a tiny buffer so the plane doesn’t pop at the edge
+  // keep a tiny buffer so nothing pops at edges
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // Y scale (log) based on visible data
+  // y-scale (log) from visible
   const maxX = Math.max(...visible.map(p => p[1])) || 1.00001;
   const logMax = Math.log(Math.max(2, maxX));
 
   const sx = (t) => {
-    const u = (t - t0) / WINDOW_SEC;                      // 0..1 across moving window
+    const u = (t - t0) / WINDOW_SEC;       // 0..1 across moving window
     const clamped = Math.min(1, Math.max(0, u));
     return pad + (W - 2 * pad) * clamped;
   };
   const sy = (x) => {
     const ly = Math.log(Math.max(1.00001, x));
-    const ny = ly / (logMax || 1);                         // 0..1
+    const ny = ly / (logMax || 1);         // 0..1
     return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // simple time→value sampler (linear interp between nearest points)
+  // linear sampler so we can place plane exactly where we want
   function sampleValueAt(tTarget) {
-    // ensure within bounds
     const tMin = visible[0][0];
     const tMax = visible[visible.length - 1][0];
     if (tTarget <= tMin) return visible[0][1];
     if (tTarget >= tMax) return visible[visible.length - 1][1];
-
-    // find surrounding points
     let i = 1;
     while (i < visible.length && visible[i][0] < tTarget) i++;
     const [t1, v1] = visible[i - 1];
@@ -326,23 +328,28 @@ function Sparkline({ points, color = "#7c3aed" }) {
     return v1 + a * (v2 - v1);
   }
 
-  // build the path
-  const d = visible.map(([t, x], i) => {
-    const X = sx(t);
-    const Y = sy(x);
-    return `${i ? "L" : "M"}${X.toFixed(1)},${Y.toFixed(1)}`;
-  }).join(" ");
-
-  // head (latest point)
+  // head (for reference)
   const [tEnd, xEnd] = visible[visible.length - 1];
   const headX = sx(tEnd), headY = sy(xEnd);
 
-  // ✈️ plane time:
-  // - at round start (small maxT), this clamps to t0 → left edge
-  // - as time grows, it smoothly trails the head by TRAIL_SEC
-  const tPlane = Math.max(t0, Math.min(tEnd, tEnd - TRAIL_SEC));
-  const vPlane = sampleValueAt(tPlane);
-  const planeX = sx(tPlane), planeY = sy(vPlane);
+  // --- PLANE LOGIC ---
+  // Phase A (takeoff): for the first bit of time, force plane to sit at the hard-left edge.
+  // Phase B (cruise): once there's enough history, let it trail the head by TRAIL_SEC.
+  const haveRoom = (tEnd - t0) >= (TRAIL_SEC + 0.1);
+  const tPlane = haveRoom ? (tEnd - TRAIL_SEC) : (t0);   // trail or left edge
+  const vPlane = sampleValueAt(Math.max(visible[0][0], tPlane));
+
+  // exact leftmost pixel for takeoff so it’s truly at the left edge
+  const planeX = haveRoom ? sx(tPlane) : pad;
+  const planeY = sy(vPlane);
+
+  // draw the line ONLY up to where the plane has flown
+  const flown = visible.filter(([t]) => t <= tPlane + 1e-6);
+  const d = (flown.length ? flown : [[t0, vPlane]]).map(([t, x], i) => {
+    const X = haveRoom ? sx(t) : Math.max(pad, sx(t)); // keep within pad
+    const Y = sy(x);
+    return `${i ? "L" : "M"}${X.toFixed(1)},${Y.toFixed(1)}`;
+  }).join(" ");
 
   const gradId = "spark-grad";
   const glowId = "spark-glow";
@@ -364,7 +371,7 @@ function Sparkline({ points, color = "#7c3aed" }) {
         </linearGradient>
       </defs>
 
-      {/* curve */}
+      {/* curve (only the flown segment) */}
       <path
         d={d}
         fill="none"
@@ -375,14 +382,14 @@ function Sparkline({ points, color = "#7c3aed" }) {
         filter={`url(#${glowId})`}
       />
 
-      {/* head dot (shows where the line ends) */}
+      {/* head dot stays (shows current multiplier visually) */}
       <circle cx={headX} cy={headY} r="4.5" fill={color} opacity="0.95" />
 
-      {/* ✈️ plane: starts at left edge, then flies up-right along the curve */}
+      {/* ✈️ bigger plane; starts hard-left, then flies up-right */}
       <text
         x={planeX}
-        y={planeY - 10}  // float above the line a bit
-        fontSize="24"     // slightly bigger as requested
+        y={planeY - 10}
+        fontSize="26"                 // a bit larger per your request
         textAnchor="middle"
         dominantBaseline="central"
         style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))" }}
@@ -392,3 +399,4 @@ function Sparkline({ points, color = "#7c3aed" }) {
     </svg>
   );
 }
+
