@@ -107,14 +107,12 @@ export default function Crash() {
     return () => { stopPolling?.(); };
   }, []);
 
-  useEffect(() => {
+
+    useEffect(() => {
     const refresh = async () => {
       try {
         const c = await getBalance();
-        if (Number.isFinite(c)) {
-          setBalance((prev) => (c !== prev ? c : prev));
-          setErr(""); // clear on success
-        }
+        if (Number.isFinite(c)) setCoins((prev) => (c !== prev ? c : prev));
       } catch {}
     };
     const onVisible = () => {
@@ -127,6 +125,8 @@ export default function Crash() {
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
+
+  
   /* ===== end Telegram auth block ===== */
 
   // initial balance (kept; now clears err on success)
