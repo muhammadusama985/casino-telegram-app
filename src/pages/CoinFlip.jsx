@@ -105,67 +105,62 @@ export default function Coinflip() {
   }, []);
 
   /* ---------- actions ---------- */
-  const placeBet = async (side) => {
-    if (flipping) return;
-    const stake = Math.max(1, Math.floor(Number(bet || 0)));
-    if (!Number.isFinite(stake) || stake <= 0) return alert("Enter a valid bet (>= 1).");
-    if (Number(coins) < stake) return alert("Not enough coins.");
+const placeBet = async (side) => {
+  if (flipping) return;
+  const stake = Math.max(1, Math.floor(Number(bet || 0)));
+  if (!Number.isFinite(stake) || stake <= 0) return alert("Enter a valid bet (>= 1).");
+  if (Number(coins) < stake) return alert("Not enough coins.");
 
-    setFlipping(true);
-    setResultMsg("");
-    setFace(side); // show chosen side while flipping
-    try { new Audio(flipSound).play().catch(() => {}); } catch {}
+  setFlipping(true);
+  setResultMsg("");
+  setFace(side); // show chosen side while flipping
+  try { new Audio(flipSound).play().catch(() => {}); } catch {}
 
-    try {
-      // IMPORTANT: send streak so backend boosts payout (and credits more on win)
-      const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
+  try {
+    const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
 
-      // sync default coef from engine if provided (optional)
-      const m = Number(res?.details?.m);
-      if (Number.isFinite(m) && m > 0) setBaseCoef(m);
+    const m = Number(res?.details?.m);
+    if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
-      const landed = (res?.details?.landed === "T") ? "T" : "H";
-      setFace(landed);
+    const landed = (res?.details?.landed === "T") ? "T" : "H";
+    setFace(landed);
+    setFlipping(false); // ✅ stop spin NOW so the final face shows before the result
 
-      if (Number.isFinite(res?.newBalance)) {
-        setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
-      }
-
-      setRound((r) => r + 1);
-
-      if (res?.result === "win") {
-        // put H/T into trail and grow streak
-        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN));
-        setStreak((s) => s + 1);
-
-        // Backend returns profit-only in res.payout (decimal-safe); show exactly that
-        const profit = Number(res?.payout || 0);
-        const msg = `🎉 You Win! +${fmt(profit)}`;
-        setResultMsg(msg);
-        try { new Audio(winSound).play().catch(() => {}); } catch {}
-        alert(msg);
-      } else {
-        // loss → reset streak (UI coef returns to base), clear trail
-        setStreak(0);
-        setTrail(Array(TRAIL_LEN).fill("?"));
-
-        const msg = `❌ You Lose! -${fmt(stake)}`;
-        setResultMsg(msg);
-        try { new Audio(loseSound).play().catch(() => {}); } catch {}
-        alert(msg);
-      }
-
-      window.dispatchEvent(new Event("balance:refresh"));
-    } catch (e) {
-      const msg = String(e?.message || "");
-      if (msg.includes("insufficient-funds")) alert("Not enough coins.");
-      else if (msg.includes("min-stake")) alert("Bet is below minimum.");
-      else if (msg.includes("max-stake")) alert("Bet exceeds maximum.");
-      else alert("Bet failed. Try again.");
-    } finally {
-      setFlipping(false);
+    if (Number.isFinite(res?.newBalance)) {
+      setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
     }
-  };
+
+    setRound((r) => r + 1);
+
+    if (res?.result === "win") {
+      setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN));
+      setStreak((s) => s + 1);
+      const profit = Number(res?.payout || 0);
+      const msg = `🎉 You Win! +${fmt(profit)}`;
+      setResultMsg(msg);
+      try { new Audio(winSound).play().catch(() => {}); } catch {}
+      setTimeout(() => alert(msg), 0); // ✅ let React paint the landed face, then alert
+    } else {
+      setStreak(0);
+      setTrail(Array(TRAIL_LEN).fill("?"));
+      const msg = `❌ You Lose! -${fmt(stake)}`;
+      setResultMsg(msg);
+      try { new Audio(loseSound).play().catch(() => {}); } catch {}
+      setTimeout(() => alert(msg), 0); // ✅ same reason
+    }
+
+    window.dispatchEvent(new Event("balance:refresh"));
+  } catch (e) {
+    const msg = String(e?.message || "");
+    if (msg.includes("insufficient-funds")) alert("Not enough coins.");
+    else if (msg.includes("min-stake")) alert("Bet is below minimum.");
+    else if (msg.includes("max-stake")) alert("Bet exceeds maximum.");
+    else alert("Bet failed. Try again.");
+  } finally {
+    setFlipping(false); // harmless if already false
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
