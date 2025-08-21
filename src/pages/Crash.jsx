@@ -177,7 +177,13 @@ export default function Crash() {
       setErr("");
 
       // hit your backend via src/api.js
-      const resp = await games.crash(stake, cashX);
+     const resp = await games.crash(stake, cashX);
+     // ⬇️ instant balance apply if server returns it (same idea as Dice)
+     if (Number.isFinite(Number(resp?.newBalance))) {
+       const nb = Number(resp.newBalance);
+       setBalance((prev) => (nb !== prev ? nb : prev));
+       window.dispatchEvent(new CustomEvent("balance:refresh"));
+     }
 
       // Accept either flat or nested outcome shape
       const outcome = resp?.outcome ?? resp;
@@ -376,7 +382,7 @@ return;
                       setBet(Math.max(1, Math.floor(Number(e.target.value || 0))))
                     }
                   />
-                  <div className="unit">1WT</div>
+                  <div className="unit"></div>
                   <div className="stepper">
                     <button
                       className="step minus"
