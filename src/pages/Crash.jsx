@@ -278,25 +278,26 @@ function InfoCard({ label, value, accent = "emerald" }) {
 
 /** very lightweight SVG sparkline */
 /** Stylish, scrolling SVG sparkline with a start-plane and glow */
-/** Stylish, constantly scrolling SVG sparkline with start-plane & glow */
 function Sparkline({ points, color = "#7c3aed" }) {
   if (!points?.length) return null;
 
   const W = 600, H = 96;
   const pad = 8;
-  const WINDOW_SEC = 8; // show up to 8s; pan only after this fills
+  const WINDOW_SEC = 8; // pan only after this fills
 
   // latest time
   const maxT = Math.max(...points.map(p => p[0]), 0);
-
-  // 🚗 camera logic: no scroll until window fills; then follow last WINDOW_SEC
+  // camera: no scroll until window fills; then follow the last WINDOW_SEC
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  // visible slice (with tiny buffer to avoid popping)
+  // takeoff time (first point) — we keep the trail attached to this start
+  const tStart = points[0][0] ?? 0;
+
+  // visible slice (small buffer to avoid pop)
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // y-scale on visible (log to keep steep climbs in frame)
+  // y-scale (log) from what’s currently visible so tall climbs still fit
   const maxX = Math.max(...visible.map(p => p[1])) || 1.00001;
   const logMax = Math.log(Math.max(2, maxX));
 
@@ -310,92 +311,98 @@ function Sparkline({ points, color = "#7c3aed" }) {
     return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // linear sampler so we can compute slope at the plane
+  // linear sampler: value at any time t
   function sampleAt(tTarget) {
-    const tMin = visible[0][0];
-    const tMax = visible[visible.length - 1][0];
-    if (tTarget <= tMin) return { x: visible[0][1], t: tMin };
-    if (tTarget >= tMax) return { x: visible[visible.length - 1][1], t: tMax };
+    const all = points; // use full history for clean start anchoring
+    const tMin = all[0][0];
+    const tMax = all[all.length - 1][0];
+    if (tTarget <= tMin) return { t: tMin, x: all[0][1] };
+    if (tTarget >= tMax) return { t: tMax, x: all[all.length - 1][1] };
     let i = 1;
-    while (i < visible.length && visible[i][0] < tTarget) i++;
-    const [t1, v1] = visible[i - 1];
-    const [t2, v2] = visible[i];
+    while (i < all.length && all[i][0] < tTarget) i++;
+    const [t1, v1] = all[i - 1];
+    const [t2, v2] = all[i];
     const a = (tTarget - t1) / Math.max(1e-6, (t2 - t1));
-    return { x: v1 + a * (v2 - v1), t: tTarget };
+    return { t: tTarget, x: v1 + a * (v2 - v1) };
   }
 
-  // plane flies at the HEAD (latest point)
-  const [tEnd] = visible[visible.length - 1];
-  const plane = sampleAt(tEnd);                 // { t, x }
-  const planeX = sx(plane.t);
-  const planeY = sy(plane.x);
+  // plane flies at the head
+  const tHead = visible[visible.length - 1][0];
+  const head = sampleAt(tHead);
+  const planeX = sx(head.t);
+  const planeY = sy(head.x);
 
-  // trail = path up to the plane only
-  const flown = visible.filter(([t]) => t <= plane.t + 1e-6);
-  const d = flown.map(([t, x], i) => {
-    const X = sx(t);
+  // --- TRAIL ---
+  // Always start trail from the TAKEOFF time. If takeoff scrolled out,
+  // we clamp its x to the left edge so the line never “leaves” its start.
+  const startSample = sampleAt(Math.max(tStart, t0)); // y at current left boundary or takeoff
+  const startX = (tStart < t0) ? pad : sx(startSample.t); // hard-left when scrolled
+  const startY = sy(startSample.x);
+
+  // Build path from anchored start → all points up to the plane (head)
+  const uptoHead = points.filter(([t]) => t <= head.t + 1e-6);
+  let d = `M${startX.toFixed(1)},${startY.toFixed(1)}`;
+  for (let i = 0; i < uptoHead.length; i++) {
+    const [t, x] = uptoHead[i];
+    // points before current window still map to < pad; clamp so tail stays pegged to left
+    const X = Math.max(pad, sx(t));
     const Y = sy(x);
-    return `${i ? "L" : "M"}${X.toFixed(1)},${Y.toFixed(1)}`;
-  }).join(" ");
+    d += ` L${X.toFixed(1)},${Y.toFixed(1)}`;
+  }
 
-  // slope near the head → rotate plane to match
-  const dt = 0.08; // small step to estimate tangent
-  const prev = sampleAt(Math.max(t0, plane.t - dt));
-  const dx = sx(plane.t) - sx(prev.t);
-  const dy = sy(plane.x) - sy(prev.x);
-  // SVG y is downward, so invert for angle math
+  // slope near head → rotate plane to match (for that “banking” feel)
+  const prev = sampleAt(Math.max(tStart, head.t - 0.08));
+  const dx = sx(head.t) - sx(prev.t);
+  const dy = sy(head.x) - sy(prev.x);
   const angleDeg = (Math.atan2(-(dy), dx) * 180) / Math.PI;
 
   const gradId = "spark-grad";
   const glowId = "spark-glow";
 
-  // ensure the very first frame places the plane at the hard-left edge
-  // (when maxT≈0, sx(0) == pad)
-  // ✅ satisfied by t0 = 0 above
-
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full">
       <defs>
         <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feGaussianBlur stdDeviation="4" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
         <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%"  stopColor={color} stopOpacity="0.35" />
-          <stop offset="70%" stopColor={color} stopOpacity="0.85" />
+          <stop offset="0%"  stopColor={color} stopOpacity="0.4" />
+          <stop offset="60%" stopColor={color} stopOpacity="0.9" />
           <stop offset="100%" stopColor={color} stopOpacity="1" />
         </linearGradient>
       </defs>
 
-      {/* trail following the plane */}
+      {/* trail from the anchored start to the plane (never disconnects) */}
       <path
         d={d}
         fill="none"
         stroke={`url(#${gradId})`}
-        strokeWidth="3.5"
+        strokeWidth="5.5"           
         strokeLinecap="round"
         strokeLinejoin="round"
         filter={`url(#${glowId})`}
       />
 
-      {/* head marker (kept) */}
-      <circle cx={planeX} cy={planeY} r="4.5" fill={color} opacity="0.95" />
+      {/* head marker (brighter/larger) */}
+      <circle cx={planeX} cy={planeY} r="6" fill={color} opacity="0.98" />
 
-      {/* ✈️ plane at the head, rotated with slope; starts hard-left and flies up-right */}
+      {/* bigger plane, rotated with slope */}
       <text
-        transform={`translate(${planeX}, ${planeY - 10}) rotate(${angleDeg})`}
-        fontSize="26"
+        transform={`translate(${planeX}, ${planeY - 12}) rotate(${angleDeg})`}
+        fontSize="30"                /* larger plane as requested */
         textAnchor="middle"
         dominantBaseline="central"
-        style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.6))" }}
+        style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.7))" }}
       >
         ✈️
       </text>
     </svg>
   );
 }
+
 
 
