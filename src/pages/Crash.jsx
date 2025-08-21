@@ -279,38 +279,46 @@ function InfoCard({ label, value, accent = "emerald" }) {
 
 /** very lightweight SVG sparkline */
 /** Stylish, scrolling SVG sparkline with a start-plane and glow */
-function Sparkline({ points, color = "#7c3aed" }) {
+/** Stylish, anchored, no-baseline Sparkline with scalable plane */
+function Sparkline({ points, color = "#7c3aed", height = 200 }) {
   if (!points?.length) return null;
 
-  const W = 600, H = 160;     // more headroom; if you must keep 96, change here
+  // Viewport dims (width fixed; height configurable)
+  const W = 600, H = height;
   const pad = 4;
-  const WINDOW_SEC = 8;
+  const WINDOW_SEC = 8; // camera window width in seconds
 
-  // camera window
+  // --- camera window (no scroll until window fills) ---
   const maxT = Math.max(...points.map(p => p[0]), 0);
   const t0 = Math.max(0, maxT - WINDOW_SEC);
 
-  // visible slice
+  // visible slice (+tiny buffer to avoid popping)
   const visible = points.filter(([t]) => t >= t0 - 0.25);
   if (!visible.length) return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" />;
 
-  // y-scale (log) over visible values
-  const visVals = visible.map(p => Math.max(1.00001, p[1]));
-  const vMin = Math.min(...visVals), vMax = Math.max(...visVals);
-  const logMin = Math.log(vMin), logMax = Math.log(Math.max(vMin + 1e-6, vMax));
+  // --- Y scaling (log) based on current visible data for good vertical use ---
+  const visVals = visible.map(([, v]) => Math.max(1.00001, v));
+  const vMin = Math.min(...visVals);
+  const vMax = Math.max(...visVals);
+  const logMin = Math.log(vMin);
+  const logMax = Math.log(Math.max(vMin + 1e-6, vMax));
 
-  const sx = (t) => pad + (W - 2 * pad) * Math.min(1, Math.max(0, (t - t0) / Math.max(1e-6, WINDOW_SEC)));
+  const sx = (t) => {
+    const u = (t - t0) / Math.max(1e-6, WINDOW_SEC);
+    return pad + (W - 2 * pad) * Math.min(1, Math.max(0, u));
+  };
   const sy = (x) => {
     const lx = Math.log(Math.max(1.00001, x));
     const ny = (lx - logMin) / Math.max(1e-6, (logMax - logMin));
     return H - pad - (H - 2 * pad) * Math.min(1, Math.max(0, ny));
   };
 
-  // linear sample at any time
+  // linear interpolation sample at any time t
   function sampleAt(tTarget) {
     const all = points;
-    if (tTarget <= all[0][0]) return { t: all[0][0], x: all[0][1] };
-    if (tTarget >= all[all.length - 1][0]) return { t: all[all.length - 1][0], x: all[all.length - 1][1] };
+    const tMin = all[0][0], tMax2 = all[all.length - 1][0];
+    if (tTarget <= tMin) return { t: tMin, x: all[0][1] };
+    if (tTarget >= tMax2) return { t: tMax2, x: all[all.length - 1][1] };
     let i = 1;
     while (i < all.length && all[i][0] < tTarget) i++;
     const [t1, v1] = all[i - 1], [t2, v2] = all[i];
@@ -318,29 +326,28 @@ function Sparkline({ points, color = "#7c3aed" }) {
     return { t: tTarget, x: v1 + a * (v2 - v1) };
   }
 
-  // start anchored to left edge at the window boundary
+  // --- build the path ---
+  // start anchored to the left edge at the current window boundary
   const start = sampleAt(t0);
   const startX = pad;
   const startY = sy(start.x);
 
-  // map only points inside the window
+  // only draw points inside the window
   const inWin = points.filter(([t]) => t >= t0);
   const mapped = inWin.map(([t, x]) => [sx(t), sy(x)]);
 
-  // --- build path with an explicit "lift-off" before smoothing ---
-  // this prevents the first control handle from dragging a long flat baseline.
+  // start the d-string with a tiny upward "lift-off" to avoid flat baseline
   let d = `M${startX},${startY}`;
   if (mapped.length) {
     const [x1, y1] = mapped[0];
-    const dx = Math.max(8, (x1 - startX) * 0.25);        // small horizontal nudge
-    const dy = Math.max(10, Math.abs(y1 - startY) * 0.35); // up-tilt (SVG y- goes up)
+    const dx = Math.max(8, (x1 - startX) * 0.25);
+    const dy = Math.max(10, Math.abs(y1 - startY) * 0.35);
     const liftX = startX + dx;
     const liftY = startY - dy;
 
-    // straight lift-off segment, then to the first real point
     d += ` L${liftX},${liftY} L${x1},${y1}`;
 
-    // smooth the rest with Catmull-Rom → Bézier
+    // Catmull–Rom → cubic Bézier smoothing for the rest
     for (let i = 1; i < mapped.length - 1; i++) {
       const p0 = mapped[i - 1];
       const p1 = mapped[i];
@@ -356,15 +363,19 @@ function Sparkline({ points, color = "#7c3aed" }) {
     }
   }
 
-  // plane at head
+  // plane (head) position and banking angle
   const tHead = visible[visible.length - 1][0];
   const head = sampleAt(tHead);
   const planeX = sx(head.t);
   const planeY = sy(head.x);
 
-  // banking angle
   const prev = sampleAt(Math.max(t0, head.t - 0.08));
   const angleDeg = (Math.atan2(-(sy(head.x) - sy(prev.x)), (sx(head.t) - sx(prev.t))) * 180) / Math.PI;
+
+  // size scales with multiplier (cap so it doesn’t explode)
+  const baseSize = 28;
+  const scale = 1 + Math.min(head.x / 50, 1.5); // at 50x → 2.5x, max 2.5x
+  const planeSize = baseSize * scale;
 
   const gradId = "spark-grad";
   const glowId = "spark-glow";
@@ -374,7 +385,10 @@ function Sparkline({ points, color = "#7c3aed" }) {
       <defs>
         <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="6" result="blur" />
-          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
         </filter>
         <linearGradient id={gradId} x1="0%" y1="0%" x2="100%">
           <stop offset="0%"  stopColor={color} stopOpacity="0.45" />
@@ -383,6 +397,7 @@ function Sparkline({ points, color = "#7c3aed" }) {
         </linearGradient>
       </defs>
 
+      {/* Curved, glow trail that starts at the left edge and never snaps flat */}
       <path
         d={d}
         fill="none"
@@ -393,16 +408,19 @@ function Sparkline({ points, color = "#7c3aed" }) {
         filter={`url(#${glowId})`}
       />
 
+      {/* Head marker */}
       <circle cx={planeX} cy={planeY} r={7.5} fill={color} opacity="0.98" />
+
+      {/* Plane emoji — scales with multiplier and banks with slope */}
       <text
-   transform={`translate(${planeX}, ${planeY - 12}) rotate(${angleDeg})`}
-   fontSize={planeSize}
-   textAnchor="middle"
-   dominantBaseline="central"
-   style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.7))" }}
- >
-   ✈️
- </text>
+        transform={`translate(${planeX}, ${planeY - 13}) rotate(${angleDeg})`}
+        fontSize={planeSize}
+        textAnchor="middle"
+        dominantBaseline="central"
+        style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))" }}
+      >
+        ✈️
+      </text>
     </svg>
   );
 }
