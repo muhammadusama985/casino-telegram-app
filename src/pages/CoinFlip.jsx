@@ -477,7 +477,7 @@ export default function Coinflip() {
       setRound((r) => r + 1);
 
       if (res?.result === "win") {
-        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN)); // fill the bubble with the correct side
+        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN)); // fill bubble with result
         setStreak((s) => s + 1);
 
         const profit = Number(res?.payout || 0);
@@ -653,7 +653,7 @@ function MiniCoin({ symbol = "$" }) {
   );
 }
 
-/* ===================== 3D CSS COIN with WAIT->RESOLVE flow ===================== */
+/* ===================== 3D CSS COIN with WAIT->RESOLVE flow (H/T faces) ===================== */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const coinRef = useRef(null);
   const waitTimerRef = useRef(null);
@@ -731,8 +731,10 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           ['--thickness']: '12px',
         }}
       >
-        <div className="coinflip-face coinflip-front"><CoinFace symbol="$" front /></div>
-        <div className="coinflip-face coinflip-back"><CoinFace symbol="€" /></div>
+        {/* FRONT → Heads = H */}
+        <div className="coinflip-face coinflip-front"><CoinFace symbol="H" front /></div>
+        {/* BACK → Tails = T */}
+        <div className="coinflip-face coinflip-back"><CoinFace symbol="T" /></div>
         <div className="coinflip-shadow" aria-hidden />
       </div>
 
@@ -854,7 +856,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   );
 });
 
-function CoinFace({ symbol = "$", front = false }) {
+function CoinFace({ symbol = "H", front = false }) {
   return (
     <div
       className="rounded-full grid place-items-center"
