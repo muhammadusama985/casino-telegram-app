@@ -258,3 +258,19 @@ export async function getBalance() {
   if (!Number.isFinite(num)) throw new Error("bad-balance");
   return num;                                  // <- ALWAYS a number
 }
+
+export async function getReferralsInfo() {
+  const res = await fetch('/api/me/referrals', { credentials: 'include' });
+  if (!res.ok) throw new Error('Failed to load referrals info');
+  return res.json();
+}
+
+export async function claimDaily() {
+  const res = await fetch('/api/me/rewards/daily', {
+    method: 'POST',
+    credentials: 'include'
+  });
+  if (!res.ok) throw new Error('Failed to claim daily');
+  return res.json();
+}
+
