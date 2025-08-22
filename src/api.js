@@ -268,10 +268,10 @@ export async function getBalance() {
   return num;                                  // <- ALWAYS a number
 }
 
-export async function getReferralsInfo() {
-  // uses BASE_URL and auto-adds x-user-id from localStorage
-  return api("/api/me/referrals");
-}
+// export async function getReferralsInfo() {
+//   // uses BASE_URL and auto-adds x-user-id from localStorage
+//   return api("/api/me/referrals");
+// }
 
 export async function claimDaily() {
   return api("/api/me/rewards/daily", { method: "POST" });
