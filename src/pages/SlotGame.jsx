@@ -485,7 +485,6 @@
 
 
 
-
 // src/pages/SlotBonanza.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { telegramAuth, getBalance, games } from "../api";
@@ -571,9 +570,9 @@ export default function SlotBonanza() {
   const cascadeQueueRef = useRef([]);
   const cascadeTimerRef = useRef(null);
 
-  // keep previous plain grid to detect NEW tiles for fall animation
+  // keep previous plain grid to detect NEW/CHANGED tiles for fall animation
   const prevPlainGridRef = useRef(makeNullPlainGrid());
-  // step tick so React keys change when new symbols appear
+  // step tick so React keys change when tiles change → CSS animation retriggers
   const stepTickRef = useRef(0);
 
   // precompute whether we’re in bonus (display only)
@@ -728,13 +727,13 @@ export default function SlotBonanza() {
       return;
     }
 
-    // bump step tick so React keys can change for NEW spawns
+    // bump step tick so React keys can change for CHANGED/NEW cells
     stepTickRef.current += 1;
 
     // mark cleared cells if provided, to animate fade
     const cleared = new Set((next.cleared || []).map(([r, c]) => `${r}:${c}`));
 
-    // compute NEW (spawn) tiles by comparing with previous plain grid
+    // compute SPAWN for any cell whose value CHANGED compared to previous step
     const prev = prevPlainGridRef.current || makeNullPlainGrid();
 
     const mapped = gPlain.map((row, r) =>
@@ -745,8 +744,7 @@ export default function SlotBonanza() {
           else if ("sym" in v) v = v.sym; // e.g. { sym:'💣', mult:12 }
         }
         const was = prev[r]?.[c] ?? null;
-        const spawn = (v != null && was == null); // NEW symbol appeared here → fall from top
-        // spawnKey ties this spawn to current step so key changes and CSS animation retriggers
+        const spawn = v !== was; // <-- ANY change (including new or moved/different) falls from top
         const spawnKey = spawn ? stepTickRef.current : 0;
         return { v, cleared: cleared.has(`${r}:${c}`), spawn, spawnKey };
       })
@@ -897,7 +895,7 @@ export default function SlotBonanza() {
 /* ------------- subcomponents ------------- */
 
 // Single grid cell with square aspect + tiny animation when “cleared”,
-// and FALL animation when it’s a NEW tile (spawned after a cascade).
+// and FALL animation when its value CHANGES (new or moved symbol).
 function Cell({ value, cleared, spawn }) {
   const emoji = asEmoji(value);
   const bg = bgClassFor(String(value || ""));
