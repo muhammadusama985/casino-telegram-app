@@ -9,7 +9,7 @@ import MainLayout from "./components/MainLayout";
 import Home from "./pages/Home";
 import Sports from "./pages/Sports";
 import Wallet from "./pages/Wallet";
-import Earn from "./pages/Earn";
+import Reference from "./pages/References";
 import Loyalty from "./pages/Loyalty";
 import Search from "./pages/Search";
 
@@ -43,7 +43,7 @@ export default function App() {
             <Route path="search" element={<Search />} />
             <Route path="sports" element={<Sports />} />
             <Route path="wallet" element={<Wallet />} />
-            <Route path="earn" element={<Earn />} />
+            <Route path="earn" element={<Reference />} />
             <Route path="loyalty" element={<Loyalty />} />
             <Route path="*" element={<Navigate to="/app/home" replace />} />
           </Route>
