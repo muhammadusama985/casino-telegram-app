@@ -28,6 +28,8 @@ export default function References() {
       console.error(e);
       setInfo({}); // keep UI from crashing
       setMsg(e.message || 'Failed to load data');
+      setInfo({}); // keep UI rendering safely
+
     } finally {
       setLoading(false);
     }
@@ -94,21 +96,21 @@ export default function References() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Your Referral</h2>
               <span className="text-xs opacity-70">
-                Reward: {rewardPerBatch} coin every {batchSize} joins
+ Reward: {info?.rewardPerBatch ?? '—'} coin every {info?.batchSize ?? '—'} joins
               </span>
             </div>
 
             <div className="mt-3 grid gap-2">
               <div className="flex items-center justify-between">
                 <div className="text-sm opacity-80">Referral Code</div>
-                <div className="font-mono">{inviteCode}</div>
+<div className="font-mono">{info?.inviteCode || '—'}</div>
               </div>
 
               <div className="flex items-center gap-2">
                 <input
                   className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm"
                   readOnly
-                  value={inviteUrl}
+ value={info?.inviteUrl || ''}
                   placeholder="Invite link will appear here"
                 />
                 <button
@@ -126,7 +128,7 @@ export default function References() {
               )}
 
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                <Stat label="Joined via you" value={referralsCount} />
+ <Stat label="Joined via you" value={info?.referralsCount ?? 0} />
                 <Stat label="Next reward in" value={nextRewardIn} />
                 <Stat label="Referral coins" value={referralRewardCoins} />
               </div>

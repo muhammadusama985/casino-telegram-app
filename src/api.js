@@ -2,7 +2,7 @@
 // Central API client for your Telegram Casino frontend (Vite)
 
 // ---------- config ----------
-const BASE_URL = import.meta.env.VITE_API?.replace(/\/+$/, "") || "http://localhost:8080";
+const BASE_URL = import.meta.env.VITE_API?.replace(/\/+$/, "") || "";
 
 // localStorage keys
 const LS_USER_ID = "userId";          // Mongo _id from /auth/login
@@ -64,15 +64,15 @@ export const auth = {
    * Telegram WebApp login: pass window.Telegram.WebApp.initData (string)
    * Returns user: { _id, tgId, username, photoUrl, coins, wallets }
    */
- async login(initData, tgProfileCache = null, ref) {
-  const data = await api("/auth/login", {
-    method: "POST",
-    body: { initData, ...(ref ? { ref } : {}) },
-  });
-  setUserId(data._id);
-  if (tgProfileCache) setTgProfile(tgProfileCache);
-  return data;
-},
+  async login(initData, tgProfileCache = null, ref) {
+    const data = await api("/auth/login", {
+      method: "POST",
+      body: { initData, ...(ref ? { ref } : {}) },
+    });
+    setUserId(data._id);
+    if (tgProfileCache) setTgProfile(tgProfileCache);
+    return data;
+  },
 
 
 
@@ -136,7 +136,7 @@ export const games = {
 
   /** Coinflip: pick 'H' or 'T' */
   // new (accept optional extraInput and merge it):
- /** Coinflip: pick 'H' or 'T' and pass optional extras (e.g., { streak }) */
+  /** Coinflip: pick 'H' or 'T' and pass optional extras (e.g., { streak }) */
   coinflip(stakeCoins, pick = "H", extraInput = {}) {
     return this.bet({
       game: "coinflip",
@@ -174,10 +174,10 @@ export const games = {
 
 
   /** Crash: choose a cashout multiplier (e.g. 1.8) */
-/** Crash: choose a cashout multiplier (e.g. 1.8) */
-crash(stakeCoins, cashoutX = 1.8) {
-  return this.bet({ game: "crash", stakeCoins, input: { cashoutX } });
-},
+  /** Crash: choose a cashout multiplier (e.g. 1.8) */
+  crash(stakeCoins, cashoutX = 1.8) {
+    return this.bet({ game: "crash", stakeCoins, input: { cashoutX } });
+  },
 
 
   /** Last 100 rounds for the user */
@@ -240,13 +240,13 @@ export async function telegramAuth() {
   const tg = window.Telegram?.WebApp;
   const initData = tg?.initData || "";
 
-    // Prefer ?ref= from URL; fallback to Telegram start_param (Mini App deep link)
+  // Prefer ?ref= from URL; fallback to Telegram start_param (Mini App deep link)
   const refFromUrl = new URLSearchParams(window.location.search).get("ref");
-  const refFromTg   = tg?.initDataUnsafe?.start_param;
+  const refFromTg = tg?.initDataUnsafe?.start_param;
   const ref = (refFromUrl || refFromTg || "").trim().toUpperCase() || undefined;
 
   // auth.login sets localStorage userId for x-user-id header
-  const data = await auth.login(initData, tg?.initDataUnsafe?.user || null);
+  const data = await auth.login(initData, tg?.initDataUnsafe?.user || null, ref);
   // Normalize to what MainLayout expects
   return {
     id: data._id,
