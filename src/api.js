@@ -118,6 +118,23 @@ export const wallet = {
   },
 };
 
+// ---------- Rewards ----------
+export const rewards = {
+  /** Claim the +0.1 daily reward (server enforces once per UTC day) */
+  dailyClaim() {
+    return api("/rewards/daily-claim", { method: "POST" });
+  },
+};
+
+// ---------- Referrals ----------
+export const referrals = {
+  /** Get referral summary: link, count, next bonus, recent rewardLog, etc. */
+  summary() {
+    return api("/referrals/summary"); // -> { coins, referralLink, referralCode, referralCount, nextBonusIn, lastDailyClaimAt, rewardLog }
+  },
+};
+
+
 // ---------- Games ----------
 export const games = {
   /**
