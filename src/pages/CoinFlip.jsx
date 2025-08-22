@@ -179,12 +179,16 @@ export default function Coinflip() {
   return (
     <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
       {/* Coins header (match Dice) */}
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="text-sm">
-          <span className="opacity-70 mr-2">Coins: </span>
-          <span className="font-bold">{formatCoins(coins)}</span>
-        </div>
-      </div>
+   <div className="flex items-center justify-between px-4 py-3">
+  <div className="flex items-center gap-3">
+    <BackButtonInline to="/" />
+    <div className="text-sm">
+      <span className="opacity-70 mr-2">Coins: </span>
+      <span className="font-bold">{formatCoins(coins)}</span>
+    </div>
+  </div>
+</div>
+
 
       {/* top bubbles */}
       <div className="flex items-center justify-center gap-3 px-4 pt-2">
@@ -318,6 +322,31 @@ function MiniCoin({ symbol = "$" }) {
     </span>
   );
 }
+
+function BackButtonInline({ to = "/" }) {
+  const onClick = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.assign(to);
+    }
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Go back"
+      className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 hover:bg-white/10 active:scale-95 text-white/80"
+      style={{ background: "rgba(255,255,255,0.04)" }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </button>
+  );
+}
+
 
 /* ===================== 3D CSS COIN with WAIT->RESOLVE flow (H/T faces) ===================== */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
