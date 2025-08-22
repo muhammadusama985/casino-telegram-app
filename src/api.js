@@ -64,16 +64,18 @@ export const auth = {
    * Telegram WebApp login: pass window.Telegram.WebApp.initData (string)
    * Returns user: { _id, tgId, username, photoUrl, coins, wallets }
    */
-  async login(initData, tgProfileCache = null) {
-    const data = await api("/auth/login", {
-      method: "POST",
-      body: { initData },
-    });
-    // Persist Mongo userId for x-user-id header
-    setUserId(data._id);
-    if (tgProfileCache) setTgProfile(tgProfileCache);
-    return data;
-  },
+ async login(initData, tgProfileCache = null, ref) {
+  const data = await api("/auth/login", {
+    method: "POST",
+    body: { initData, ...(ref ? { ref } : {}) },
+  });
+  setUserId(data._id);
+  if (tgProfileCache) setTgProfile(tgProfileCache);
+  return data;
+},
+
+
+
 
   logout() {
     setUserId("");
@@ -238,6 +240,11 @@ export async function telegramAuth() {
   const tg = window.Telegram?.WebApp;
   const initData = tg?.initData || "";
 
+    // Prefer ?ref= from URL; fallback to Telegram start_param (Mini App deep link)
+  const refFromUrl = new URLSearchParams(window.location.search).get("ref");
+  const refFromTg   = tg?.initDataUnsafe?.start_param;
+  const ref = (refFromUrl || refFromTg || "").trim().toUpperCase() || undefined;
+
   // auth.login sets localStorage userId for x-user-id header
   const data = await auth.login(initData, tg?.initDataUnsafe?.user || null);
   // Normalize to what MainLayout expects
@@ -260,17 +267,12 @@ export async function getBalance() {
 }
 
 export async function getReferralsInfo() {
-  const res = await fetch('/api/me/referrals', { credentials: 'include' });
-  if (!res.ok) throw new Error('Failed to load referrals info');
-  return res.json();
+  // uses BASE_URL and auto-adds x-user-id from localStorage
+  return api("/api/me/referrals");
 }
 
 export async function claimDaily() {
-  const res = await fetch('/api/me/rewards/daily', {
-    method: 'POST',
-    credentials: 'include'
-  });
-  if (!res.ok) throw new Error('Failed to claim daily');
-  return res.json();
+  return api("/api/me/rewards/daily", { method: "POST" });
 }
+
 
