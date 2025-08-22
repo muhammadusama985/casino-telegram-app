@@ -29,7 +29,6 @@ export default function References() {
       setInfo({}); // keep UI from crashing
       setMsg(e.message || 'Failed to load data');
       setInfo({}); // keep UI rendering safely
-
     } finally {
       setLoading(false);
     }
@@ -96,43 +95,70 @@ export default function References() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Your Referral</h2>
               <span className="text-xs opacity-70">
- Reward: {info?.rewardPerBatch ?? '—'} coin every {info?.batchSize ?? '—'} joins
+                Reward: {rewardPerBatch} coin every {batchSize} joins
               </span>
             </div>
 
+            {/* ======= ONE PLACE: Code + Link (kept design language) ======= */}
             <div className="mt-3 grid gap-2">
+              {/* Compact header row still shows the code at a glance */}
               <div className="flex items-center justify-between">
-                <div className="text-sm opacity-80">Referral Code</div>
-<div className="font-mono">{info?.inviteCode || '—'}</div>
+                <div className="text-sm opacity-80">Referral</div>
+                <div className="font-mono">{inviteCode}</div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <input
-                  className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm"
-                  readOnly
- value={info?.inviteUrl || ''}
-                  placeholder="Invite link will appear here"
-                />
-                <button
-                  onClick={() => copy(inviteUrl)}
-                  className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm active:scale-95"
-                >
-                  Copy
-                </button>
-              </div>
+              {/* Unified card that contains both Code + Link with their own copy buttons */}
+              <div className="rounded-xl bg-black/20 border border-white/10 p-3">
+                <div className="text-xs opacity-70 mb-2">Share your code or link</div>
 
-              {!inviteUrl && (
-                <div className="text-xs opacity-60">
-                  Tip: set <code>WEBAPP_URL</code> in your backend env to your Vercel URL so the invite link can be built.
+                {/* Row: Code badge + Copy */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm opacity-80">Code</span>
+                  <span className="font-mono text-sm bg-white/5 border border-white/10 rounded-md px-2 py-1">
+                    {inviteCode}
+                  </span>
+                  <button
+                    onClick={() => copy(inviteCode)}
+                    disabled={!inviteCode || inviteCode === '—'}
+                    className="px-2 py-1 text-xs rounded-md bg-white/10 border border-white/10 active:scale-95 disabled:opacity-50"
+                  >
+                    Copy code
+                  </button>
                 </div>
-              )}
 
+                {/* Row: Link input + Copy */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm opacity-80">Link</span>
+                  <input
+                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                    readOnly
+                    value={inviteUrl}
+                    placeholder="Invite link will appear here"
+                  />
+                  <button
+                    onClick={() => copy(inviteUrl)}
+                    disabled={!inviteUrl}
+                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm active:scale-95 disabled:opacity-50"
+                  >
+                    Copy link
+                  </button>
+                </div>
+
+                {!inviteUrl && (
+                  <div className="text-xs opacity-60 mt-2">
+                    Tip: set <code>WEBAPP_URL</code> in your backend env to your Vercel URL so the invite link can be built.
+                  </div>
+                )}
+              </div>
+
+              {/* Stats grid preserved */}
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
- <Stat label="Joined via you" value={info?.referralsCount ?? 0} />
+                <Stat label="Joined via you" value={referralsCount} />
                 <Stat label="Next reward in" value={nextRewardIn} />
                 <Stat label="Referral coins" value={referralRewardCoins} />
               </div>
 
+              {/* Recent referrals preserved */}
               <div className="mt-4">
                 <div className="text-sm opacity-70 mb-2">Recent referrals</div>
                 {referred.length === 0 ? (
