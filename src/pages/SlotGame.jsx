@@ -475,6 +475,17 @@
 // }
 
 
+
+
+
+
+
+
+
+
+
+
+
 // src/pages/SlotBonanza.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { telegramAuth, getBalance, games } from "../api";
@@ -562,6 +573,8 @@ export default function SlotBonanza() {
 
   // keep previous plain grid to detect NEW tiles for fall animation
   const prevPlainGridRef = useRef(makeNullPlainGrid());
+  // step tick so React keys change when new symbols appear
+  const stepTickRef = useRef(0);
 
   // precompute whether we’re in bonus (display only)
   const inBonus = freeSpinsLeft > 0;
@@ -668,6 +681,9 @@ export default function SlotBonanza() {
 
       // animate cascades sequentially
       cascadeQueueRef.current = cascades.slice(0);
+      // reset prev grid so first frame of a new spin falls in
+      prevPlainGridRef.current = makeNullPlainGrid();
+      stepTickRef.current = 0;
       stepCascade();
 
       // outcome
@@ -712,6 +728,9 @@ export default function SlotBonanza() {
       return;
     }
 
+    // bump step tick so React keys can change for NEW spawns
+    stepTickRef.current += 1;
+
     // mark cleared cells if provided, to animate fade
     const cleared = new Set((next.cleared || []).map(([r, c]) => `${r}:${c}`));
 
@@ -727,7 +746,9 @@ export default function SlotBonanza() {
         }
         const was = prev[r]?.[c] ?? null;
         const spawn = (v != null && was == null); // NEW symbol appeared here → fall from top
-        return { v, cleared: cleared.has(`${r}:${c}`), spawn };
+        // spawnKey ties this spawn to current step so key changes and CSS animation retriggers
+        const spawnKey = spawn ? stepTickRef.current : 0;
+        return { v, cleared: cleared.has(`${r}:${c}`), spawn, spawnKey };
       })
     );
 
@@ -783,7 +804,12 @@ export default function SlotBonanza() {
           <div className="grid grid-cols-6 gap-2">
             {grid.flatMap((row, r) =>
               row.map((cell, c) => (
-                <Cell key={`${r}-${c}`} value={cell?.v} cleared={cell?.cleared} spawn={cell?.spawn} />
+                <Cell
+                  key={`${r}-${c}-${cell?.v ?? "x"}-${cell?.spawnKey ?? 0}`}
+                  value={cell?.v}
+                  cleared={cell?.cleared}
+                  spawn={cell?.spawn}
+                />
               ))
             )}
           </div>
@@ -834,7 +860,7 @@ export default function SlotBonanza() {
           </div>
         </div>
 
-        {/* Spin button — NOW ROUND (unchanged colors/feel) */}
+        {/* Spin button — ROUND */}
         <div className="mt-6 flex justify-center pb-10">
           <button
             onClick={spin}
@@ -925,7 +951,7 @@ function InfoCard({ label, value, accent = "emerald" }) {
 function emptyGrid() {
   // 5 rows × 6 cols
   return Array.from({ length: 5 }, () =>
-    Array.from({ length: 6 }, () => ({ v: null, cleared: false, spawn: false }))
+    Array.from({ length: 6 }, () => ({ v: null, cleared: false, spawn: false, spawnKey: 0 }))
   );
 }
 
@@ -970,3 +996,4 @@ function randomGrid() {
     Array.from({ length: 6 }, () => EMOJIS[Math.floor(Math.random() * EMOJIS.length)])
   );
 }
+
