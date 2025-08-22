@@ -7,34 +7,72 @@ export default function References() {
   const [msg, setMsg] = useState('');
   const [claiming, setClaiming] = useState(false);
 
+  // --- Helper: ensure we have a userId in localStorage so x-user-id is sent
+  const ensureAuth = async () => {
+    let uid = auth?.getUserId?.() || '';
+    if (uid) {
+      console.debug('[refs] already authed uid=', uid);
+      return uid;
+    }
+
+    // 1) Try Telegram WebApp auth (real prod path)
+    try {
+      console.debug('[refs] trying telegramAuth()');
+      await telegramAuth(); // sets localStorage userId
+      uid = auth?.getUserId?.() || '';
+      if (uid) {
+        console.debug('[refs] telegramAuth ok uid=', uid);
+        return uid;
+      }
+    } catch (e) {
+      console.warn('[refs] telegramAuth failed (likely outside Telegram):', e?.message || e);
+    }
+
+    // 2) Dev/browser fallback: allow ?uid=<mongoId> to simulate login
+    const qp = new URLSearchParams(window.location.search);
+    const uidFromQuery = qp.get('uid');
+    if (uidFromQuery) {
+      console.debug('[refs] using ?uid= fallback for dev:', uidFromQuery);
+      localStorage.setItem('userId', uidFromQuery);
+      return uidFromQuery;
+    }
+
+    // No way to auth → throw so UI shows a message
+    throw new Error('Not logged in (no Telegram initData and no ?uid provided)');
+  };
+
   const refresh = async () => {
     setLoading(true);
     try {
-      // ensure we have a logged-in user (x-user-id header comes from localStorage)
-      const uid = auth?.getUserId?.() || '';
-      if (!uid) {
-        try {
-          await telegramAuth(); // sets userId in localStorage
-        } catch (e) {
-          console.error('telegramAuth failed', e);
-          throw new Error('Not logged in');
-        }
-      }
+      await ensureAuth();
 
+      console.debug('[refs] fetching /api/me/referrals');
       const data = await getReferralsInfo();
+      console.debug('[refs] /api/me/referrals ->', data);
+
       setInfo(data || {}); // never leave it null
       setMsg('');
     } catch (e) {
-      console.error(e);
+      console.error('[refs] refresh failed:', e);
       setInfo({}); // keep UI from crashing
       setMsg(e.message || 'Failed to load data');
-      setInfo({}); // keep UI rendering safely
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    // initial load
+    refresh();
+
+    // optional: refresh when tab becomes visible (nice in Telegram)
+    const onVis = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const copy = async (text) => {
     try {
@@ -99,66 +137,39 @@ export default function References() {
               </span>
             </div>
 
-            {/* ======= ONE PLACE: Code + Link (kept design language) ======= */}
             <div className="mt-3 grid gap-2">
-              {/* Compact header row still shows the code at a glance */}
               <div className="flex items-center justify-between">
-                <div className="text-sm opacity-80">Referral</div>
+                <div className="text-sm opacity-80">Referral Code</div>
                 <div className="font-mono">{inviteCode}</div>
               </div>
 
-              {/* Unified card that contains both Code + Link with their own copy buttons */}
-              <div className="rounded-xl bg-black/20 border border-white/10 p-3">
-                <div className="text-xs opacity-70 mb-2">Share your code or link</div>
-
-                {/* Row: Code badge + Copy */}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm opacity-80">Code</span>
-                  <span className="font-mono text-sm bg-white/5 border border-white/10 rounded-md px-2 py-1">
-                    {inviteCode}
-                  </span>
-                  <button
-                    onClick={() => copy(inviteCode)}
-                    disabled={!inviteCode || inviteCode === '—'}
-                    className="px-2 py-1 text-xs rounded-md bg-white/10 border border-white/10 active:scale-95 disabled:opacity-50"
-                  >
-                    Copy code
-                  </button>
-                </div>
-
-                {/* Row: Link input + Copy */}
-                <div className="flex items-center gap-2">
-                  <span className="text-sm opacity-80">Link</span>
-                  <input
-                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm"
-                    readOnly
-                    value={inviteUrl}
-                    placeholder="Invite link will appear here"
-                  />
-                  <button
-                    onClick={() => copy(inviteUrl)}
-                    disabled={!inviteUrl}
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm active:scale-95 disabled:opacity-50"
-                  >
-                    Copy link
-                  </button>
-                </div>
-
-                {!inviteUrl && (
-                  <div className="text-xs opacity-60 mt-2">
-                    Tip: set <code>WEBAPP_URL</code> in your backend env to your Vercel URL so the invite link can be built.
-                  </div>
-                )}
+              <div className="flex items-center gap-2">
+                <input
+                  className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                  readOnly
+                  value={inviteUrl}
+                  placeholder="Invite link will appear here"
+                />
+                <button
+                  onClick={() => copy(inviteUrl)}
+                  className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm active:scale-95"
+                >
+                  Copy
+                </button>
               </div>
 
-              {/* Stats grid preserved */}
+              {!inviteUrl && (
+                <div className="text-xs opacity-60">
+                  Tip: set <code>WEBAPP_URL</code> in your backend env to your Vercel URL so the invite link can be built.
+                </div>
+              )}
+
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <Stat label="Joined via you" value={referralsCount} />
                 <Stat label="Next reward in" value={nextRewardIn} />
                 <Stat label="Referral coins" value={referralRewardCoins} />
               </div>
 
-              {/* Recent referrals preserved */}
               <div className="mt-4">
                 <div className="text-sm opacity-70 mb-2">Recent referrals</div>
                 {referred.length === 0 ? (
