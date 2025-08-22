@@ -12,10 +12,11 @@ export default function References() {
     setLoading(true);
     try {
       // ensure we have a logged-in user (x-user-id header comes from localStorage)
-      const uid = auth?.getUserId?.() || '';
+      let uid = auth?.getUserId?.() || '';
       if (!uid) {
         try {
           await telegramAuth(); // sets userId in localStorage
+          uid = auth?.getUserId?.() || '';
         } catch (e) {
           console.error('telegramAuth failed', e);
           throw new Error('Not logged in');
@@ -67,29 +68,29 @@ export default function References() {
     }
   };
 
-  // NEW: fetch referrals on button press
+  // NEW: Button handler — uses auth.getUserId() and alerts code+link after backend call
   const onGetReferral = async () => {
     if (fetchingReferral) return;
     setFetchingReferral(true);
-    setMsg('Fetching referral…');
     try {
-      // ensure auth (same logic as refresh)
-      const uid = auth?.getUserId?.() || '';
+      let uid = auth?.getUserId?.() || '';
       if (!uid) {
-        try {
-          await telegramAuth();
-        } catch (e) {
-          console.error('telegramAuth failed', e);
-          throw new Error('Not logged in');
-        }
+        console.debug('[refs] No uid, running telegramAuth()');
+        await telegramAuth();
+        uid = auth?.getUserId?.() || '';
       }
+      if (!uid) throw new Error('Not logged in');
+
       const data = await getReferralsInfo();
       setInfo(data || {});
+      // Visual confirmation that response came from backend:
+      alert(`Referral Code: ${data?.inviteCode || '—'}\nReferral Link: ${data?.inviteUrl || '—'}`);
       setMsg('Referral loaded');
       setTimeout(() => setMsg(''), 1500);
     } catch (e) {
-      console.error(e);
+      console.error('[refs] Get Referral failed:', e);
       setMsg(e.message || 'Failed to fetch referral');
+      alert('Failed to fetch referral: ' + (e.message || 'unknown error'));
     } finally {
       setFetchingReferral(false);
     }
@@ -127,7 +128,9 @@ export default function References() {
                 <span className="text-xs opacity-70">
                   Reward: {rewardPerBatch} coin every {batchSize} joins
                 </span>
+                {/* NEW: Get Referral button (minimal, fits existing design) */}
                 <button
+                  type="button"
                   onClick={onGetReferral}
                   disabled={fetchingReferral}
                   className={`px-3 py-1.5 rounded-md border text-xs font-medium active:scale-95 ${
@@ -136,7 +139,7 @@ export default function References() {
                       : 'bg-white/10 border-white/20'
                   }`}
                 >
-                  {fetchingReferral ? 'Fetching…' : 'Get Referral'}
+                  {fetchingReferral ? 'Fetching…' : 'Get Referral Info'}
                 </button>
               </div>
             </div>
