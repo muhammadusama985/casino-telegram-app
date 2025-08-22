@@ -1,19 +1,33 @@
 import { useEffect, useState } from 'react';
-import { getReferralsInfo, claimDaily } from '../api';
+import { getReferralsInfo, claimDaily, telegramAuth, auth } from '../api';
 
 export default function References() {
   const [loading, setLoading] = useState(true);
   const [info, setInfo] = useState(null);
   const [msg, setMsg] = useState('');
+  const [claiming, setClaiming] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
     try {
+      // ensure we have a logged-in user (x-user-id header comes from localStorage)
+      const uid = auth?.getUserId?.() || '';
+      if (!uid) {
+        try {
+          await telegramAuth(); // sets userId in localStorage
+        } catch (e) {
+          console.error('telegramAuth failed', e);
+          throw new Error('Not logged in');
+        }
+      }
+
       const data = await getReferralsInfo();
-      setInfo(data);
+      setInfo(data || {}); // never leave it null
+      setMsg('');
     } catch (e) {
       console.error(e);
-      setMsg('Failed to load data');
+      setInfo({}); // keep UI from crashing
+      setMsg(e.message || 'Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -23,26 +37,46 @@ export default function References() {
 
   const copy = async (text) => {
     try {
+      if (!text) throw new Error('No link to copy');
       await navigator.clipboard.writeText(text);
       setMsg('Copied!');
       setTimeout(() => setMsg(''), 1500);
-    } catch { setMsg('Copy failed'); }
+    } catch {
+      setMsg('Copy failed');
+    }
   };
 
   const onClaimDaily = async () => {
+    if (claiming) return;
+    setClaiming(true);
     try {
       const res = await claimDaily();
-      if (res.alreadyClaimed) {
+      if (res?.alreadyClaimed) {
         setMsg('Already claimed today');
       } else {
-        setMsg(`+${res.claimed} claimed`);
+        setMsg(`+${res?.claimed ?? 0} claimed`);
       }
       await refresh();
     } catch (e) {
       console.error(e);
-      setMsg('Claim failed');
+      setMsg(e.message || 'Claim failed');
+    } finally {
+      setClaiming(false);
     }
   };
+
+  // Safe fallbacks so rendering never crashes
+  const inviteUrl = info?.inviteUrl || '';
+  const inviteCode = info?.inviteCode || '—';
+  const rewardPerBatch = info?.rewardPerBatch ?? '—';
+  const batchSize = info?.batchSize ?? '—';
+  const referralsCount = info?.referralsCount ?? 0;
+  const nextRewardIn = info?.nextRewardIn ?? 0;
+  const referralRewardCoins = Number(info?.referralRewardCoins || 0).toFixed(2);
+  const dailyStreak = info?.dailyStreak ?? 0;
+  const lastDailyAt = info?.lastDailyAt ? new Date(info.lastDailyAt).toLocaleDateString() : '—';
+  const dailyRewardCoins = Number(info?.dailyRewardCoins || 0).toFixed(2);
+  const referred = Array.isArray(info?.referred) ? info.referred : [];
 
   return (
     <div className="min-h-screen bg-[#0B1020] text-white flex flex-col">
@@ -60,42 +94,50 @@ export default function References() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Your Referral</h2>
               <span className="text-xs opacity-70">
-                Reward: {info.rewardPerBatch} coin every {info.batchSize} joins
+                Reward: {rewardPerBatch} coin every {batchSize} joins
               </span>
             </div>
 
             <div className="mt-3 grid gap-2">
               <div className="flex items-center justify-between">
                 <div className="text-sm opacity-80">Referral Code</div>
-                <div className="font-mono">{info.inviteCode}</div>
+                <div className="font-mono">{inviteCode}</div>
               </div>
+
               <div className="flex items-center gap-2">
                 <input
                   className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm"
                   readOnly
-                  value={info.inviteUrl}
+                  value={inviteUrl}
+                  placeholder="Invite link will appear here"
                 />
                 <button
-                  onClick={() => copy(info.inviteUrl)}
+                  onClick={() => copy(inviteUrl)}
                   className="px-3 py-2 rounded-lg bg-white/10 border border-white/10 text-sm active:scale-95"
                 >
                   Copy
                 </button>
               </div>
 
+              {!inviteUrl && (
+                <div className="text-xs opacity-60">
+                  Tip: set <code>WEBAPP_URL</code> in your backend env to your Vercel URL so the invite link can be built.
+                </div>
+              )}
+
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                <Stat label="Joined via you" value={info.referralsCount} />
-                <Stat label="Next reward in" value={info.nextRewardIn} />
-                <Stat label="Referral coins" value={Number(info.referralRewardCoins || 0).toFixed(2)} />
+                <Stat label="Joined via you" value={referralsCount} />
+                <Stat label="Next reward in" value={nextRewardIn} />
+                <Stat label="Referral coins" value={referralRewardCoins} />
               </div>
 
               <div className="mt-4">
                 <div className="text-sm opacity-70 mb-2">Recent referrals</div>
-                {(!info.referred || info.referred.length === 0) ? (
+                {referred.length === 0 ? (
                   <div className="text-sm opacity-60">No referrals yet.</div>
                 ) : (
                   <ul className="space-y-2 max-h-48 overflow-auto pr-1">
-                    {info.referred.map((r) => (
+                    {referred.map((r) => (
                       <li key={r.id} className="flex items-center justify-between text-sm">
                         <span className="opacity-80">User •••{String(r.id).slice(-4)}</span>
                         <span className="opacity-60">{new Date(r.at).toLocaleString()}</span>
@@ -115,17 +157,22 @@ export default function References() {
             </div>
 
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <Stat label="Streak" value={info.dailyStreak ?? 0} />
-              <Stat label="Last claim" value={info.lastDailyAt ? new Date(info.lastDailyAt).toLocaleDateString() : '—'} />
-              <Stat label="Daily coins" value={Number(info.dailyRewardCoins || 0).toFixed(2)} />
+              <Stat label="Streak" value={dailyStreak} />
+              <Stat label="Last claim" value={lastDailyAt} />
+              <Stat label="Daily coins" value={dailyRewardCoins} />
             </div>
 
             <div className="mt-4">
               <button
                 onClick={onClaimDaily}
-                className="w-full rounded-xl px-4 py-3 bg-emerald-600/30 border border-emerald-500/30 font-semibold active:scale-95"
+                disabled={claiming}
+                className={`w-full rounded-xl px-4 py-3 border font-semibold active:scale-95 ${
+                  claiming
+                    ? 'bg-emerald-600/20 border-emerald-500/20 opacity-60 cursor-not-allowed'
+                    : 'bg-emerald-600/30 border-emerald-500/30'
+                }`}
               >
-                Claim Daily
+                {claiming ? 'Claiming…' : 'Claim Daily'}
               </button>
             </div>
           </section>
