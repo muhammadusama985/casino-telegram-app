@@ -50,6 +50,8 @@ async function handle(res) {
 
 // Generic request (exported for one-off calls if needed)
 export async function api(path, { method = "GET", body, headers } = {}) {
+  console.debug('[api] →', (BASE_URL || '(same-origin)') + path, 'uid=', getUserId());
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: getHeaders(headers),
