@@ -451,12 +451,13 @@ export default function Coinflip() {
 
     setFlipping(true);
     setResultMsg("");
-    // NOTE: do NOT set the face yet and do NOT pre-spin.
-    // We wait for backend, then do ONE deterministic flip to the landed side.
+
+    // 1) Start spin immediately (no message yet)
     try { new Audio(flipSound).play().catch(() => {}); } catch {}
+    try { coinApiRef.current?.startWaiting(); } catch {}
 
     try {
-      // IMPORTANT: send streak so backend boosts payout (and credits more on win)
+      // 2) Ask backend
       const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
 
       // sync default coef from engine if provided (optional)
@@ -464,10 +465,10 @@ export default function Coinflip() {
       if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
       const landed = (res?.details?.landed === "T") ? "T" : "H";
+      setFace(landed); // update ARIA/semantics
 
-      // Single deterministic flip now that we know the result:
-      setFace(landed);
-      try { coinApiRef.current?.flip(landed); } catch {}
+      // 3) Resolve the spin to the correct side, then show result/message
+      await (coinApiRef.current?.resolve(landed) ?? Promise.resolve());
 
       if (Number.isFinite(res?.newBalance)) {
         setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
@@ -476,17 +477,15 @@ export default function Coinflip() {
       setRound((r) => r + 1);
 
       if (res?.result === "win") {
-        // Win: put the landed side into the trail and grow streak
-        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN));
+        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN)); // fill the bubble with the correct side
         setStreak((s) => s + 1);
 
-        const profit = Number(res?.payout || 0); // profit-only
+        const profit = Number(res?.payout || 0);
         const msg = `🎉 You Win! +${fmt(profit)}`;
         setResultMsg(msg);
         try { new Audio(winSound).play().catch(() => {}); } catch {}
         alert(msg);
       } else {
-        // Loss: no fill into trail (your rule); reset streak and show loss
         setStreak(0);
         setTrail(Array(TRAIL_LEN).fill("?"));
 
@@ -498,6 +497,8 @@ export default function Coinflip() {
 
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
+      // stop any waiting spin on error
+      try { coinApiRef.current?.stop(); } catch {}
       const msg = String(e?.message || "");
       if (msg.includes("insufficient-funds")) alert("Not enough coins.");
       else if (msg.includes("min-stake")) alert("Bet is below minimum.");
@@ -652,22 +653,43 @@ function MiniCoin({ symbol = "$" }) {
   );
 }
 
-/* ===================== 3D CSS COIN ===================== */
+/* ===================== 3D CSS COIN with WAIT->RESOLVE flow ===================== */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const coinRef = useRef(null);
+  const waitTimerRef = useRef(null);
+
+  function clearTimers() {
+    if (waitTimerRef.current) {
+      clearTimeout(waitTimerRef.current);
+      waitTimerRef.current = null;
+    }
+  }
 
   useImperativeHandle(ref, () => ({
-    // Flip exactly once to desired side ('H' or 'T'); no random pre-spin.
-    flip(desired) {
+    // Begin indefinite spin while waiting for backend
+    startWaiting() {
       const el = coinRef.current;
       if (!el) return;
+      clearTimers();
+      el.classList.remove("coinflip-anim");
+      // reflow
+      // eslint-disable-next-line no-unused-expressions
+      el.offsetWidth;
+      el.classList.add("coinflip-wait");
+    },
+    // Resolve to 'H' or 'T' and return a Promise that fulfills after the animation ends
+    resolve(desired) {
+      const el = coinRef.current;
+      if (!el) return Promise.resolve();
 
-      const spins = Math.floor(5 + Math.random() * 5); // 5–9 full turns
+      // remove waiting loop
+      el.classList.remove("coinflip-wait");
+
+      const spins = Math.floor(3 + Math.random() * 3); // slightly shorter final settle
       const yawStart = (Math.random() * 18 - 9).toFixed(2) + "deg";
-      const yawEnd = (Math.random() * 32 - 16).toFixed(2) + "deg";
-      const duration = Math.floor(1100 + Math.random() * 500); // 1.1–1.6s
-
-      const half = desired === "T" ? 0.5 : 0; // deterministic finish
+      const yawEnd = (Math.random() * 24 - 12).toFixed(2) + "deg";
+      const duration = Math.floor(950 + Math.random() * 450); // ~1.0–1.4s
+      const half = desired === "T" ? 0.5 : 0;
 
       el.style.setProperty("--spins", String(spins));
       el.style.setProperty("--half", String(half));
@@ -675,10 +697,25 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       el.style.setProperty("--yawStart", yawStart);
       el.style.setProperty("--yawEnd", yawEnd);
 
+      // trigger final deterministic flip
       el.classList.remove("coinflip-anim");
       // eslint-disable-next-line no-unused-expressions
       el.offsetWidth;
       el.classList.add("coinflip-anim");
+
+      return new Promise((resolve) => {
+        waitTimerRef.current = setTimeout(() => {
+          resolve();
+        }, duration + 60);
+      });
+    },
+    // Stop any animation (used on error)
+    stop() {
+      const el = coinRef.current;
+      if (!el) return;
+      clearTimers();
+      el.classList.remove("coinflip-wait");
+      el.classList.remove("coinflip-anim");
     },
   }), []);
 
@@ -699,6 +736,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         <div className="coinflip-shadow" aria-hidden />
       </div>
 
+      {/* coin styles */}
       <style>{`
         :root {
           --coin-gold-1: #f4e3b1;
@@ -706,6 +744,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           --coin-gold-3: #b7913a;
           --coin-gold-4: #8e6b24;
         }
+
         .coinflip-coin {
           width: var(--size);
           height: var(--size);
@@ -713,6 +752,27 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           transform-style: preserve-3d;
           user-select: none;
         }
+
+        /* Waiting loop: smooth, continuous flipping */
+        .coinflip-wait {
+          animation: coinflip-wait 0.9s linear infinite;
+        }
+        @keyframes coinflip-wait {
+          0% {
+            transform:
+              rotateX(0turn)
+              rotateY(-6deg)
+              rotateZ(0deg);
+          }
+          100% {
+            transform:
+              rotateX(1turn)
+              rotateY(6deg)
+              rotateZ(3deg);
+          }
+        }
+
+        /* Final settle animation (deterministic) */
         .coinflip-coin.coinflip-anim {
           animation: coinflip-spin var(--duration) cubic-bezier(.2,.7,.2,1) forwards;
         }
@@ -730,6 +790,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
               rotateZ(3deg);
           }
         }
+
         .coinflip-face {
           position: absolute;
           inset: 0;
@@ -753,6 +814,8 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
                       linear-gradient(225deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
           transform: rotateX(180deg) translateZ(calc(var(--thickness) / 2));
         }
+
+        /* ridged edge illusion */
         .coinflip-coin::before {
           content: "";
           position: absolute;
@@ -768,6 +831,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           opacity: .45;
           pointer-events: none;
         }
+
         .coinflip-shadow {
           position: absolute;
           left: 50%;
@@ -780,7 +844,9 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           opacity: .7;
           pointer-events: none;
         }
+
         @media (prefers-reduced-motion: reduce) {
+          .coinflip-wait { animation-duration: 0.01ms; }
           .coinflip-coin.coinflip-anim { animation-duration: 0.01ms; }
         }
       `}</style>
