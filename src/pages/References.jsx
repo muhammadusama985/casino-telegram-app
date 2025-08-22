@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getReferralsInfo, claimDaily, telegramAuth, auth } from '../api';
+import { getReferralsInfo, claimDaily } from '../api'; // ← no need to import telegramAuth/auth here
 
 export default function References() {
   const [loading, setLoading] = useState(true);
@@ -8,25 +8,11 @@ export default function References() {
   const [claiming, setClaiming] = useState(false);
   const [fetchingReferral, setFetchingReferral] = useState(false);
 
-
+  // Simplified: let the API helper ensure login + uid + ?uid fallback
   const refresh = async () => {
     setLoading(true);
     try {
-      let uid = auth?.getUserId?.() || '';
-      if (!uid) {
-        try {
-          await telegramAuth(); // sets userId in localStorage
-          uid = auth?.getUserId?.() || '';
-        } catch (e) {
-          console.error('telegramAuth failed', e);
-          throw new Error('Not logged in');
-        }
-      }
-
-      // 🔥 Show userId in an alert before passing to backend
-      alert(`User ID being sent to backend: ${uid}`);
-
-      const data = await getReferralsInfo();
+      const data = await getReferralsInfo({ debug: true }); // shows the exact URL/uid once
       setInfo(data || {});
       setMsg('');
     } catch (e) {
@@ -70,31 +56,22 @@ export default function References() {
     }
   };
 
-  // NEW: Explicit button to send userId and fetch referral info
-
-const onGetReferral = async () => {
-  if (fetchingReferral) return;
-  setFetchingReferral(true);
-  try {
-    let uid = auth?.getUserId?.() || '';
-    if (!uid) {
-      await telegramAuth();
-      uid = auth?.getUserId?.() || '';
+  // Button explicitly re-fetches referral info (same call, cleaner UX)
+  const onGetReferral = async () => {
+    if (fetchingReferral) return;
+    setFetchingReferral(true);
+    try {
+      const data = await getReferralsInfo({ debug: true });
+      setInfo(data || {});
+      setMsg('Referral loaded');
+      setTimeout(() => setMsg(''), 1500);
+    } catch (e) {
+      console.error('[refs] Get Referral failed:', e);
+      setMsg(e.message || 'Failed to fetch referral');
+    } finally {
+      setFetchingReferral(false);
     }
-    if (!uid) throw new Error('Not logged in');
-
-    alert(`User ID being sent to backend: ${uid}`);
-    const data = await getReferralsInfo(); // now includes header + ?uid= fallback
-    setInfo(data || {});
-    setMsg('Referral loaded');
-    setTimeout(() => setMsg(''), 1500);
-  } catch (e) {
-    console.error('[refs] Get Referral failed:', e);
-    setMsg(e.message || 'Failed to fetch referral');
-  } finally {
-    setFetchingReferral(false);
-  }
-};
+  };
 
   // Safe fallbacks so rendering never crashes
   const inviteUrl = info?.inviteUrl || '';
@@ -122,27 +99,26 @@ const onGetReferral = async () => {
         <div className="px-4 pb-8 space-y-6">
           {/* REFERRALS */}
           <section className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
-           <div className="flex items-center justify-between">
-  <h2 className="text-lg font-semibold">Your Referral</h2>
-  <div className="flex items-center gap-2">
-    <span className="text-xs opacity-70">
-      Reward: {rewardPerBatch} coin every {batchSize} joins
-    </span>
-    <button
-      type="button"
-      onClick={onGetReferral}
-      disabled={fetchingReferral}
-      className={`px-3 py-1.5 rounded-md border text-xs font-medium active:scale-95 ${
-        fetchingReferral
-          ? 'bg-white/10 border-white/10 opacity-60 cursor-not-allowed'
-          : 'bg-white/10 border-white/20'
-      }`}
-    >
-      {fetchingReferral ? 'Fetching…' : 'Get Referral'}
-    </button>
-  </div>
-</div>
-
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Your Referral</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-xs opacity-70">
+                  Reward: {rewardPerBatch} coin every {batchSize} joins
+                </span>
+                <button
+                  type="button"
+                  onClick={onGetReferral}
+                  disabled={fetchingReferral}
+                  className={`px-3 py-1.5 rounded-md border text-xs font-medium active:scale-95 ${
+                    fetchingReferral
+                      ? 'bg-white/10 border-white/10 opacity-60 cursor-not-allowed'
+                      : 'bg-white/10 border-white/20'
+                  }`}
+                >
+                  {fetchingReferral ? 'Fetching…' : 'Get Referral'}
+                </button>
+              </div>
+            </div>
 
             <div className="mt-3 grid gap-2">
               <div className="flex items-center justify-between">
@@ -165,10 +141,32 @@ const onGetReferral = async () => {
                 </button>
               </div>
 
+              {!inviteUrl && (
+                <div className="text-xs opacity-60">
+                  Tip: set <code>WEBAPP_URL</code> in your backend env to your Vercel URL so the invite link can be built.
+                </div>
+              )}
+
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 <Stat label="Joined via you" value={referralsCount} />
                 <Stat label="Next reward in" value={nextRewardIn} />
                 <Stat label="Referral coins" value={referralRewardCoins} />
+              </div>
+
+              <div className="mt-4">
+                <div className="text-sm opacity-70 mb-2">Recent referrals</div>
+                {referred.length === 0 ? (
+                  <div className="text-sm opacity-60">No referrals yet.</div>
+                ) : (
+                  <ul className="space-y-2 max-h-48 overflow-auto pr-1">
+                    {referred.map((r) => (
+                      <li key={r.id} className="flex items-center justify-between text-sm">
+                        <span className="opacity-80">User •••{String(r.id).slice(-4)}</span>
+                        <span className="opacity-60">{new Date(r.at).toLocaleString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           </section>

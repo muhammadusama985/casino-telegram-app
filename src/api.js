@@ -52,9 +52,6 @@ async function handle(res) {
 export async function api(path, { method = "GET", body, headers } = {}) {
   console.debug('[api] →', (BASE_URL || '(same-origin)') + path, 'uid=', getUserId());
 
-  const fullUrl = `${BASE_URL}${path}`;
-alert(`Fetching: ${fullUrl}`); // TEMP
-
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: getHeaders(headers),
@@ -271,17 +268,37 @@ export async function getBalance() {
   return num;                                  // <- ALWAYS a number
 }
 
-// src/api.js
 export async function getReferralsInfo() {
-  const uid = auth.getUserId?.() || localStorage.getItem('userId') || '';
-  // Include uid in query as a fallback for Telegram webview oddities while debugging
-  const q = uid ? `?uid=${encodeURIComponent(uid)}` : '';
-  return api(`/api/me/referrals${q}`);
+  // uses BASE_URL and auto-adds x-user-id from localStorage
+  return api("/api/me/referrals");
 }
-
 
 export async function claimDaily() {
   return api("/api/me/rewards/daily", { method: "POST" });
 }
 
+// --- add this helper somewhere near the bottom, before the exports that use it ---
+export async function ensureLoggedIn() {
+  let uid = auth.getUserId?.() || localStorage.getItem('userId') || '';
+  if (!uid) {
+    await telegramAuth();                    // sets localStorage.userId
+    uid = auth.getUserId?.() || localStorage.getItem('userId') || '';
+  }
+  if (!uid) throw new Error('Not logged in');
+  return uid;
+}
+
+// --- replace your current getReferralsInfo() with this version ---
+export async function getReferralsInfo({ debug = false } = {}) {
+  const uid = await ensureLoggedIn();        // ✅ guarantee x-user-id exists
+  const q = `?uid=${encodeURIComponent(uid)}`; // ✅ debug fallback for Telegram/NG
+  const path = `/api/me/referrals${q}`;
+
+  // optional: quick visibility while debugging
+  if (debug || import.meta.env.VITE_DEBUG_ALERT === '1') {
+    alert(`GET ${BASE_URL}${path}\nuid=${uid}`);
+  }
+
+  return api(path); // headers include x-user-id automatically via getHeaders()
+}
 
