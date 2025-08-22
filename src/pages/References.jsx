@@ -6,73 +6,36 @@ export default function References() {
   const [info, setInfo] = useState(null);
   const [msg, setMsg] = useState('');
   const [claiming, setClaiming] = useState(false);
-
-  // --- Helper: ensure we have a userId in localStorage so x-user-id is sent
-  const ensureAuth = async () => {
-    let uid = auth?.getUserId?.() || '';
-    if (uid) {
-      console.debug('[refs] already authed uid=', uid);
-      return uid;
-    }
-
-    // 1) Try Telegram WebApp auth (real prod path)
-    try {
-      console.debug('[refs] trying telegramAuth()');
-      await telegramAuth(); // sets localStorage userId
-      uid = auth?.getUserId?.() || '';
-      if (uid) {
-        console.debug('[refs] telegramAuth ok uid=', uid);
-        return uid;
-      }
-    } catch (e) {
-      console.warn('[refs] telegramAuth failed (likely outside Telegram):', e?.message || e);
-    }
-
-    // 2) Dev/browser fallback: allow ?uid=<mongoId> to simulate login
-    const qp = new URLSearchParams(window.location.search);
-    const uidFromQuery = qp.get('uid');
-    if (uidFromQuery) {
-      console.debug('[refs] using ?uid= fallback for dev:', uidFromQuery);
-      localStorage.setItem('userId', uidFromQuery);
-      return uidFromQuery;
-    }
-
-    // No way to auth → throw so UI shows a message
-    throw new Error('Not logged in (no Telegram initData and no ?uid provided)');
-  };
+  const [fetchingReferral, setFetchingReferral] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
     try {
-      await ensureAuth();
+      // ensure we have a logged-in user (x-user-id header comes from localStorage)
+      const uid = auth?.getUserId?.() || '';
+      if (!uid) {
+        try {
+          await telegramAuth(); // sets userId in localStorage
+        } catch (e) {
+          console.error('telegramAuth failed', e);
+          throw new Error('Not logged in');
+        }
+      }
 
-      console.debug('[refs] fetching /api/me/referrals');
       const data = await getReferralsInfo();
-      console.debug('[refs] /api/me/referrals ->', data);
-
       setInfo(data || {}); // never leave it null
       setMsg('');
     } catch (e) {
-      console.error('[refs] refresh failed:', e);
+      console.error(e);
       setInfo({}); // keep UI from crashing
       setMsg(e.message || 'Failed to load data');
+      setInfo({}); // keep UI rendering safely
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    // initial load
-    refresh();
-
-    // optional: refresh when tab becomes visible (nice in Telegram)
-    const onVis = () => {
-      if (document.visibilityState === 'visible') refresh();
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { refresh(); }, []);
 
   const copy = async (text) => {
     try {
@@ -104,6 +67,34 @@ export default function References() {
     }
   };
 
+  // NEW: fetch referrals on button press
+  const onGetReferral = async () => {
+    if (fetchingReferral) return;
+    setFetchingReferral(true);
+    setMsg('Fetching referral…');
+    try {
+      // ensure auth (same logic as refresh)
+      const uid = auth?.getUserId?.() || '';
+      if (!uid) {
+        try {
+          await telegramAuth();
+        } catch (e) {
+          console.error('telegramAuth failed', e);
+          throw new Error('Not logged in');
+        }
+      }
+      const data = await getReferralsInfo();
+      setInfo(data || {});
+      setMsg('Referral loaded');
+      setTimeout(() => setMsg(''), 1500);
+    } catch (e) {
+      console.error(e);
+      setMsg(e.message || 'Failed to fetch referral');
+    } finally {
+      setFetchingReferral(false);
+    }
+  };
+
   // Safe fallbacks so rendering never crashes
   const inviteUrl = info?.inviteUrl || '';
   const inviteCode = info?.inviteCode || '—';
@@ -132,9 +123,22 @@ export default function References() {
           <section className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Your Referral</h2>
-              <span className="text-xs opacity-70">
-                Reward: {rewardPerBatch} coin every {batchSize} joins
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs opacity-70">
+                  Reward: {rewardPerBatch} coin every {batchSize} joins
+                </span>
+                <button
+                  onClick={onGetReferral}
+                  disabled={fetchingReferral}
+                  className={`px-3 py-1.5 rounded-md border text-xs font-medium active:scale-95 ${
+                    fetchingReferral
+                      ? 'bg-white/10 border-white/10 opacity-60 cursor-not-allowed'
+                      : 'bg-white/10 border-white/20'
+                  }`}
+                >
+                  {fetchingReferral ? 'Fetching…' : 'Get Referral'}
+                </button>
+              </div>
             </div>
 
             <div className="mt-3 grid gap-2">
