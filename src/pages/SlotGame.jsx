@@ -483,8 +483,6 @@
 
 
 
-
-
 // src/pages/SlotBonanza.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { telegramAuth, getBalance, games } from "../api";
@@ -570,7 +568,7 @@ export default function SlotBonanza() {
   const cascadeQueueRef = useRef([]);
   const cascadeTimerRef = useRef(null);
 
-  // keep previous plain grid to detect NEW/CHANGED tiles for fall animation
+  // keep previous plain grid to detect NEW/CHANGED/MOVED tiles for fall animation
   const prevPlainGridRef = useRef(makeNullPlainGrid());
   // step tick so React keys change when tiles change → CSS animation retriggers
   const stepTickRef = useRef(0);
@@ -727,15 +725,17 @@ export default function SlotBonanza() {
       return;
     }
 
-    // bump step tick so React keys can change for CHANGED/NEW cells
+    // bump step tick so React keys can change for CHANGED/NEW/MOVED cells
     stepTickRef.current += 1;
 
     // mark cleared cells if provided, to animate fade
     const cleared = new Set((next.cleared || []).map(([r, c]) => `${r}:${c}`));
 
-    // compute SPAWN for any cell whose value CHANGED compared to previous step
+    // --- compute FALL flags (NEW or MOVED down, even if same symbol) & one-by-one order ---
     const prev = prevPlainGridRef.current || makeNullPlainGrid();
+    const R = 5, C = 6;
 
+    // Base mapping first (value + cleared + spawn flag)
     const mapped = gPlain.map((row, r) =>
       row.map((cell, c) => {
         let v = cell;
@@ -743,14 +743,61 @@ export default function SlotBonanza() {
           if ("v" in v) v = v.v;
           else if ("sym" in v) v = v.sym; // e.g. { sym:'💣', mult:12 }
         }
-        const was = prev[r]?.[c] ?? null;
-        const spawn = v !== was; // <-- ANY change (including new or moved/different) falls from top
-        const spawnKey = spawn ? stepTickRef.current : 0;
-        return { v, cleared: cleared.has(`${r}:${c}`), spawn, spawnKey };
+        // default: value changed?
+        const changed = (v !== (prev[r]?.[c] ?? null));
+        return { v, cleared: cleared.has(`${r}:${c}`), fall: changed, spawnKey: 0, delayMs: 0 };
       })
     );
 
+    // Column-aware movement detection (covers same-type movement):
+    for (let c = 0; c < C; c++) {
+      const prevCol = [];
+      for (let r = 0; r < R; r++) prevCol.push(prev[r]?.[c] ?? null);
+
+      // track previous non-null values with their original row indices
+      const prevPairs = [];
+      for (let r = 0; r < R; r++) if (prevCol[r] != null) prevPairs.push({ v: prevCol[r], rPrev: r });
+
+      const k = prevPairs.length;
+      const bottomStart = R - k;
+
+      for (let r = 0; r < R; r++) {
+        const cell = mapped[r][c];
+        // top region -> definitely new spawns
+        if (r < bottomStart) {
+          cell.fall = true;
+          continue;
+        }
+        // bottom region should be compacted prevPairs in-order
+        const idx = r - bottomStart;
+        const expected = prevPairs[idx];
+        if (expected) {
+          // if value matches expected but came from higher row, mark as falling (movement)
+          if (cell.v === expected.v && expected.rPrev !== r) {
+            cell.fall = true;
+          }
+        } else {
+          // safety: if somehow missing, treat as falling
+          cell.fall = true;
+        }
+      }
+    }
+
+    // Assign sequential delays left→right, top→bottom for cells that fall
+    let order = 0;
+    for (let c = 0; c < C; c++) {
+      for (let r = 0; r < R; r++) {
+        const cell = mapped[r][c];
+        if (cell.fall) {
+          cell.delayMs = order * 60; // 60ms per tile for a cascading feel
+          cell.spawnKey = stepTickRef.current; // ensure key changes when animating
+          order++;
+        }
+      }
+    }
+
     setGrid(mapped);
+
     // update prev reference for next cascade step
     prevPlainGridRef.current = gPlain.map(row => row.map(cell => {
       if (cell && typeof cell === "object") {
@@ -806,7 +853,8 @@ export default function SlotBonanza() {
                   key={`${r}-${c}-${cell?.v ?? "x"}-${cell?.spawnKey ?? 0}`}
                   value={cell?.v}
                   cleared={cell?.cleared}
-                  spawn={cell?.spawn}
+                  fall={cell?.fall}
+                  delayMs={cell?.delayMs}
                 />
               ))
             )}
@@ -858,7 +906,7 @@ export default function SlotBonanza() {
           </div>
         </div>
 
-        {/* Spin button — ROUND */}
+        {/* Spin button — ROUND (unchanged style) */}
         <div className="mt-6 flex justify-center pb-10">
           <button
             onClick={spin}
@@ -895,8 +943,9 @@ export default function SlotBonanza() {
 /* ------------- subcomponents ------------- */
 
 // Single grid cell with square aspect + tiny animation when “cleared”,
-// and FALL animation when its value CHANGES (new or moved symbol).
-function Cell({ value, cleared, spawn }) {
+// and FALL animation (sequential) whenever the cell CHANGES or MOVES down.
+// delayMs staggers the animation one-by-one.
+function Cell({ value, cleared, fall, delayMs }) {
   const emoji = asEmoji(value);
   const bg = bgClassFor(String(value || ""));
 
@@ -904,8 +953,11 @@ function Cell({ value, cleared, spawn }) {
     <div
       className={`relative w-full rounded-xl overflow-hidden border border-white/10
                   bg-gradient-to-br ${bg} shadow-inner
-                  ${cleared ? "animate-ping-fast" : ""} ${spawn ? "animate-fall-down" : ""}`}
-      style={{ paddingBottom: "100%" /* square */ }}
+                  ${cleared ? "animate-ping-fast" : ""} ${fall ? "animate-fall-down" : ""}`}
+      style={{
+        paddingBottom: "100%", // square
+        animationDelay: fall ? `${delayMs}ms` : undefined
+      }}
     >
       <div className="absolute inset-0 flex items-center justify-center">
         <span className="text-2xl md:text-3xl drop-shadow-[0_2px_0_rgba(0,0,0,0.25)]">
@@ -925,7 +977,7 @@ function Cell({ value, cleared, spawn }) {
           60%  { opacity: 1.0; }
           100% { transform: translateY(0); opacity: 1.0; }
         }
-        .animate-fall-down { animation: fall-down 0.28s ease-out; }
+        .animate-fall-down { animation: fall-down 0.28s ease-out forwards; }
       `}</style>
     </div>
   );
@@ -949,7 +1001,7 @@ function InfoCard({ label, value, accent = "emerald" }) {
 function emptyGrid() {
   // 5 rows × 6 cols
   return Array.from({ length: 5 }, () =>
-    Array.from({ length: 6 }, () => ({ v: null, cleared: false, spawn: false, spawnKey: 0 }))
+    Array.from({ length: 6 }, () => ({ v: null, cleared: false, fall: false, spawnKey: 0, delayMs: 0 }))
   );
 }
 
@@ -994,4 +1046,3 @@ function randomGrid() {
     Array.from({ length: 6 }, () => EMOJIS[Math.floor(Math.random() * EMOJIS.length)])
   );
 }
-
