@@ -16,9 +16,9 @@ import dice6 from "../assets/6.jpg";
 const diceImages = [dice1, dice2, dice3, dice4, dice5, dice6];
 
 // Base payout% on win (matches your server default unless you change it there)
-const BASE_PAYOUT_PCT = 0.90;     // set to 0.88 if you configure 88% in DB
-const BOOST_PER_WIN   = 0.05;     // +5% per win (same as cfg.diceStreakBoostPct)
-const PAYOUT_CAP      = 1.0;      // cap at 100% of stake
+const BASE_PAYOUT_PCT = 0.90;
+const BOOST_PER_WIN   = 0.05;
+const PAYOUT_CAP      = 1.0;
 
 // ---- helpers ----
 function toNum(v) {
@@ -29,10 +29,8 @@ function toNum(v) {
 function formatCoins(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return "0";
-  // Show up to 2 decimals without trailing zeros (e.g., 9 -> "9", 9.5 -> "9.5", 9.57 -> "9.57")
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
-// Calculate effective payout % given the current streak
 function calcEffectivePayoutPct(streak) {
   const s = Math.max(0, Number(streak) || 0);
   const pct = Math.min(PAYOUT_CAP, BASE_PAYOUT_PCT * (1 + BOOST_PER_WIN * s));
@@ -202,11 +200,14 @@ export default function Dice() {
   // ---------- UI --------------------------------------------------------------
   return (
     <div className="min-h-screen bg-[#08122B] text-white overflow-x-hidden">
-      {/* Top bar */}
+      {/* Top bar with Back button on left of Coins */}
       <div className="flex items-center justify-between px-4 py-3">
-        <div className="text-sm">
-          <span className="opacity-70 mr-2">Coins: </span>
-          <span className="font-bold">{formatCoins(coins)}</span>
+        <div className="flex items-center gap-3">
+          <BackButtonInline />
+          <div className="text-sm">
+            <span className="opacity-70 mr-2">Coins: </span>
+            <span className="font-bold">{formatCoins(coins)}</span>
+          </div>
         </div>
       </div>
 
@@ -214,7 +215,7 @@ export default function Dice() {
         className="max-w-md mx-auto px-4 pb-24 w-full"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)" }}
       >
-        {/* Slider card (only one, fully functional) */}
+        {/* Slider card */}
         <div className="mt-2 rounded-2xl bg-[#0C1A3A] border border-white/10 p-4 relative">
           {/* visual track */}
           <div className="relative">
@@ -228,7 +229,7 @@ export default function Dice() {
               <div className="w-7 h-7 rounded-md bg-[#FFB800] border-2 border-yellow-300 shadow" />
             </div>
 
-            {/* click/drag overlay: invisible range makes the bar functional */}
+            {/* click/drag overlay */}
             <input
               type="range"
               min={0}
@@ -239,7 +240,6 @@ export default function Dice() {
               className="absolute left-0 right-0 top-[-8px] bottom-[-8px] opacity-0 cursor-pointer"
             />
 
-            {/* labels 0 and 100 only */}
             <div className="mt-2 flex justify-between text-xs opacity-70">
               <span>0</span><span>100</span>
             </div>
@@ -265,7 +265,7 @@ export default function Dice() {
               )}
             </div>
 
-            {/* Roll over/under toggle – no numeric value field */}
+            {/* Roll over/under toggle */}
             <div className="rounded-lg bg-black/30 border border-white/10 p-3">
               <div className="text-[10px] sm:text-xs uppercase tracking-wider opacity-60">
                 {modeOver ? "Roll over to win" : "Roll under to win"}
@@ -288,41 +288,42 @@ export default function Dice() {
           </div>
         </div>
 
-        {/* Tabs (Auto disabled) */}
-        <div className="mt-5 flex gap-6 border-b border-white/10">
-          <button className="pb-2 text-sm font-semibold border-b-2 border-white">MANUAL</button>
-          <button className="pb-2 text-sm opacity-50 cursor-not-allowed">AUTO</button>
-        </div>
-
-        {/* Bet amount card */}
+        {/* Bet amount card (UPDATED: smaller input left→middle, +/− stacked right) */}
         <div className="mt-4 rounded-2xl bg-[#0C1A3A] border border-white/10 p-4">
           <div className="text-xs opacity-70 mb-2">BET AMOUNT</div>
 
-          {/* Responsive + / input / + row */}
-          <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
-            <button
-              onClick={() => setBet((b) => Math.max(1, b - 1))}
-              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none shrink-0"
-              aria-label="Decrease bet"
-            >−</button>
+          {/* Smaller input on the left, + on top / − below on the right */}
+<div className="grid grid-cols-[1fr,auto] items-start gap-3">
+  <div className="justify-self-start">
+    <input
+      type="number"
+      inputMode="numeric"
+      min="1"
+      value={bet}
+      onChange={(e) => setBet(Math.max(1, Number(e.target.value || 1)))}
+      className="w-32 sm:w-40 md:w-48 text-center text-2xl font-bold rounded-md bg-black/60 border border-white/10 py-2 px-3"
+      aria-label="Bet amount"
+    />
+  </div>
 
-            <input
-              type="number"
-              inputMode="numeric"
-              min="1"
-              value={bet}
-              onChange={(e) => setBet(Math.max(1, Number(e.target.value || 1)))}
-              className="w-full min-w-0 text-center text-2xl font-bold rounded-md bg-black/60 border border-white/10 py-2 px-3"
-              aria-label="Bet amount"
-            />
+  {/* raise buttons to align with the input’s placeholder line */}
+  <div className="flex items-center gap-2 justify-self-end self-start -mt-15">
+    <button
+      onClick={() => setBet((b) => b + 1)}
+      className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+      aria-label="Increase bet"
+    >+</button>
+    <button
+      onClick={() => setBet((b) => Math.max(1, b - 1))}
+      className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+      aria-label="Decrease bet"
+    >−</button>
+  </div>
+</div>
 
-            <button
-              onClick={() => setBet((b) => b + 1)}
-              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none shrink-0"
-              aria-label="Increase bet"
-            >+</button>
-          </div>
 
+
+          {/* Row for multiplier actions and payout on win (unchanged semantics) */}
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div>
               <div className="text-xs opacity-70 mb-1">MULTIPLY BET AMOUNT</div>
@@ -350,6 +351,11 @@ export default function Dice() {
           </div>
         </div>
 
+        {/* 3D Dice preview */}
+        <div className="mt-6 flex justify-center">
+          <Dice3D value={dice} rolling={rolling} images={diceImages} />
+        </div>
+
         {/* ROLL button */}
         <div className="mt-6 flex justify-center">
           <button
@@ -365,5 +371,136 @@ export default function Dice() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ---------- Back button (left of Coins) ---------- */
+function BackButtonInline({ to = "/" }) {
+  const onClick = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.assign(to);
+    }
+  };
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Go back"
+      className="inline-flex items-center justify-center w-8 h-8 pr-2 mr-3 rounded-lg border border-white/10 hover:bg-white/10 active:scale-95 text-white/80"
+      style={{ background: "rgba(255,255,255,0.04)" }}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </button>
+  );
+}
+
+/* ---------- 3D Dice component ---------- */
+function Dice3D({ value = 1, rolling = false, images = [] }) {
+  // Map result -> orientation that brings the matching face to the front
+  const faceRotation = {
+    1: "rotateX(0deg) rotateY(0deg)",       // front
+    2: "rotateX(0deg) rotateY(-90deg)",     // right
+    3: "rotateX(-90deg) rotateY(0deg)",     // top
+    4: "rotateX(90deg) rotateY(0deg)",      // bottom
+    5: "rotateX(0deg) rotateY(90deg)",      // left
+    6: "rotateX(0deg) rotateY(180deg)",     // back
+  };
+
+  const size = 96; // px
+  const depth = size / 2;
+
+  return (
+    <div
+      className="relative"
+      style={{ width: size, height: size, perspective: 600 }}
+      aria-label="3D dice"
+    >
+      <div
+        className={`w-full h-full relative preserve-3d`}
+        style={{
+          transformStyle: "preserve-3d",
+          transform: rolling ? undefined : faceRotation[value] || faceRotation[1],
+          animation: rolling ? "dice-spin 1s linear infinite" : "none",
+        }}
+      >
+        {/* Front (1) */}
+        <DiceFace
+          img={images[0]} alt="1"
+          style={{
+            transform: `rotateY(0deg) translateZ(${depth}px)`
+          }}
+        />
+        {/* Back (6) */}
+        <DiceFace
+          img={images[5]} alt="6"
+          style={{
+            transform: `rotateY(180deg) translateZ(${depth}px)`
+          }}
+        />
+        {/* Right (2) */}
+        <DiceFace
+          img={images[1]} alt="2"
+          style={{
+            transform: `rotateY(90deg) translateZ(${depth}px)`
+          }}
+        />
+        {/* Left (5) */}
+        <DiceFace
+          img={images[4]} alt="5"
+          style={{
+            transform: `rotateY(-90deg) translateZ(${depth}px)`
+          }}
+        />
+        {/* Top (3) */}
+        <DiceFace
+          img={images[2]} alt="3"
+          style={{
+            transform: `rotateX(90deg) translateZ(${depth}px)`
+          }}
+        />
+        {/* Bottom (4) */}
+        <DiceFace
+          img={images[3]} alt="4"
+          style={{
+            transform: `rotateX(-90deg) translateZ(${depth}px)`
+          }}
+        />
+      </div>
+
+      {/* local styles for 3D */}
+      <style>{`
+        .preserve-3d { transform-style: preserve-3d; }
+        @keyframes dice-spin {
+          0%   { transform: rotateX(0deg) rotateY(0deg); }
+          25%  { transform: rotateX(90deg) rotateY(0deg); }
+          50%  { transform: rotateX(90deg) rotateY(90deg); }
+          75%  { transform: rotateX(180deg) rotateY(90deg); }
+          100% { transform: rotateX(360deg) rotateY(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function DiceFace({ img, alt, style }) {
+  return (
+    <div
+      className="absolute inset-0 rounded-xl shadow-lg border border-white/10 overflow-hidden"
+      style={{
+        ...style,
+        width: "100%",
+        height: "100%",
+        backgroundImage: `url(${img})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backfaceVisibility: "hidden",
+      }}
+      role="img"
+      aria-label={`Face ${alt}`}
+    />
   );
 }
