@@ -8,6 +8,7 @@ export default function References() {
   const [claiming, setClaiming] = useState(false);
   const [fetchingReferral, setFetchingReferral] = useState(false);
 
+
   const refresh = async () => {
     setLoading(true);
     try {
@@ -70,32 +71,30 @@ export default function References() {
   };
 
   // NEW: Explicit button to send userId and fetch referral info
-  const onGetReferral = async () => {
-    if (fetchingReferral) return;
-    setFetchingReferral(true);
-    try {
-      let uid = auth?.getUserId?.() || '';
-      if (!uid) {
-        await telegramAuth();
-        uid = auth?.getUserId?.() || '';
-      }
-      if (!uid) throw new Error('Not logged in');
 
-      // Optional: show what UID is being sent
-      alert(`User ID being sent to backend: ${uid}`);
-
-      const data = await getReferralsInfo(); // sends x-user-id automatically
-      setInfo(data || {});
-      setMsg('Referral loaded');
-      setTimeout(() => setMsg(''), 1500);
-    } catch (e) {
-      console.error('[refs] Get Referral failed:', e);
-      setMsg(e.message || 'Failed to fetch referral');
-      alert('Failed to fetch referral: ' + (e.message || 'unknown error'));
-    } finally {
-      setFetchingReferral(false);
+const onGetReferral = async () => {
+  if (fetchingReferral) return;
+  setFetchingReferral(true);
+  try {
+    let uid = auth?.getUserId?.() || '';
+    if (!uid) {
+      await telegramAuth();
+      uid = auth?.getUserId?.() || '';
     }
-  };
+    if (!uid) throw new Error('Not logged in');
+
+    alert(`User ID being sent to backend: ${uid}`);
+    const data = await getReferralsInfo(); // now includes header + ?uid= fallback
+    setInfo(data || {});
+    setMsg('Referral loaded');
+    setTimeout(() => setMsg(''), 1500);
+  } catch (e) {
+    console.error('[refs] Get Referral failed:', e);
+    setMsg(e.message || 'Failed to fetch referral');
+  } finally {
+    setFetchingReferral(false);
+  }
+};
 
   // Safe fallbacks so rendering never crashes
   const inviteUrl = info?.inviteUrl || '';
@@ -123,27 +122,27 @@ export default function References() {
         <div className="px-4 pb-8 space-y-6">
           {/* REFERRALS */}
           <section className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Your Referral</h2>
-              <div className="flex items-center gap-2">
-                <span className="text-xs opacity-70">
-                  Reward: {rewardPerBatch} coin every {batchSize} joins
-                </span>
-                {/* NEW: Button to explicitly trigger sending userId and fetching referral */}
-                <button
-                  type="button"
-                  onClick={onGetReferral}
-                  disabled={fetchingReferral}
-                  className={`px-3 py-1.5 rounded-md border text-xs font-medium active:scale-95 ${
-                    fetchingReferral
-                      ? 'bg-white/10 border-white/10 opacity-60 cursor-not-allowed'
-                      : 'bg-white/10 border-white/20'
-                  }`}
-                >
-                  {fetchingReferral ? 'Fetching…' : 'Get Referral'}
-                </button>
-              </div>
-            </div>
+           <div className="flex items-center justify-between">
+  <h2 className="text-lg font-semibold">Your Referral</h2>
+  <div className="flex items-center gap-2">
+    <span className="text-xs opacity-70">
+      Reward: {rewardPerBatch} coin every {batchSize} joins
+    </span>
+    <button
+      type="button"
+      onClick={onGetReferral}
+      disabled={fetchingReferral}
+      className={`px-3 py-1.5 rounded-md border text-xs font-medium active:scale-95 ${
+        fetchingReferral
+          ? 'bg-white/10 border-white/10 opacity-60 cursor-not-allowed'
+          : 'bg-white/10 border-white/20'
+      }`}
+    >
+      {fetchingReferral ? 'Fetching…' : 'Get Referral'}
+    </button>
+  </div>
+</div>
+
 
             <div className="mt-3 grid gap-2">
               <div className="flex items-center justify-between">

@@ -268,10 +268,14 @@ export async function getBalance() {
   return num;                                  // <- ALWAYS a number
 }
 
+// src/api.js
 export async function getReferralsInfo() {
-  // uses BASE_URL and auto-adds x-user-id from localStorage
-  return api("/api/me/referrals");
+  const uid = auth.getUserId?.() || localStorage.getItem('userId') || '';
+  // Include uid in query as a fallback for Telegram webview oddities while debugging
+  const q = uid ? `?uid=${encodeURIComponent(uid)}` : '';
+  return api(`/api/me/referrals${q}`);
 }
+
 
 export async function claimDaily() {
   return api("/api/me/rewards/daily", { method: "POST" });
