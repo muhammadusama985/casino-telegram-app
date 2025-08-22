@@ -243,7 +243,7 @@ export default function SlotBonanza() {
     <button
       onClick={onClick}
       aria-label="Go back"
-      className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-white/10 hover:bg-white/10 active:scale-95 text-white/80"
+      className="inline-flex items-center justify-center w-8 h-8 pr-2 mr-3 rounded-lg border border-white/10 hover:bg-white/10 active:scale-95 text-white/80"
       style={{ background: "rgba(255,255,255,0.04)" }}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
