@@ -2,7 +2,7 @@
 // Central API client for your Telegram Casino frontend (Vite)
 
 // ---------- config ----------
-const BASE_URL = import.meta.env.VITE_API?.replace(/\/+$/, "") || "";
+const BASE_URL = import.meta.env.VITE_API?.replace(/\/+$/, "") || "http://localhost:8080";
 
 // localStorage keys
 const LS_USER_ID = "userId";          // Mongo _id from /auth/login
@@ -50,8 +50,6 @@ async function handle(res) {
 
 // Generic request (exported for one-off calls if needed)
 export async function api(path, { method = "GET", body, headers } = {}) {
-  console.debug('[api] →', (BASE_URL || '(same-origin)') + path, 'uid=', getUserId());
-
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: getHeaders(headers),
@@ -66,18 +64,16 @@ export const auth = {
    * Telegram WebApp login: pass window.Telegram.WebApp.initData (string)
    * Returns user: { _id, tgId, username, photoUrl, coins, wallets }
    */
-  async login(initData, tgProfileCache = null, ref) {
+  async login(initData, tgProfileCache = null) {
     const data = await api("/auth/login", {
       method: "POST",
-      body: { initData, ...(ref ? { ref } : {}) },
+      body: { initData },
     });
+    // Persist Mongo userId for x-user-id header
     setUserId(data._id);
     if (tgProfileCache) setTgProfile(tgProfileCache);
     return data;
   },
-
-
-
 
   logout() {
     setUserId("");
@@ -138,7 +134,7 @@ export const games = {
 
   /** Coinflip: pick 'H' or 'T' */
   // new (accept optional extraInput and merge it):
-  /** Coinflip: pick 'H' or 'T' and pass optional extras (e.g., { streak }) */
+ /** Coinflip: pick 'H' or 'T' and pass optional extras (e.g., { streak }) */
   coinflip(stakeCoins, pick = "H", extraInput = {}) {
     return this.bet({
       game: "coinflip",
@@ -176,10 +172,10 @@ export const games = {
 
 
   /** Crash: choose a cashout multiplier (e.g. 1.8) */
-  /** Crash: choose a cashout multiplier (e.g. 1.8) */
-  crash(stakeCoins, cashoutX = 1.8) {
-    return this.bet({ game: "crash", stakeCoins, input: { cashoutX } });
-  },
+/** Crash: choose a cashout multiplier (e.g. 1.8) */
+crash(stakeCoins, cashoutX = 1.8) {
+  return this.bet({ game: "crash", stakeCoins, input: { cashoutX } });
+},
 
 
   /** Last 100 rounds for the user */
@@ -242,13 +238,8 @@ export async function telegramAuth() {
   const tg = window.Telegram?.WebApp;
   const initData = tg?.initData || "";
 
-  // Prefer ?ref= from URL; fallback to Telegram start_param (Mini App deep link)
-  const refFromUrl = new URLSearchParams(window.location.search).get("ref");
-  const refFromTg = tg?.initDataUnsafe?.start_param;
-  const ref = (refFromUrl || refFromTg || "").trim().toUpperCase() || undefined;
-
   // auth.login sets localStorage userId for x-user-id header
-  const data = await auth.login(initData, tg?.initDataUnsafe?.user || null, ref);
+  const data = await auth.login(initData, tg?.initDataUnsafe?.user || null);
   // Normalize to what MainLayout expects
   return {
     id: data._id,
@@ -268,37 +259,4 @@ export async function getBalance() {
   return num;                                  // <- ALWAYS a number
 }
 
-// export async function getReferralsInfo() {
-//   // uses BASE_URL and auto-adds x-user-id from localStorage
-//   return api("/api/me/referrals");
-// }
-
-export async function claimDaily() {
-  return api("/api/me/rewards/daily", { method: "POST" });
-}
-
-// --- add this helper somewhere near the bottom, before the exports that use it ---
-export async function ensureLoggedIn() {
-  let uid = auth.getUserId?.() || localStorage.getItem('userId') || '';
-  if (!uid) {
-    await telegramAuth();                    // sets localStorage.userId
-    uid = auth.getUserId?.() || localStorage.getItem('userId') || '';
-  }
-  if (!uid) throw new Error('Not logged in');
-  return uid;
-}
-
-// --- replace your current getReferralsInfo() with this version ---
-export async function getReferralsInfo({ debug = false } = {}) {
-  const uid = await ensureLoggedIn();        // ✅ guarantee x-user-id exists
-  const q = `?uid=${encodeURIComponent(uid)}`; // ✅ debug fallback for Telegram/NG
-  const path = `/api/me/referrals${q}`;
-
-  // optional: quick visibility while debugging
-  if (debug || import.meta.env.VITE_DEBUG_ALERT === '1') {
-    alert(`GET ${BASE_URL}${path}\nuid=${uid}`);
-  }
-
-  return api(path); // headers include x-user-id automatically via getHeaders()
-}
 
