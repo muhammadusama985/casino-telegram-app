@@ -52,6 +52,9 @@ async function handle(res) {
 export async function api(path, { method = "GET", body, headers } = {}) {
   console.debug('[api] →', (BASE_URL || '(same-origin)') + path, 'uid=', getUserId());
 
+  const fullUrl = `${BASE_URL}${path}`;
+alert(`Fetching: ${fullUrl}`); // TEMP
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers: getHeaders(headers),
