@@ -377,12 +377,23 @@ export const referrals = {
     const data = await api("/referrals/summary");
     const u = data?.user ? data.user : data || {};
     const link = u.referralLink || u.referralLinkCached || "";
-    return { ...u, referralLink: link }; // always present
+    return { ...u, referralLink: link };
   },
 
-  // optional handy fallback for debugging/mobile
   link() {
     return api("/referrals/link");
+  },
+
+  // NEW: fetch by user id (explicit button flow)
+  async getLink(userId) {
+    console.log('[referrals.getLink] POST /referrals/get-link userId=', userId);
+    const r = await api("/referrals/get-link", {
+      method: "POST",
+      body: { userId },
+    });
+    // normalize shape for UI convenience
+    const link = r?.referralLink || r?.referralLinkCached || "";
+    return { ...r, referralLink: link };
   },
 };
 

@@ -1,6 +1,6 @@
 // src/pages/References.jsx
 import { useEffect, useState } from "react";
-import { referrals, rewards } from "../api";
+import { referrals, rewards, users } from "../api";
 
 export default function References() {
   const [loading, setLoading] = useState(true);
@@ -11,15 +11,9 @@ export default function References() {
   async function load() {
     setError("");
     try {
-      const normalized = await referrals.summary(); // has .referralLink guaranteed
+      // You can still pre-load counts/coins/rewardLog via summary:
+      const normalized = await referrals.summary();
       setSummary(normalized);
-
-      if (!normalized?.referralLink) {
-        alert("No referral link from server (summary/link/me). Check if logged in and x-user-id header is set.");
-      }
-      if (!normalized?.referralCode) {
-        alert("Referral code missing. Make sure backend generates and returns it.");
-      }
     } catch (e) {
       setError("Failed to load referral summary.");
       alert(`Failed to load summary: ${e?.message || "Unknown error"}`);
@@ -59,21 +53,26 @@ export default function References() {
     }
   }
 
-  async function copyLink() {
-    const link = summary?.referralLink || "";
+  async function handleGetLink() {
     try {
-      await navigator.clipboard.writeText(link);
-      alert("Referral link copied!");
-    } catch {
-      // WebView fallback
-      const el = document.createElement("input");
-      el.value = link;
-      document.body.appendChild(el);
-      el.select();
-      el.setSelectionRange(0, 99999);
-      const ok = document.execCommand("copy");
-      document.body.removeChild(el);
-      alert(ok ? "Referral link copied!" : "Could not copy link.");
+      const userId = users.getUserId(); // from localStorage set at /auth/login
+      if (!userId) return alert("Not logged in yet — open via Telegram and let the app log you in first.");
+
+      const r = await referrals.getLink(userId);
+      if (!r?.referralLink) {
+        alert("No referral link returned for your account.");
+      }
+
+      // Merge into summary so the input updates
+      setSummary((prev) => ({
+        ...(prev || {}),
+        referralCode: r?.referralCode || (prev && prev.referralCode),
+        referralLink: r?.referralLink || (prev && prev.referralLink),
+      }));
+
+      alert("Referral link fetched.");
+    } catch (e) {
+      alert(`Get link failed: ${e?.message || "Unknown error"}`);
     }
   }
 
@@ -85,7 +84,7 @@ export default function References() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6">
-      {/* Always-visible debug strip for mobile */}
+      {/* Mobile-visible debug strip */}
       <div className="rounded-lg p-2 text-xs bg-amber-900/40 border border-amber-700/40">
         <div><b>referralCode</b>: {refCode || "(missing)"} </div>
         <div className="break-all"><b>referralLink</b>: {refLink || "(missing)"} </div>
@@ -120,8 +119,9 @@ export default function References() {
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-4">
         <h2 className="text-lg font-semibold">Referrals</h2>
 
-        <div className="text-sm">
-          <div className="opacity-80 mb-1">Your referral link</div>
+        <div className="text-sm space-y-2">
+          <div className="opacity-80">Your referral link</div>
+
           <div className="flex items-center gap-2">
             <input
               readOnly
@@ -129,17 +129,36 @@ export default function References() {
               className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-xs"
             />
             <button
-              onClick={copyLink}
+              onClick={handleGetLink}
+              className="px-3 py-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-xs"
+            >
+              Get referral link
+            </button>
+            <button
+              onClick={async () => {
+                if (!refLink) return alert("No referral link to copy");
+                try {
+                  await navigator.clipboard.writeText(refLink);
+                  alert("Referral link copied!");
+                } catch {
+                  const el = document.createElement("input");
+                  el.value = refLink;
+                  document.body.appendChild(el);
+                  el.select();
+                  el.setSelectionRange(0, 99999);
+                  const ok = document.execCommand("copy");
+                  document.body.removeChild(el);
+                  alert(ok ? "Referral link copied!" : "Could not copy link.");
+                }
+              }}
               className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs"
             >
               Copy
             </button>
           </div>
-          <div className="text-xs opacity-80 mt-2 break-all">
-            {refLink || "(no referral link returned)"}
-          </div>
-          <div className="text-xs opacity-70 mt-1">
-            Share this link. Every 10 joins = +1 coin.
+
+          <div className="text-xs opacity-70">
+            Press “Get referral link” to fetch from the server (uses your cached link in DB).
           </div>
         </div>
 
@@ -181,7 +200,6 @@ export default function References() {
           ))}
         </div>
 
-        {/* On-screen payload inspector (mobile-friendly) */}
         <details className="text-xs opacity-60 mt-3">
           <summary>Debug payload</summary>
           <pre className="whitespace-pre-wrap break-all">
