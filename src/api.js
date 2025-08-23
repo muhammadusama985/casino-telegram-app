@@ -277,7 +277,6 @@
 // }
 
 
-
 // src/api.js
 const BASE_URL = import.meta.env.VITE_API?.replace(/\/+$/, "") || "http://localhost:8080";
 
@@ -362,7 +361,7 @@ export const auth = {
 // ---------- Rewards ----------
 export const rewards = {
   dailyClaim() {
-    console.log('[rewards.dailyClaim] posting /rewards/daily-claim');
+    console.log('[rewards.dailyClaim] POST /rewards/daily-claim');
     return api("/rewards/daily-claim", { method: "POST" });
   },
 };
@@ -417,21 +416,24 @@ export const games = {
 
 // ---------- Users ----------
 export const users = {
+  getUserId,
+  getCachedTelegramProfile() {
+    const raw = localStorage.getItem(LS_TG_PROFILE);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  },
   async me() {
-    const r = await api("/users/me");
+    const r = await api("/users/me"); // -> { user: {...} }
     if (!r?.user) {
       alert('No user in /users/me');
       throw new Error("no-user");
     }
     const u = r.user;
     const link = u.referralLink || u.referralLinkCached || "";
-    return { ...u, referralLink: link }; // always has referralLink
+    return { ...u, referralLink: link }; // always expose referralLink to UI
   },
 };
 
-
 // Helpers
-// in telegramAuth()
 export async function telegramAuth() {
   const tg = window.Telegram?.WebApp;
   const initData = tg?.initData || "";
@@ -446,15 +448,14 @@ export async function telegramAuth() {
     last_name: data.lastName || tg?.initDataUnsafe?.user?.last_name || "",
     photo_url: data.photoUrl || tg?.initDataUnsafe?.user?.photo_url || "",
     coins: data.coins ?? 0,
+
     referralCode: data.referralCode,
-    referralLink: link,                   // ✅ normalized
+    referralLink: link,                         // normalized
     referralLinkCached: data.referralLinkCached,
     referredBy: data.referredBy,
     referralCount: data.referralCount,
   };
 }
-
-
 
 export async function getBalance() {
   const res = await api("/wallet/balance");

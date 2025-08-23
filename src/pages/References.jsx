@@ -15,15 +15,19 @@ export default function References() {
       const data = await referrals.summary();
       console.log('[References] summary loaded (raw):', data);
 
-      // normalize (works for flat or { user: {...} })
+      // normalize: accept flat or { user: {...} }
       const u = data?.user ? data.user : data;
-      setSummary(u);
 
-      if (!u?.referralLink) {
-        console.warn('[References] referralLink missing in payload:', u);
-        alert('Referral link missing in API payload. Check backend returns virtuals.');
+      // prefer virtual; fallback to cached
+      const link = u?.referralLink || u?.referralLinkCached || "";
+
+      setSummary({ ...u, referralLink: link });
+
+      if (!link) {
+        console.warn('[References] no referral link (virtual or cached) in payload:', u);
+        alert('No referral link returned. Check server returns virtuals or cached value.');
       } else {
-        console.log('[References] referralLink =', u.referralLink);
+        console.log('[References] using link:', link);
       }
     } catch (e) {
       console.error('[References] summary failed:', e.status, e.message, e.payload);
@@ -114,7 +118,7 @@ export default function References() {
             <input
               readOnly
               value={summary?.referralLink || ""}
-              className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-xs" // 👈 make text visible
+              className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-xs"
               onClick={() => {
                 console.log('[References] input clicked, value:', summary?.referralLink);
                 if (!summary?.referralLink) alert('Referral link is empty');
@@ -124,12 +128,6 @@ export default function References() {
               Copy
             </button>
           </div>
-
-          {/* Debug: visible fallback so you can see it even if input styling hides it */}
-          <div className="text-xs opacity-80 mt-2 break-all">
-            {summary?.referralLink || '(no referral link returned)'}
-          </div>
-
           <div className="text-xs opacity-70 mt-1">
             Share this link. Every 10 joins = +1 coin.
           </div>
@@ -172,7 +170,7 @@ export default function References() {
           ))}
         </div>
 
-        {/* Optional payload inspector to be 100% sure */}
+        {/* Optional: peek payload */}
         <details className="text-xs opacity-60 mt-3">
           <summary>Debug payload</summary>
           <pre className="whitespace-pre-wrap break-all">{JSON.stringify(summary, null, 2)}</pre>
