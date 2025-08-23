@@ -367,12 +367,25 @@ export const rewards = {
 };
 
 // ---------- Referrals ----------
+// src/api.js
 export const referrals = {
   summary() {
     console.log('[referrals.summary] GET /referrals/summary');
-    return api("/referrals/link");
+    return api("/referrals/summary").then((data) => {
+      // Accept either flat or { user: {...} } just in case
+      const u = data?.user ? data.user : data || {};
+      const link = u.referralLink || u.referralLinkCached || "";
+      if (!link) {
+        console.warn('[referrals.summary] no link in payload:', u);
+        alert('No referral link in /referrals/summary. Check server virtuals/cached.');
+      }
+      const normalized = { ...u, referralLink: link };
+      console.log('[referrals.summary] normalized:', normalized);
+      return normalized;
+    });
   },
 };
+
 
 // ---------- Wallet ----------
 export const wallet = {

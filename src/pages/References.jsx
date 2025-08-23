@@ -11,34 +11,37 @@ export default function References() {
   async function load() {
     setError("");
     try {
-      console.log('[References] loading summary…');
-      const data = await referrals.summary();
-      console.log('[References] summary loaded (raw):', data);
+      console.log("[References] loading summary…");
+      const raw = await referrals.summary();
+      console.log("[References] summary loaded (raw):", raw);
 
-      // normalize: accept flat or { user: {...} }
-      const u = data?.user ? data.user : data;
+      // Normalize: accept flat or { user: {...} }
+      const u = raw?.user ? raw.user : raw || {};
 
-      // prefer virtual; fallback to cached
+      // Prefer live virtual, fallback to cached in DB
       const link = u?.referralLink || u?.referralLinkCached || "";
 
-      setSummary({ ...u, referralLink: link });
+      const normalized = { ...u, referralLink: link };
+      setSummary(normalized);
 
       if (!link) {
-        console.warn('[References] no referral link (virtual or cached) in payload:', u);
-        alert('No referral link returned. Check server returns virtuals or cached value.');
+        console.warn("[References] No referral link (virtual or cached) in payload:", u);
+        alert("No referral link returned by /referrals/summary. Check server virtuals/cached.");
       } else {
-        console.log('[References] using link:', link);
+        console.log("[References] using link:", link);
       }
     } catch (e) {
-      console.error('[References] summary failed:', e.status, e.message, e.payload);
+      console.error("[References] summary failed:", e.status, e.message, e.payload);
       setError("Failed to load referral summary.");
-      alert(`Failed to load summary: ${e.message || 'Unknown error'}`);
+      alert(`Failed to load summary: ${e.message || "Unknown error"}`);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const canClaimToday = (() => {
     if (!summary) return false;
@@ -55,16 +58,18 @@ export default function References() {
   async function handleClaim() {
     setClaiming(true);
     try {
-      console.log('[References] claiming daily…');
+      console.log("[References] claiming daily…");
       const r = await rewards.dailyClaim();
-      console.log('[References] daily claim OK:', r);
+      console.log("[References] daily claim OK:", r);
       alert(`Daily claimed: +${r?.rewardAdded ?? 0} coin`);
       await load();
     } catch (e) {
-      console.error('[References] daily claim failed:', e.status, e.message, e.payload);
-      alert(e?.payload?.error === 'already-claimed-today'
-        ? 'You already claimed today.'
-        : `Daily claim failed: ${e.message || 'Unknown error'}`);
+      console.error("[References] daily claim failed:", e.status, e.message, e.payload);
+      alert(
+        e?.payload?.error === "already-claimed-today"
+          ? "You already claimed today."
+          : `Daily claim failed: ${e.message || "Unknown error"}`
+      );
     } finally {
       setClaiming(false);
     }
@@ -72,13 +77,13 @@ export default function References() {
 
   async function copyLink() {
     const link = summary?.referralLink || "";
-    console.log('[References] copying value:', link);
+    console.log("[References] copying value:", link);
     try {
       await navigator.clipboard.writeText(link);
-      alert('Referral link copied!');
+      alert("Referral link copied!");
     } catch (e) {
-      console.error('[References] copy failed:', e);
-      alert('Could not copy link.');
+      console.error("[References] copy failed:", e);
+      alert("Could not copy link.");
     }
   }
 
@@ -87,10 +92,13 @@ export default function References() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6">
+      {/* Rewards card */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Rewards</h2>
-          <div className="text-sm opacity-80">Balance: <b>{Number(summary.coins).toFixed(2)}</b> coins</div>
+          <div className="text-sm opacity-80">
+            Balance: <b>{Number(summary.coins).toFixed(2)}</b> coins
+          </div>
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -109,6 +117,7 @@ export default function References() {
         </div>
       </div>
 
+      {/* Referrals card */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-4">
         <h2 className="text-lg font-semibold">Referrals</h2>
 
@@ -120,14 +129,23 @@ export default function References() {
               value={summary?.referralLink || ""}
               className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-xs"
               onClick={() => {
-                console.log('[References] input clicked, value:', summary?.referralLink);
-                if (!summary?.referralLink) alert('Referral link is empty');
+                console.log("[References] input clicked, value:", summary?.referralLink);
+                if (!summary?.referralLink) alert("Referral link is empty");
               }}
             />
-            <button onClick={copyLink} className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs">
+            <button
+              onClick={copyLink}
+              className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs"
+            >
               Copy
             </button>
           </div>
+
+          {/* Visible fallback to double-check the value even if input styling fails */}
+          <div className="text-xs opacity-80 mt-2 break-all">
+            {summary?.referralLink || "(no referral link returned)"}
+          </div>
+
           <div className="text-xs opacity-70 mt-1">
             Share this link. Every 10 joins = +1 coin.
           </div>
@@ -152,6 +170,7 @@ export default function References() {
         </div>
       </div>
 
+      {/* Recent reward activity */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
         <h3 className="text-lg font-semibold mb-3">Recent reward activity</h3>
         <div className="space-y-2">
@@ -161,19 +180,23 @@ export default function References() {
           {(summary?.rewardLog || []).map((r, idx) => (
             <div key={idx} className="flex items-center justify-between text-sm">
               <div className="opacity-80">
-                {r.type === 'daily' ? 'Daily login' : 'Referral bonus'}
-                {r?.meta?.blocks ? ` (+${r.meta.blocks} block${r.meta.blocks>1?'s':''})` : ''}
+                {r.type === "daily" ? "Daily login" : "Referral bonus"}
+                {r?.meta?.blocks ? ` (+${r.meta.blocks} block${r.meta.blocks > 1 ? "s" : ""})` : ""}
               </div>
               <div className="font-medium">+{r.amount} coin</div>
-              <div className="text-xs opacity-60">{new Date(r.createdAt).toLocaleString()}</div>
+              <div className="text-xs opacity-60">
+                {new Date(r.createdAt).toLocaleString()}
+              </div>
             </div>
           ))}
         </div>
 
-        {/* Optional: peek payload */}
+        {/* Optional: inspect the payload the UI is using */}
         <details className="text-xs opacity-60 mt-3">
           <summary>Debug payload</summary>
-          <pre className="whitespace-pre-wrap break-all">{JSON.stringify(summary, null, 2)}</pre>
+          <pre className="whitespace-pre-wrap break-all">
+            {JSON.stringify(summary, null, 2)}
+          </pre>
         </details>
       </div>
     </div>
