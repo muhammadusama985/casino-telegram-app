@@ -370,75 +370,22 @@ export const rewards = {
 // src/api.js
 // src/api.js (only this part)
 // src/api.js (replace the referrals export with this)
+// in src/api.js
 export const referrals = {
   async summary() {
-    // Try primary summary
-    const data = await api("/referrals/summary").catch((e) => {
-      // bubble error (handle in summarySmart)
-      throw e;
-    });
-    return data;
+    const data = await api("/referrals/summary");
+    const u = data?.user ? data.user : data || {};
+    const link = u.referralLink || u.referralLinkCached || "";
+    return { ...u, referralLink: link };        // always present
   },
 
-  async link() {
-    // Minimal payload: { referralCode, referralLink, referralLinkCached }
+  // optional handy fallback for debugging/mobile
+  link() {
     return api("/referrals/link");
   },
-
-  /**
-   * Returns a *normalized* object with:
-   *   { referralLink: string, referralCode, referralCount, coins, ... }
-   * Tries /referrals/summary -> /referrals/link -> /users/me
-   * If still no link, synthesizes from code + VITE_BOT_USERNAME (optional).
-   */
-  async summarySmart() {
-    let u = null;
-
-    // 1) /referrals/summary
-    try {
-      const s = await this.summary();
-      const sObj = s?.user ? s.user : s || {};
-      const link = sObj.referralLink || sObj.referralLinkCached || "";
-      u = { ...sObj, referralLink: link };
-    } catch (e) {
-      alert(`summary failed: ${e?.message || 'unknown'}`);
-    }
-
-    // 2) if missing link, try /referrals/link
-    if (!u || !u.referralLink) {
-      try {
-        const l = await this.link();
-        const link2 = l?.referralLink || l?.referralLinkCached || "";
-        u = { ...(u || {}), ...(l || {}), referralLink: link2 || (u && u.referralLink) || "" };
-      } catch (e) {
-        alert(`link failed: ${e?.message || 'unknown'}`);
-      }
-    }
-
-    // 3) if still missing link, try /users/me
-    if (!u || !u.referralLink) {
-      try {
-        const me = await api("/users/me"); // -> { user: {...} }
-        const m = me?.user || {};
-        const link3 = m?.referralLink || m?.referralLinkCached || "";
-        u = { ...(u || {}), ...m, referralLink: link3 || (u && u.referralLink) || "" };
-      } catch (e) {
-        alert(`me failed: ${e?.message || 'unknown'}`);
-      }
-    }
-
-    // 4) (optional) synthesize from code + VITE_BOT_USERNAME if still nothing
-    if (!u?.referralLink) {
-      const code = u?.referralCode;
-      const bot = import.meta.env.VITE_BOT_USERNAME; // add to your frontend .env if you want this
-      if (code && bot) {
-        u = { ...(u || {}), referralLink: `https://t.me/${bot}/app?startapp=${code}` };
-      }
-    }
-
-    return u || {};
-  },
 };
+
+
 
 
 
@@ -486,23 +433,46 @@ export const games = {
 // ---------- Users ----------
 export const users = {
   getUserId,
+
   getCachedTelegramProfile() {
     const raw = localStorage.getItem(LS_TG_PROFILE);
     try { return raw ? JSON.parse(raw) : null; } catch { return null; }
   },
+
+  /**
+   * GET /users/me
+   * Always returns a user object where `referralLink` is guaranteed:
+   *   referralLink := user.referralLink || user.referralLinkCached || ""
+   */
   async me() {
+    // NOTE: requires you already called /auth/login so x-user-id is set
     const r = await api("/users/me"); // -> { user: {...} }
-    if (!r?.user) {
-      alert('No user in /users/me');
+    if (!r || !r.user) {
+      alert("No user in /users/me (are you logged in?)");
       throw new Error("no-user");
     }
-    const u = r.user;
+
+    const u = r.user || {};
     const link = u.referralLink || u.referralLinkCached || "";
-    return { ...u, referralLink: link }; // always expose referralLink to UI
+
+    // optional: quick signal if link is missing
+    if (!link) {
+      // avoid spamming every call; comment this alert out if it’s noisy
+      alert("No referral link in /users/me. Check backend returns virtuals or referralLinkCached.");
+      // fall through; still return the user so UI can render other parts
+    }
+
+    const normalized = { ...u, referralLink: link };
+    // tiny log for mobile visibility (won’t show unless you surface somewhere)
+    try { console.log?.("[api.users.me] normalized:", normalized); } catch {}
+
+    return normalized;
   },
 };
 
+
 // Helpers
+// in src/api.js
 export async function telegramAuth() {
   const tg = window.Telegram?.WebApp;
   const initData = tg?.initData || "";
@@ -517,9 +487,8 @@ export async function telegramAuth() {
     last_name: data.lastName || tg?.initDataUnsafe?.user?.last_name || "",
     photo_url: data.photoUrl || tg?.initDataUnsafe?.user?.photo_url || "",
     coins: data.coins ?? 0,
-
     referralCode: data.referralCode,
-    referralLink: link,                         // normalized
+    referralLink: link,                          // <-- normalized
     referralLinkCached: data.referralLinkCached,
     referredBy: data.referredBy,
     referralCount: data.referralCount,
