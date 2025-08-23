@@ -13,8 +13,18 @@ export default function References() {
     try {
       console.log('[References] loading summary…');
       const data = await referrals.summary();
-      console.log('[References] summary loaded:', data);
-      setSummary(data);
+      console.log('[References] summary loaded (raw):', data);
+
+      // normalize (works for flat or { user: {...} })
+      const u = data?.user ? data.user : data;
+      setSummary(u);
+
+      if (!u?.referralLink) {
+        console.warn('[References] referralLink missing in payload:', u);
+        alert('Referral link missing in API payload. Check backend returns virtuals.');
+      } else {
+        console.log('[References] referralLink =', u.referralLink);
+      }
     } catch (e) {
       console.error('[References] summary failed:', e.status, e.message, e.payload);
       setError("Failed to load referral summary.");
@@ -57,8 +67,10 @@ export default function References() {
   }
 
   async function copyLink() {
+    const link = summary?.referralLink || "";
+    console.log('[References] copying value:', link);
     try {
-      await navigator.clipboard.writeText(summary?.referralLink || "");
+      await navigator.clipboard.writeText(link);
       alert('Referral link copied!');
     } catch (e) {
       console.error('[References] copy failed:', e);
@@ -102,12 +114,22 @@ export default function References() {
             <input
               readOnly
               value={summary?.referralLink || ""}
-              className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-xs"
+              className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-xs" // 👈 make text visible
+              onClick={() => {
+                console.log('[References] input clicked, value:', summary?.referralLink);
+                if (!summary?.referralLink) alert('Referral link is empty');
+              }}
             />
             <button onClick={copyLink} className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs">
               Copy
             </button>
           </div>
+
+          {/* Debug: visible fallback so you can see it even if input styling hides it */}
+          <div className="text-xs opacity-80 mt-2 break-all">
+            {summary?.referralLink || '(no referral link returned)'}
+          </div>
+
           <div className="text-xs opacity-70 mt-1">
             Share this link. Every 10 joins = +1 coin.
           </div>
@@ -149,6 +171,12 @@ export default function References() {
             </div>
           ))}
         </div>
+
+        {/* Optional payload inspector to be 100% sure */}
+        <details className="text-xs opacity-60 mt-3">
+          <summary>Debug payload</summary>
+          <pre className="whitespace-pre-wrap break-all">{JSON.stringify(summary, null, 2)}</pre>
+        </details>
       </div>
     </div>
   );
