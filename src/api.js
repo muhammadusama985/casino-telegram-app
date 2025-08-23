@@ -417,26 +417,28 @@ export const games = {
 
 // ---------- Users ----------
 export const users = {
-  getUserId,
-  getCachedTelegramProfile() {
-    const raw = localStorage.getItem(LS_TG_PROFILE);
-    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
-  },
   async me() {
     const r = await api("/users/me");
     if (!r?.user) {
       alert('No user in /users/me');
       throw new Error("no-user");
     }
-    return r.user;
+    const u = r.user;
+    const link = u.referralLink || u.referralLinkCached || "";
+    return { ...u, referralLink: link }; // always has referralLink
   },
 };
 
+
 // Helpers
+// in telegramAuth()
 export async function telegramAuth() {
   const tg = window.Telegram?.WebApp;
   const initData = tg?.initData || "";
   const data = await auth.login(initData, tg?.initDataUnsafe?.user || null);
+
+  const link = data.referralLink || data.referralLinkCached || "";
+
   return {
     id: data._id,
     username: data.username || tg?.initDataUnsafe?.user?.username || "Guest",
@@ -445,11 +447,14 @@ export async function telegramAuth() {
     photo_url: data.photoUrl || tg?.initDataUnsafe?.user?.photo_url || "",
     coins: data.coins ?? 0,
     referralCode: data.referralCode,
-    referralLink: data.referralLink,
+    referralLink: link,                   // ✅ normalized
+    referralLinkCached: data.referralLinkCached,
     referredBy: data.referredBy,
     referralCount: data.referralCount,
   };
 }
+
+
 
 export async function getBalance() {
   const res = await api("/wallet/balance");
