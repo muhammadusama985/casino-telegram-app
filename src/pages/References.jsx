@@ -12,23 +12,12 @@ export default function References() {
     setError("");
     try {
       console.log("[References] loading summary…");
-      const raw = await referrals.summary();
-      console.log("[References] summary loaded (raw):", raw);
-
-      // Normalize: accept flat or { user: {...} }
-      const u = raw?.user ? raw.user : raw || {};
-
-      // Prefer live virtual, fallback to cached in DB
-      const link = u?.referralLink || u?.referralLinkCached || "";
-
-      const normalized = { ...u, referralLink: link };
+      const normalized = await referrals.summary(); // already normalized with fallback
+      console.log("[References] normalized summary:", normalized);
       setSummary(normalized);
-
-      if (!link) {
-        console.warn("[References] No referral link (virtual or cached) in payload:", u);
-        alert("No referral link returned by /referrals/summary. Check server virtuals/cached.");
-      } else {
-        console.log("[References] using link:", link);
+      if (!normalized?.referralLink) {
+        // only informational; the debug panel below will help
+        alert("Referral link not found in API. Check Network → /referrals/summary response.");
       }
     } catch (e) {
       console.error("[References] summary failed:", e.status, e.message, e.payload);
@@ -39,9 +28,7 @@ export default function References() {
     }
   }
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   const canClaimToday = (() => {
     if (!summary) return false;
@@ -92,12 +79,12 @@ export default function References() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6">
-      {/* Rewards card */}
+      {/* Rewards */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Rewards</h2>
           <div className="text-sm opacity-80">
-            Balance: <b>{Number(summary.coins).toFixed(2)}</b> coins
+            Balance: <b>{Number(summary?.coins || 0).toFixed(2)}</b> coins
           </div>
         </div>
         <div className="flex items-center justify-between gap-3">
@@ -117,7 +104,7 @@ export default function References() {
         </div>
       </div>
 
-      {/* Referrals card */}
+      {/* Referrals */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-4">
         <h2 className="text-lg font-semibold">Referrals</h2>
 
@@ -140,12 +127,6 @@ export default function References() {
               Copy
             </button>
           </div>
-
-          {/* Visible fallback to double-check the value even if input styling fails */}
-          <div className="text-xs opacity-80 mt-2 break-all">
-            {summary?.referralLink || "(no referral link returned)"}
-          </div>
-
           <div className="text-xs opacity-70 mt-1">
             Share this link. Every 10 joins = +1 coin.
           </div>
@@ -170,7 +151,7 @@ export default function References() {
         </div>
       </div>
 
-      {/* Recent reward activity */}
+      {/* Activity + Debug */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
         <h3 className="text-lg font-semibold mb-3">Recent reward activity</h3>
         <div className="space-y-2">
@@ -184,16 +165,14 @@ export default function References() {
                 {r?.meta?.blocks ? ` (+${r.meta.blocks} block${r.meta.blocks > 1 ? "s" : ""})` : ""}
               </div>
               <div className="font-medium">+{r.amount} coin</div>
-              <div className="text-xs opacity-60">
-                {new Date(r.createdAt).toLocaleString()}
-              </div>
+              <div className="text-xs opacity-60">{new Date(r.createdAt).toLocaleString()}</div>
             </div>
           ))}
         </div>
 
-        {/* Optional: inspect the payload the UI is using */}
+        {/* Debug — see exactly what the UI received */}
         <details className="text-xs opacity-60 mt-3">
-          <summary>Debug payload</summary>
+          <summary>Debug payload (what the UI is using)</summary>
           <pre className="whitespace-pre-wrap break-all">
             {JSON.stringify(summary, null, 2)}
           </pre>

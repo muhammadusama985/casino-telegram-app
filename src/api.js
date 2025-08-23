@@ -368,23 +368,55 @@ export const rewards = {
 
 // ---------- Referrals ----------
 // src/api.js
+// src/api.js (only this part)
 export const referrals = {
-  summary() {
+  async summary() {
+    console.log('[referrals.summary] BASE_URL =', BASE_URL);
     console.log('[referrals.summary] GET /referrals/summary');
-    return api("/referrals/summary").then((data) => {
-      // Accept either flat or { user: {...} } just in case
-      const u = data?.user ? data.user : data || {};
-      const link = u.referralLink || u.referralLinkCached || "";
-      if (!link) {
-        console.warn('[referrals.summary] no link in payload:', u);
-        alert('No referral link in /referrals/summary. Check server virtuals/cached.');
+
+    const data = await api("/referrals/summary");
+    console.log('[referrals.summary] raw response:', data);
+
+    // Accept either flat or { user: {...} }
+    let u = data?.user ? data.user : data || {};
+
+    // If the server returned an error payload (but 200), surface it
+    if (u?.error) {
+      console.warn('[referrals.summary] server returned error field:', u.error);
+    }
+
+    // Prefer virtual; fallback to cached
+    let link = u.referralLink || u.referralLinkCached || "";
+
+    if (!link) {
+      console.warn('[referrals.summary] no link in /referrals/summary, trying /users/me fallback…');
+      try {
+        const me = await api("/users/me"); // -> { user: {...} }
+        console.log('[referrals.summary] /users/me raw:', me);
+        const usr = me?.user || {};
+        const alt = usr.referralLink || usr.referralLinkCached || "";
+        if (alt) {
+          link = alt;
+          u = { ...u, ...usr }; // merge any missing fields
+        }
+      } catch (e) {
+        console.error('[referrals.summary] /users/me fallback failed:', e.status, e.message, e.payload);
       }
-      const normalized = { ...u, referralLink: link };
-      console.log('[referrals.summary] normalized:', normalized);
-      return normalized;
-    });
+    }
+
+    const normalized = { ...u, referralLink: link };
+
+    if (!normalized.referralLink) {
+      console.warn('[referrals.summary] STILL no referral link after fallback. Payload:', normalized);
+      // don't alert here; let the page show the debug block
+    } else {
+      console.log('[referrals.summary] using referralLink:', normalized.referralLink);
+    }
+
+    return normalized;
   },
 };
+
 
 
 // ---------- Wallet ----------
