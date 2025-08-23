@@ -371,12 +371,13 @@ export const rewards = {
 // src/api.js (only this part)
 // src/api.js (replace the referrals export with this)
 // in src/api.js
+// ---------- Referrals ----------
 export const referrals = {
   async summary() {
     const data = await api("/referrals/summary");
     const u = data?.user ? data.user : data || {};
     const link = u.referralLink || u.referralLinkCached || "";
-    return { ...u, referralLink: link };        // always present
+    return { ...u, referralLink: link }; // always present
   },
 
   // optional handy fallback for debugging/mobile
@@ -384,6 +385,56 @@ export const referrals = {
     return api("/referrals/link");
   },
 };
+
+// ---------- Users ----------
+export const users = {
+  getUserId,
+
+  getCachedTelegramProfile() {
+    const raw = localStorage.getItem(LS_TG_PROFILE);
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+  },
+
+  async me() {
+    const r = await api("/users/me"); // -> { user: {...} }
+    if (!r || !r.user) {
+      alert("No user in /users/me (are you logged in?)");
+      throw new Error("no-user");
+    }
+    const u = r.user || {};
+    const link = u.referralLink || u.referralLinkCached || "";
+    if (!link) {
+      alert("No referral link in /users/me. Check backend returns virtuals or referralLinkCached.");
+    }
+    const normalized = { ...u, referralLink: link };
+    try { console.log?.("[api.users.me] normalized:", normalized); } catch {}
+    return normalized;
+  },
+};
+
+// Helpers
+export async function telegramAuth() {
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || "";
+  const data = await auth.login(initData, tg?.initDataUnsafe?.user || null);
+
+  const link = data.referralLink || data.referralLinkCached || "";
+
+  return {
+    id: data._id,
+    username: data.username || tg?.initDataUnsafe?.user?.username || "Guest",
+    first_name: data.firstName || tg?.initDataUnsafe?.user?.first_name || "",
+    last_name: data.lastName || tg?.initDataUnsafe?.user?.last_name || "",
+    photo_url: data.photoUrl || tg?.initDataUnsafe?.user?.photo_url || "",
+    coins: data.coins ?? 0,
+    referralCode: data.referralCode,
+    referralLink: link,               // normalized here too
+    referralLinkCached: data.referralLinkCached,
+    referredBy: data.referredBy,
+    referralCount: data.referralCount,
+  };
+}
+
 
 
 
@@ -431,69 +482,18 @@ export const games = {
 };
 
 // ---------- Users ----------
-export const users = {
-  getUserId,
 
-  getCachedTelegramProfile() {
-    const raw = localStorage.getItem(LS_TG_PROFILE);
-    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
-  },
 
   /**
    * GET /users/me
    * Always returns a user object where `referralLink` is guaranteed:
    *   referralLink := user.referralLink || user.referralLinkCached || ""
    */
-  async me() {
-    // NOTE: requires you already called /auth/login so x-user-id is set
-    const r = await api("/users/me"); // -> { user: {...} }
-    if (!r || !r.user) {
-      alert("No user in /users/me (are you logged in?)");
-      throw new Error("no-user");
-    }
-
-    const u = r.user || {};
-    const link = u.referralLink || u.referralLinkCached || "";
-
-    // optional: quick signal if link is missing
-    if (!link) {
-      // avoid spamming every call; comment this alert out if it’s noisy
-      alert("No referral link in /users/me. Check backend returns virtuals or referralLinkCached.");
-      // fall through; still return the user so UI can render other parts
-    }
-
-    const normalized = { ...u, referralLink: link };
-    // tiny log for mobile visibility (won’t show unless you surface somewhere)
-    try { console.log?.("[api.users.me] normalized:", normalized); } catch {}
-
-    return normalized;
-  },
-};
 
 
 // Helpers
 // in src/api.js
-export async function telegramAuth() {
-  const tg = window.Telegram?.WebApp;
-  const initData = tg?.initData || "";
-  const data = await auth.login(initData, tg?.initDataUnsafe?.user || null);
 
-  const link = data.referralLink || data.referralLinkCached || "";
-
-  return {
-    id: data._id,
-    username: data.username || tg?.initDataUnsafe?.user?.username || "Guest",
-    first_name: data.firstName || tg?.initDataUnsafe?.user?.first_name || "",
-    last_name: data.lastName || tg?.initDataUnsafe?.user?.last_name || "",
-    photo_url: data.photoUrl || tg?.initDataUnsafe?.user?.photo_url || "",
-    coins: data.coins ?? 0,
-    referralCode: data.referralCode,
-    referralLink: link,                          // <-- normalized
-    referralLinkCached: data.referralLinkCached,
-    referredBy: data.referredBy,
-    referralCount: data.referralCount,
-  };
-}
 
 export async function getBalance() {
   const res = await api("/wallet/balance");
