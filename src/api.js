@@ -317,7 +317,6 @@ async function handle(res) {
     err.status = res.status;
     err.payload = data;
     console.error('[api.handle] Error:', err.status, err.message, err.payload);
-    alert(`API Error: ${msg}`);
     throw err;
   }
   return data;
@@ -345,14 +344,12 @@ export const auth = {
     });
     setUserId(data._id);
     if (tgProfileCache) setTgProfile(tgProfileCache);
-    alert('Login successful');
     return data;
   },
 
   logout() {
     setUserId("");
     setTgProfile(null);
-    alert('Logged out');
   },
 
   getUserId,
@@ -409,13 +406,11 @@ export const users = {
   async me() {
     const r = await api("/users/me"); // -> { user: {...} }
     if (!r || !r.user) {
-      alert("No user in /users/me (are you logged in?)");
       throw new Error("no-user");
     }
     const u = r.user || {};
     const link = u.referralLink || u.referralLinkCached || "";
     if (!link) {
-      alert("No referral link in /users/me. Check backend returns virtuals or referralLinkCached.");
     }
     const normalized = { ...u, referralLink: link };
     try { console.log?.("[api.users.me] normalized:", normalized); } catch {}
@@ -510,7 +505,6 @@ export async function getBalance() {
   const res = await api("/wallet/balance");
   const num = Number(res?.coins);
   if (!Number.isFinite(num)) {
-    alert('Bad balance from server');
     throw new Error("bad-balance");
   }
   return num;

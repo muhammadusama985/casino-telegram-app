@@ -108,13 +108,7 @@ export default function References() {
       <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 backdrop-blur-sm p-4 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.6)]">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold tracking-tight">Rewards</h2>
-          <div className="text-sm opacity-80">
-            Balance:{" "}
-            <span className="inline-flex items-center gap-1 font-semibold">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              {Number(summary?.coins || 0).toFixed(2)} coins
-            </span>
-          </div>
+          
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -246,13 +240,7 @@ export default function References() {
           ))}
         </div>
 
-        {/* On-screen payload inspector (mobile-friendly) */}
-        <details className="text-xs opacity-60 mt-3">
-          <summary className="cursor-pointer select-none">Debug payload</summary>
-          <pre className="whitespace-pre-wrap break-all mt-2 p-2 rounded bg-zinc-950/60 border border-zinc-800/60">
-            {JSON.stringify(summary || {}, null, 2)}
-          </pre>
-        </details>
+     
       </section>
     </div>
   );
