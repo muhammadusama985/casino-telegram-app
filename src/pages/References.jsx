@@ -16,10 +16,10 @@ export default function References() {
             setSummary(normalized);
 
             // Show quick mobile-friendly alerts when things look off
-            if (!norm?.referralLink) {
+            if (!normalized?.referralLink) {
                 alert("No referral link from server (summary/link/me). Check if logged in and x-user-id header is set.");
             }
-            if (!norm?.referralCode) {
+            if (!normalized?.referralCode) {
                 alert("Referral code missing. Make sure backend generates and returns it.");
             }
         } catch (e) {
