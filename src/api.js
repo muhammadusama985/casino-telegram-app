@@ -370,7 +370,7 @@ export const rewards = {
 export const referrals = {
   summary() {
     console.log('[referrals.summary] GET /referrals/summary');
-    return api("/referrals/summary");
+    return api("/referrals/link");
   },
 };
 
