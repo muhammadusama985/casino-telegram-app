@@ -15,19 +15,15 @@ export default function References() {
       const data = await referrals.summary();
       console.log('[References] summary loaded (raw):', data);
 
-      // normalize shape: flat or { user: {...} }
+      // normalize (works for flat or { user: {...} })
       const u = data?.user ? data.user : data;
+      setSummary(u);
 
-      // 🔑 prefer fresh virtual; fallback to cached-in-DB
-      const link = u?.referralLink || u?.referralLinkCached || "";
-
-      setSummary({ ...u, referralLink: link }); // ensure summary.referralLink is always set
-
-      if (!link) {
-        console.warn('[References] no referral link (virtual or cached) in payload:', u);
-        alert('No referral link returned. Check server returns virtuals or cached value.');
+      if (!u?.referralLink) {
+        console.warn('[References] referralLink missing in payload:', u);
+        alert('Referral link missing in API payload. Check backend returns virtuals.');
       } else {
-        console.log('[References] using link:', link);
+        console.log('[References] referralLink =', u.referralLink);
       }
     } catch (e) {
       console.error('[References] summary failed:', e.status, e.message, e.payload);
@@ -87,7 +83,27 @@ export default function References() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6">
-      {/* Rewards card ... unchanged */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Rewards</h2>
+          <div className="text-sm opacity-80">Balance: <b>{Number(summary.coins).toFixed(2)}</b> coins</div>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm">Daily login reward</div>
+            <div className="text-xs opacity-70">Claim +0.1 coin once per day</div>
+          </div>
+          <button
+            onClick={handleClaim}
+            disabled={!canClaimToday || claiming}
+            className={`px-3 py-2 rounded-lg text-sm ${
+              canClaimToday ? "bg-emerald-600 hover:bg-emerald-500" : "bg-zinc-700 cursor-not-allowed"
+            }`}
+          >
+            {claiming ? "Claiming…" : canClaimToday ? "Claim +0.1" : "Already claimed"}
+          </button>
+        </div>
+      </div>
 
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 space-y-4">
         <h2 className="text-lg font-semibold">Referrals</h2>
@@ -97,19 +113,70 @@ export default function References() {
           <div className="flex items-center gap-2">
             <input
               readOnly
-              value={summary?.referralLink || ""}   // now guaranteed from load()
-              className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-xs"
+              value={summary?.referralLink || ""}
+              className="w-full bg-zinc-800 text-white rounded-lg px-3 py-2 text-xs" // 👈 make text visible
+              onClick={() => {
+                console.log('[References] input clicked, value:', summary?.referralLink);
+                if (!summary?.referralLink) alert('Referral link is empty');
+              }}
             />
             <button onClick={copyLink} className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs">
               Copy
             </button>
           </div>
+
+          {/* Debug: visible fallback so you can see it even if input styling hides it */}
+          <div className="text-xs opacity-80 mt-2 break-all">
+            {summary?.referralLink || '(no referral link returned)'}
+          </div>
+
           <div className="text-xs opacity-70 mt-1">
             Share this link. Every 10 joins = +1 coin.
           </div>
         </div>
 
-        {/* rest of the component unchanged */}
+        <div className="text-sm">
+          <div className="flex items-center justify-between">
+            <div>Referral count</div>
+            <div className="font-semibold">{summary?.referralCount ?? 0}</div>
+          </div>
+          <div className="mt-2">
+            <div className="text-xs opacity-70 mb-1">
+              Next bonus in <b>{summary?.nextBonusIn ?? 10}</b> referrals
+            </div>
+            <div className="h-2 bg-zinc-800 rounded">
+              <div
+                className="h-2 bg-emerald-600 rounded"
+                style={{ width: `${(((summary?.referralCount ?? 0) % 10) / 10) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4">
+        <h3 className="text-lg font-semibold mb-3">Recent reward activity</h3>
+        <div className="space-y-2">
+          {(summary?.rewardLog || []).length === 0 && (
+            <div className="text-sm opacity-70">No rewards yet.</div>
+          )}
+          {(summary?.rewardLog || []).map((r, idx) => (
+            <div key={idx} className="flex items-center justify-between text-sm">
+              <div className="opacity-80">
+                {r.type === 'daily' ? 'Daily login' : 'Referral bonus'}
+                {r?.meta?.blocks ? ` (+${r.meta.blocks} block${r.meta.blocks>1?'s':''})` : ''}
+              </div>
+              <div className="font-medium">+{r.amount} coin</div>
+              <div className="text-xs opacity-60">{new Date(r.createdAt).toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Optional payload inspector to be 100% sure */}
+        <details className="text-xs opacity-60 mt-3">
+          <summary>Debug payload</summary>
+          <pre className="whitespace-pre-wrap break-all">{JSON.stringify(summary, null, 2)}</pre>
+        </details>
       </div>
     </div>
   );
