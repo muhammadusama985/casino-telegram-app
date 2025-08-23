@@ -369,53 +369,77 @@ export const rewards = {
 // ---------- Referrals ----------
 // src/api.js
 // src/api.js (only this part)
+// src/api.js (replace the referrals export with this)
 export const referrals = {
   async summary() {
-    console.log('[referrals.summary] BASE_URL =', BASE_URL);
-    console.log('[referrals.summary] GET /referrals/summary');
+    // Try primary summary
+    const data = await api("/referrals/summary").catch((e) => {
+      // bubble error (handle in summarySmart)
+      throw e;
+    });
+    return data;
+  },
 
-    const data = await api("/referrals/summary");
-    console.log('[referrals.summary] raw response:', data);
+  async link() {
+    // Minimal payload: { referralCode, referralLink, referralLinkCached }
+    return api("/referrals/link");
+  },
 
-    // Accept either flat or { user: {...} }
-    let u = data?.user ? data.user : data || {};
+  /**
+   * Returns a *normalized* object with:
+   *   { referralLink: string, referralCode, referralCount, coins, ... }
+   * Tries /referrals/summary -> /referrals/link -> /users/me
+   * If still no link, synthesizes from code + VITE_BOT_USERNAME (optional).
+   */
+  async summarySmart() {
+    let u = null;
 
-    // If the server returned an error payload (but 200), surface it
-    if (u?.error) {
-      console.warn('[referrals.summary] server returned error field:', u.error);
+    // 1) /referrals/summary
+    try {
+      const s = await this.summary();
+      const sObj = s?.user ? s.user : s || {};
+      const link = sObj.referralLink || sObj.referralLinkCached || "";
+      u = { ...sObj, referralLink: link };
+    } catch (e) {
+      alert(`summary failed: ${e?.message || 'unknown'}`);
     }
 
-    // Prefer virtual; fallback to cached
-    let link = u.referralLink || u.referralLinkCached || "";
-
-    if (!link) {
-      console.warn('[referrals.summary] no link in /referrals/summary, trying /users/me fallback…');
+    // 2) if missing link, try /referrals/link
+    if (!u || !u.referralLink) {
       try {
-        const me = await api("/users/me"); // -> { user: {...} }
-        console.log('[referrals.summary] /users/me raw:', me);
-        const usr = me?.user || {};
-        const alt = usr.referralLink || usr.referralLinkCached || "";
-        if (alt) {
-          link = alt;
-          u = { ...u, ...usr }; // merge any missing fields
-        }
+        const l = await this.link();
+        const link2 = l?.referralLink || l?.referralLinkCached || "";
+        u = { ...(u || {}), ...(l || {}), referralLink: link2 || (u && u.referralLink) || "" };
       } catch (e) {
-        console.error('[referrals.summary] /users/me fallback failed:', e.status, e.message, e.payload);
+        alert(`link failed: ${e?.message || 'unknown'}`);
       }
     }
 
-    const normalized = { ...u, referralLink: link };
-
-    if (!normalized.referralLink) {
-      console.warn('[referrals.summary] STILL no referral link after fallback. Payload:', normalized);
-      // don't alert here; let the page show the debug block
-    } else {
-      console.log('[referrals.summary] using referralLink:', normalized.referralLink);
+    // 3) if still missing link, try /users/me
+    if (!u || !u.referralLink) {
+      try {
+        const me = await api("/users/me"); // -> { user: {...} }
+        const m = me?.user || {};
+        const link3 = m?.referralLink || m?.referralLinkCached || "";
+        u = { ...(u || {}), ...m, referralLink: link3 || (u && u.referralLink) || "" };
+      } catch (e) {
+        alert(`me failed: ${e?.message || 'unknown'}`);
+      }
     }
 
-    return normalized;
+    // 4) (optional) synthesize from code + VITE_BOT_USERNAME if still nothing
+    if (!u?.referralLink) {
+      const code = u?.referralCode;
+      const bot = import.meta.env.VITE_BOT_USERNAME; // add to your frontend .env if you want this
+      if (code && bot) {
+        u = { ...(u || {}), referralLink: `https://t.me/${bot}/app?startapp=${code}` };
+      }
+    }
+
+    return u || {};
   },
 };
+
 
 
 
