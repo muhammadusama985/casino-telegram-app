@@ -24,17 +24,6 @@ function getHeaders(extra = {}) {
   };
 }
 
-async function handle(res) {
-  const text = await res.text();
-  let data;
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-  if (!res.ok) {
-    const msg = data?.error || data?.message || `HTTP ${res.status}`;
-    const err = new Error(msg); err.status = res.status; err.payload = data;
-    throw err;
-  }
-  return data;
-}
 
 export async function api(path, { method = "GET", body, headers } = {}) {
   const url = `${BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
