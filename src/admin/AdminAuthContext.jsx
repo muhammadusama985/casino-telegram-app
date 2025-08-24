@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { adminApi } from './api';
+import { adminApi } from './AdminApi';
 
 const Ctx = createContext(null);
 export const useAdminAuth = () => useContext(Ctx);

@@ -170,6 +170,17 @@ export default function AdminUsers() {
           </button>
         </div>
       )}
+
+      <details className="text-xs opacity-60 mt-3">
+  <summary>Debug</summary>
+  <pre className="whitespace-pre-wrap break-all">
+    {JSON.stringify({
+      base: import.meta.env.VITE_API || "(fallback)",
+      tokenPrefix: localStorage.getItem("adminToken")?.slice(0, 12) || "(none)"
+    }, null, 2)}
+  </pre>
+</details>
+
     </div>
   );
 }
