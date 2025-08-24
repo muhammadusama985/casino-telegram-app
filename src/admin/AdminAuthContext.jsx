@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { adminApi } from './AdminApi';
+import { adminAuth } from './AdminApi';
 
 const Ctx = createContext(null);
 export const useAdminAuth = () => useContext(Ctx);
@@ -10,7 +10,7 @@ export function AdminAuthProvider({ children }) {
 
   async function probe() {
     try {
-      const r = await adminApi.me();
+      const r = await adminAuth.me();
       setAdmin(r?.admin || null);
     } finally {
       setLoading(false);
@@ -20,13 +20,13 @@ export function AdminAuthProvider({ children }) {
   useEffect(() => { probe(); }, []);
 
   async function login(email, password) {
-    await adminApi.login(email, password);
-    const r = await adminApi.me();
+    await adminAuth.login(email, password);
+    const r = await adminAuth.me();
     setAdmin(r?.admin || null);
   }
 
   async function logout() {
-    await adminApi.logout();
+    await adminAuth.logout();
     setAdmin(null);
   }
 
