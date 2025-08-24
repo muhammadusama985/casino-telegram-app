@@ -9,4 +9,10 @@ export default defineConfig({
         react(),
         tailwindcss()
   ],
+  server: {
+    proxy: {
+      '/admin': 'https://b33ff2158e32.ngrok-free.app',
+    }
+  }
+
 })
