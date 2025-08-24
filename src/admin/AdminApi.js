@@ -1,5 +1,7 @@
 // src/admin/adminApi.js
-const BASE = import.meta.env.VITE_API || "https://b33ff2158e32.ngrok-free.app";
+
+const BASE_URL =
+  import.meta.env.VITE_API?.replace(/\/+$/, "") || "https://b33ff2158e32.ngrok-free.app ";
 
 
 // localStorage keys
