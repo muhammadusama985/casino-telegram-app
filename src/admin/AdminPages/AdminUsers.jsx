@@ -182,6 +182,13 @@ export default function AdminUsers() {
           </button>
         </div>
       </div>
+      <details className="text-xs opacity-60 mt-3">
+  <summary>Debug payload</summary>
+  <pre className="whitespace-pre-wrap break-all">
+    {JSON.stringify({ total, page, items }, null, 2)}
+  </pre>
+</details>
+
     </div>
   );
 }

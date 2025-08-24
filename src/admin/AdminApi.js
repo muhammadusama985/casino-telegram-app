@@ -88,6 +88,23 @@ export const adminUsers = {
   },
 };
 
+async function handle(res) {
+  const text = await res.text();
+  let data;
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `HTTP ${res.status}`;
+    // TEMP: surface details while debugging
+    alert(`Admin API error: ${msg}`);
+    const err = new Error(msg);
+    err.status = res.status;
+    err.payload = data;
+    throw err;
+  }
+  return data;
+}
+
+
 export const adminTx = {
   list(params = {}) {
     const qs = new URLSearchParams(params).toString();
