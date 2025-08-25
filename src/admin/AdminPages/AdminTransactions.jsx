@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { adminTx } from "../AdminApi";
 
 export default function AdminTransactions() {
-  const [type, setType] = useState(""); // '', 'deposit', 'bet', 'payout', 'withdrawal'
+  const [type, setType] = useState(""); // '', 'deposit', 'bet', 'withdrawal'
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -17,7 +17,7 @@ export default function AdminTransactions() {
         // pull from gamebets collection (expects backend /admin/bets)
         r = await adminTx.listBets({ page: 1, limit: 50 });
       } else {
-        // deposits / payouts / withdrawals from transactions collection
+        // deposits / withdrawals from transactions collection
         r = await adminTx.list({ type, page: 1, limit: 50 });
       }
       setItems(r.items || []);
@@ -47,7 +47,6 @@ export default function AdminTransactions() {
           <option value="">All</option>
           <option value="deposit">Deposit</option>
           <option value="bet">Bet</option>
-          <option value="payout">Payout</option>
           <option value="withdrawal">Withdrawal</option>
         </select>
       </header>
