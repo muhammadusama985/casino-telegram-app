@@ -7,17 +7,25 @@ export default function AdminTransactions() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  async function load() {
-    setLoading(true); setErr("");
-    try {
-      const r = await adminTx.list({ type, page: 1, limit: 50 });
-      setItems(r.items || []);
-    } catch (e) {
-      setErr(e?.message || "Failed to load");
-    } finally {
-      setLoading(false);
+ async function load() {
+  setLoading(true); setErr("");
+  try {
+    let r;
+    if (type === "bet") {
+      // pull from gamebets collection
+      r = await adminTx.listBets({ page: 1, limit: 50 });
+    } else {
+      // deposits / payouts / withdrawals from transactions collection
+      r = await adminTx.list({ type, page: 1, limit: 50 });
     }
+    setItems(r.items || []);
+  } catch (e) {
+    setErr(e?.message || "Failed to load");
+  } finally {
+    setLoading(false);
   }
+}
+
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [type]);
 

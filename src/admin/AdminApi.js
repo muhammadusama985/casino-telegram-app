@@ -147,7 +147,12 @@ export const adminTx = {
     const qs = new URLSearchParams(params).toString();
     return api(`/admin/transactions${qs ? `?${qs}` : ""}`);
   },
+  listBets(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return api(`/admin/gamebets${qs ? `?${qs}` : ""}`);
+  },
 };
+
 
 // ---------- GAMES / RTP ----------
 export const adminGames = {
