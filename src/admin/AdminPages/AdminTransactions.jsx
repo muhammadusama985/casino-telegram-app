@@ -43,7 +43,8 @@ export default function AdminTransactions() {
           <thead className="bg-zinc-900/70">
             <tr className="[&>th]:text-left [&>th]:px-3 [&>th]:py-2">
               <th>When</th>
-              <th>User</th>
+              <th>User Id</th>
+              <th>User Name</th>
               <th>Type</th>
               <th>Direction</th>
               <th>Amount</th>
