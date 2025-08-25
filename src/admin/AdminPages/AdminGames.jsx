@@ -1,50 +1,56 @@
+import { useState } from "react";
+import { api as adminApi } from "../AdminApi";
+
 export default function AdminGames() {
+  const [game, setGame] = useState("coinflip");
+  const [rtp, setRtp] = useState("0.90");
+  const [userId, setUserId] = useState("");
+
+  async function save(scope) {
+    const payload = { scope, game, targetRTP: Number(rtp) };
+    if (scope === "user") payload.userId = userId.trim();
+    try {
+      await adminApi("/admin/rtp", { method: "POST", body: payload });
+      alert("Saved!");
+    } catch (e) {
+      alert(e?.message || "Failed");
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Game Settings</h1>
-        <p className="text-sm opacity-70">RTP, bet limits, enable/disable per game.</p>
-      </header>
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold">Game Settings / RTP</h1>
 
-      <section className="grid gap-3 lg:grid-cols-2">
-        {["coinflip","dice","slot","crash"].map((g) => (
-          <div key={g} className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="font-medium uppercase">{g}</div>
-              <label className="text-xs flex items-center gap-2">
-                <span>Enabled</span>
-                <input type="checkbox" className="accent-emerald-500" defaultChecked />
-              </label>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <div className="text-xs opacity-70 mb-1">Target RTP</div>
-                <input className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" placeholder="0.90" />
-              </div>
-              <div>
-                <div className="text-xs opacity-70 mb-1">Max Stake</div>
-                <input className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" placeholder="100000" />
-              </div>
-              <div>
-                <div className="text-xs opacity-70 mb-1">Min Stake</div>
-                <input className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-sm" placeholder="1" />
-              </div>
-              <div className="flex items-end">
-                <button className="w-full px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm">
-                  Save
-                </button>
-              </div>
-            </div>
-
-            {g === "dice" && (
-              <div className="text-xs opacity-70">
-                For new dice, payout% and streak boost are also available in config (wire later).
-              </div>
-            )}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-zinc-800 p-4 space-y-3">
+          <h2 className="font-semibold">Global RTP</h2>
+          <div className="flex gap-2">
+            <select value={game} onChange={(e)=>setGame(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2">
+              <option value="coinflip">coinflip</option>
+              <option value="dice">dice</option>
+              <option value="slot">slot</option>
+              <option value="crash">crash</option>
+            </select>
+            <input value={rtp} onChange={(e)=>setRtp(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 w-24" />
+            <button onClick={()=>save("game")} className="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500">Save</button>
           </div>
-        ))}
-      </section>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 p-4 space-y-3">
+          <h2 className="font-semibold">Per-user RTP</h2>
+          <input value={userId} onChange={(e)=>setUserId(e.target.value)} placeholder="User ID" className="w-full bg-zinc-900 border border-zinc-800 rounded px-3 py-2" />
+          <div className="flex gap-2">
+            <select value={game} onChange={(e)=>setGame(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2">
+              <option value="coinflip">coinflip</option>
+              <option value="dice">dice</option>
+              <option value="slot">slot</option>
+              <option value="crash">crash</option>
+            </select>
+            <input value={rtp} onChange={(e)=>setRtp(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 w-24" />
+            <button onClick={()=>save("user")} className="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500">Save</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
