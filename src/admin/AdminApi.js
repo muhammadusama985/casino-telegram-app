@@ -55,27 +55,43 @@ export const adminAuth = {
   logout() { setAdminToken(""); },
 };
 
+// src/admin/AdminApi.js (exported next to adminAuth)
 export const adminUsers = {
-  list(params = {}) {
-    const qs = new URLSearchParams(params).toString();
-    return api(`/admin/users${qs ? `?${qs}` : ""}`);
+  /**
+   * List users with optional search + pagination.
+   * @param {Object} params
+   * @param {string} [params.query=""] - search across username, firstName, lastName, tgId, referralCode
+   * @param {number} [params.page=1]   - 1-based page index
+   * @param {number} [params.limit=20] - page size (<=100)
+   */
+  async list(params = {}) {
+    const query = params.query ?? "";
+    const page  = Number.isFinite(params.page)  ? params.page  : 1;
+    const limit = Number.isFinite(params.limit) ? params.limit : 20;
+
+    const qs = new URLSearchParams({ query, page: String(page), limit: String(limit) }).toString();
+    return api(`/admin/users?${qs}`);
   },
+
   adjustBalance({ userId, delta, reason }) {
     return api(`/admin/users/${userId}/balance`, {
       method: "POST",
       body: { delta, reason },
     });
   },
-  ban({ userId, is }) {
+
+  ban({ userId, is, reason = "" }) {
     return api(`/admin/users/${userId}/ban`, {
       method: "POST",
-      body: { is },
+      body: { is, reason },
     });
   },
+
   logs({ userId, limit = 50 }) {
     return api(`/admin/users/${userId}/logs?limit=${limit}`);
   },
 };
+
 
 async function handle(res) {
   const text = await res.text();
