@@ -62,6 +62,12 @@ export default function AdminTransactions() {
               <tr key={t._id} className="[&>td]:px-3 [&>td]:py-2">
                 <td className="opacity-80">{new Date(t.createdAt).toLocaleString()}</td>
                 <td className="text-xs">{t.userId}</td>
+                <td className="text-xs">
+                  {t.firstName && t.lastName
+                    ? `${t.firstName} ${t.lastName}`
+                    : t.userId}
+                </td>
+
                 <td>{t.type}</td>
                 <td>{t.direction}</td>
                 <td>{t.amount}</td>
