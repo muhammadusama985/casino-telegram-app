@@ -1,56 +1,60 @@
 // src/admin/AdminApi.js
 
+// --- Base URL from env (no trailing slash). Fallback to your ngrok tunnel.
 const BASE_URL =
-  import.meta.env.VITE_API?.replace(/\/+$/, "") || "https://b33ff2158e32.ngrok-free.app";
+  (import.meta.env.VITE_API ? import.meta.env.VITE_API.replace(/\/+$/, "") : "") ||
+  "https://b33ff2158e32.ngrok-free.app";
+
+// Detect if we're talking to an ngrok URL (so we can skip the warning page)
+const IS_NGROK = BASE_URL.includes("ngrok");
 
 const LS_ADMIN_TOKEN = "adminToken";
 
+// ---------- token helpers ----------
 export function getAdminToken() {
   return localStorage.getItem(LS_ADMIN_TOKEN) || "";
 }
 export function setAdminToken(t) {
-  if (!t) {
-    localStorage.removeItem(LS_ADMIN_TOKEN);
-  } else {
-    localStorage.setItem(LS_ADMIN_TOKEN, t);
-    // 🔔 Alert once when the token is stored
-    alert("🔑 Admin token saved in localStorage:\n\n" + t);
-    console.log("[AdminAPI] token saved:", t);
-  }
+  if (!t) localStorage.removeItem(LS_ADMIN_TOKEN);
+  else localStorage.setItem(LS_ADMIN_TOKEN, t);
 }
 
-// ---- DEBUG FLAGS (so we don’t alert a thousand times) ----
-let __lastTokenShown = null;
-
+// ---------- headers ----------
 function getHeaders(extra = {}) {
   const token = getAdminToken();
+
   const headers = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...extra,
   };
 
-  if (token && token !== __lastTokenShown) {
-    __lastTokenShown = token;
-    // 🔔 Alert whenever token is actually attached to a request
-    alert("🚀 Sending request with token:\n\n" + token);
-    console.log("[AdminAPI] attaching Authorization header:", "Bearer " + token);
-  }
+  // For ngrok, bypass the browser interstitial
+  if (IS_NGROK) headers["ngrok-skip-browser-warning"] = "1";
 
-  if (!token) {
-    console.warn("[AdminAPI] no admin token present; /admin/* calls will 401.");
+  // TEMP: show token once per reload (helps confirm it's sent)
+  if (token && !window.__ADMIN_TOKEN_ALERTED__) {
+    window.__ADMIN_TOKEN_ALERTED__ = true;
+    alert(`Admin token (first 20 chars): ${token.slice(0, 20)}…`);
   }
 
   return headers;
 }
 
+// ---------- response handler ----------
 async function handle(res) {
   const text = await res.text();
   let data;
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+
   if (!res.ok) {
     const msg = data?.error || data?.message || `HTTP ${res.status}`;
-    alert(`❌ Admin API error: ${msg}`);
+    // TEMP while debugging:
+    alert(`Admin API error: ${msg}`);
     const err = new Error(msg);
     err.status = res.status;
     err.payload = data;
@@ -59,24 +63,25 @@ async function handle(res) {
   return data;
 }
 
+// ---------- generic API wrapper ----------
 export async function api(path, { method = "GET", body, headers } = {}) {
-  const url = `${BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
-  const hdrs = getHeaders(headers);
+  // Ensure leading slash in path
+  const p = path.startsWith("/") ? path : `/${path}`;
 
-  console.log("[AdminAPI] fetch", method, url, {
-    hasAuth: !!hdrs.Authorization,
-    body,
-  });
+  // For ngrok, add the skip param too (belt & suspenders)
+  const url = IS_NGROK
+    ? `${BASE_URL}${p}${p.includes("?") ? "&" : "?"}ngrok-skip-browser-warning=1`
+    : `${BASE_URL}${p}`;
 
   const res = await fetch(url, {
     method,
-    headers: hdrs,
+    headers: getHeaders(headers),
     body: body ? JSON.stringify(body) : undefined,
   });
   return handle(res);
 }
 
-// ---- auth ----
+// ---------- AUTH ----------
 export const adminAuth = {
   async login(password) {
     const email = import.meta.env.VITE_ADMIN_EMAIL || "admin@casino.local";
@@ -85,41 +90,58 @@ export const adminAuth = {
       body: { email, password },
     });
     if (!r?.token) throw new Error("no-token");
-    setAdminToken(r.token); // 🔔 this will alert the token saved
+    setAdminToken(r.token);
     return r;
   },
   async me() {
-    return api("/admin/me"); // backend must have this route
+    return api("/admin/me"); // make sure your backend exposes this behind requireAdmin
   },
-  logout() { setAdminToken(""); },
+  logout() {
+    setAdminToken("");
+  },
 };
 
-// ---- users ----
+// ---------- USERS ----------
 export const adminUsers = {
+  /**
+   * List users with optional search + pagination.
+   * @param {Object} params
+   * @param {string} [params.query=""]
+   * @param {number} [params.page=1]
+   * @param {number} [params.limit=20]
+   */
   async list(params = {}) {
     const query = params.query ?? "";
-    const page  = Number.isFinite(params.page)  ? params.page  : 1;
+    const page = Number.isFinite(params.page) ? params.page : 1;
     const limit = Number.isFinite(params.limit) ? params.limit : 20;
-    const qs = new URLSearchParams({ query, page: String(page), limit: String(limit) }).toString();
+    const qs = new URLSearchParams({
+      query,
+      page: String(page),
+      limit: String(limit),
+    }).toString();
     return api(`/admin/users?${qs}`);
   },
+
   adjustBalance({ userId, delta, reason }) {
     return api(`/admin/users/${userId}/balance`, {
       method: "POST",
       body: { delta, reason },
     });
   },
+
   ban({ userId, is, reason = "" }) {
     return api(`/admin/users/${userId}/ban`, {
       method: "POST",
       body: { is, reason },
     });
   },
+
   logs({ userId, limit = 50 }) {
     return api(`/admin/users/${userId}/logs?limit=${limit}`);
   },
 };
 
+// ---------- TRANSACTIONS ----------
 export const adminTx = {
   list(params = {}) {
     const qs = new URLSearchParams(params).toString();
@@ -127,14 +149,18 @@ export const adminTx = {
   },
 };
 
+// ---------- GAMES / RTP ----------
 export const adminGames = {
-  getAll() { return api(`/admin/games`); },
+  getAll() {
+    return api(`/admin/games`);
+  },
   save(game, payload) {
     return api(`/admin/games/${game}`, { method: "POST", body: payload });
   },
   toggle(game, enabled) {
     return api(`/admin/games/${game}/toggle`, {
-      method: "POST", body: { enabled },
+      method: "POST",
+      body: { enabled },
     });
   },
 };
