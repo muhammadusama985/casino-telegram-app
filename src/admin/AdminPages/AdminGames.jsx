@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { adminRTP } from "../AdminApi"; // ⬅️ use the dedicated RTP API
+import { api as adminApi } from "../AdminApi";
 
 export default function AdminGames() {
   const [game, setGame] = useState("coinflip");
@@ -7,24 +7,10 @@ export default function AdminGames() {
   const [userId, setUserId] = useState("");
 
   async function save(scope) {
-    // validate RTP
-    const r = Number(rtp);
-    if (!Number.isFinite(r) || r < 0.5 || r > 0.99) {
-      alert("Enter a valid RTP between 0.50 and 0.99");
-      return;
-    }
-
+    const payload = { scope, game, targetRTP: Number(rtp) };
+    if (scope === "user") payload.userId = userId.trim();
     try {
-      if (scope === "user") {
-        const uid = userId.trim();
-        if (!uid) {
-          alert("Enter a User ID for per-user RTP");
-          return;
-        }
-        await adminRTP.setUser(uid, game, r);
-      } else {
-        await adminRTP.setGlobal(game, r);
-      }
+      await adminApi("/admin/rtp", { method: "POST", body: payload });
       alert("Saved!");
     } catch (e) {
       alert(e?.message || "Failed");
