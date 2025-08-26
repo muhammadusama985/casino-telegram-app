@@ -168,4 +168,24 @@ export const adminGames = {
       body: { enabled },
     });
   },
+
+    list() {
+    return api("/admin/rtp");
+  },
+
+  // Set global RTP for a game
+  setGlobal(game, targetRTP) {
+    return api("/admin/rtp", {
+      method: "POST",
+      body: { scope: "game", game, targetRTP },
+    });
+  },
+
+  // Set per-user RTP override
+  setUser(userId, game, targetRTP) {
+    return api("/admin/rtp", {
+      method: "POST",
+      body: { scope: "user", userId, game, targetRTP },
+    });
+  },
 };
