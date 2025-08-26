@@ -2,13 +2,32 @@ import { useState } from "react";
 import { api as adminApi } from "../AdminApi";
 
 export default function AdminGames() {
-  const [game, setGame] = useState("coinflip");
-  const [rtp, setRtp] = useState("0.90");
-  const [userId, setUserId] = useState("");
+  // separate state for GLOBAL
+  const [globalGame, setGlobalGame] = useState("coinflip");
+  const [globalRtp, setGlobalRtp]   = useState("0.90");
 
-  async function save(scope) {
-    const payload = { scope, game, targetRTP: Number(rtp) };
-    if (scope === "user") payload.userId = userId.trim();
+  // separate state for PER-USER
+  const [userGame, setUserGame] = useState("coinflip");
+  const [userRtp, setUserRtp]   = useState("0.90");
+  const [userId, setUserId]     = useState("");
+
+  async function saveGlobal() {
+    const payload = { scope: "game", game: globalGame, targetRTP: Number(globalRtp) };
+    try {
+      await adminApi("/admin/rtp", { method: "POST", body: payload });
+      alert("Saved!");
+    } catch (e) {
+      alert(e?.message || "Failed");
+    }
+  }
+
+  async function saveUser() {
+    const payload = {
+      scope: "user",
+      game: userGame,
+      targetRTP: Number(userRtp),
+      userId: userId.trim(),
+    };
     try {
       await adminApi("/admin/rtp", { method: "POST", body: payload });
       alert("Saved!");
@@ -27,8 +46,8 @@ export default function AdminGames() {
           <h2 className="font-semibold">Global RTP</h2>
           <div className="flex gap-2">
             <select
-              value={game}
-              onChange={(e) => setGame(e.target.value)}
+              value={globalGame}
+              onChange={(e) => setGlobalGame(e.target.value)}
               className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-gray-100"
             >
               <option value="coinflip">coinflip</option>
@@ -38,14 +57,14 @@ export default function AdminGames() {
             </select>
 
             <input
-              value={rtp}
-              onChange={(e) => setRtp(e.target.value)}
+              value={globalRtp}
+              onChange={(e) => setGlobalRtp(e.target.value)}
               placeholder="0.90"
               className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 w-24 text-gray-100 placeholder-gray-400"
             />
 
             <button
-              onClick={() => save("game")}
+              onClick={saveGlobal}
               className="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500"
             >
               Save
@@ -66,8 +85,8 @@ export default function AdminGames() {
 
           <div className="flex gap-2">
             <select
-              value={game}
-              onChange={(e) => setGame(e.target.value)}
+              value={userGame}
+              onChange={(e) => setUserGame(e.target.value)}
               className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-gray-100"
             >
               <option value="coinflip">coinflip</option>
@@ -77,14 +96,14 @@ export default function AdminGames() {
             </select>
 
             <input
-              value={rtp}
-              onChange={(e) => setRtp(e.target.value)}
+              value={userRtp}
+              onChange={(e) => setUserRtp(e.target.value)}
               placeholder="0.90"
               className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 w-24 text-gray-100 placeholder-gray-400"
             />
 
             <button
-              onClick={() => save("user")}
+              onClick={saveUser}
               className="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500"
             >
               Save
@@ -93,7 +112,7 @@ export default function AdminGames() {
         </div>
       </div>
 
-      {/* Make the native dropdown menu readable on dark themes */}
+      {/* readable native dropdown on dark themes */}
       <style>{`
         select option {
           background-color: #18181b; /* zinc-900 */
