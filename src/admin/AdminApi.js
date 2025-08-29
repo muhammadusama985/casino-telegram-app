@@ -225,6 +225,7 @@ export const adminGames = {
 
 
 // ---------- NOTIFICATIONS ----------
+// ---------- NOTIFICATIONS ----------
 export const adminNotifications = {
   send({ segment, title, body }) {
     return api('/admin/notifications', { method: 'POST', body: { segment, title, body } });
@@ -233,6 +234,8 @@ export const adminNotifications = {
     return api(`/admin/notifications/${id}`);
   },
 };
+
+
 
 
 
