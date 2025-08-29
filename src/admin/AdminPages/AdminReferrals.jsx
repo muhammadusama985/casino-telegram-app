@@ -36,23 +36,6 @@ export default function AdminReferrals() {
 
   useEffect(() => { load(); loadTop(); /* eslint-disable-next-line */ }, []);
 
-  async function handleExport() {
-    try {
-      const csv = await adminReferrals.exportCSV({ query });
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "referrals.csv";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      alert(e?.message || "Export failed");
-    }
-  }
-
   return (
     <div className="space-y-6">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
@@ -74,12 +57,7 @@ export default function AdminReferrals() {
           >
             Search
           </button>
-          <button
-            onClick={handleExport}
-            className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
-          >
-            Export CSV
-          </button>
+          {/* Export button removed */}
         </div>
       </header>
 
