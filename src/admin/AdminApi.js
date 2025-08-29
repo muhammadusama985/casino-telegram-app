@@ -221,3 +221,15 @@ export const adminGames = {
     });
   },
 };
+
+
+// ---------- NOTIFICATIONS ----------
+export const adminNotifications = {
+  send({ segment, title, body }) {
+    return api('/admin/notifications', { method: 'POST', body: { segment, title, body } });
+  },
+  status(id) {
+    return api(`/admin/notifications/${id}`);
+  },
+};
+
