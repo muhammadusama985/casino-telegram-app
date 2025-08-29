@@ -1,10 +1,12 @@
 // src/admin/AdminPages/AdminReferrals.jsx
 import { useEffect, useState } from "react";
-import { adminReferrals, adminUsers } from "../AdminApi";
+import { adminReferrals } from "../AdminApi";
 
 export default function AdminReferrals() {
   const [items, setItems] = useState([]);
+  const [topItems, setTopItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingTop, setLoadingTop] = useState(true);
   const [err, setErr] = useState("");
   const [query, setQuery] = useState("");
 
@@ -20,12 +22,23 @@ export default function AdminReferrals() {
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  async function loadTop() {
+    setLoadingTop(true);
+    try {
+      const r = await adminReferrals.top({ limit: 50 }); // backend: GET /admin/referrals/top
+      setTopItems(r.items || []);
+    } catch {
+      // silent; we still show the main table
+    } finally {
+      setLoadingTop(false);
+    }
+  }
+
+  useEffect(() => { load(); loadTop(); /* eslint-disable-next-line */ }, []);
 
   async function handleExport() {
     try {
       const csv = await adminReferrals.exportCSV({ query });
-      // download as file
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -40,20 +53,6 @@ export default function AdminReferrals() {
     }
   }
 
-  async function handleEditBonus(u) {
-    const val = prompt(`Add coins to ${u.displayName} (can be negative):`, "1");
-    if (val == null) return;
-    const delta = Number(val);
-    if (!Number.isFinite(delta) || delta === 0) return alert("Enter a non-zero number.");
-    try {
-      await adminUsers.adjustBalance({ userId: u._id, delta, reason: "manual referral bonus" });
-      alert("Updated.");
-      load();
-    } catch (e) {
-      alert(e?.message || "Failed to update");
-    }
-  }
-
   return (
     <div className="space-y-6">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
@@ -63,7 +62,6 @@ export default function AdminReferrals() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* readable input on dark bg */}
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -85,6 +83,7 @@ export default function AdminReferrals() {
         </div>
       </header>
 
+      {/* All referrers (searchable) */}
       <div className="rounded-xl border border-zinc-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-zinc-900/70">
@@ -93,15 +92,14 @@ export default function AdminReferrals() {
               <th>Referrals</th>
               <th>Coins Awarded</th>
               <th>Last Activity</th>
-              <th className="w-40">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800">
             {loading && (
-              <tr><td colSpan={5} className="px-3 py-6 text-center opacity-70">Loading…</td></tr>
+              <tr><td colSpan={4} className="px-3 py-6 text-center opacity-70">Loading…</td></tr>
             )}
             {!loading && items.length === 0 && (
-              <tr><td colSpan={5} className="px-3 py-6 text-center opacity-70">No results.</td></tr>
+              <tr><td colSpan={4} className="px-3 py-6 text-center opacity-70">No results.</td></tr>
             )}
 
             {!loading && items.map((u) => (
@@ -113,19 +111,49 @@ export default function AdminReferrals() {
                 <td>{u.referralCount ?? 0}</td>
                 <td>{(u.coinsAwarded ?? 0).toFixed(4)}</td>
                 <td>{u.lastActivity ? new Date(u.lastActivity).toLocaleString() : "—"}</td>
-                <td>
-                  <button
-                    onClick={() => handleEditBonus(u)}
-                    className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500"
-                  >
-                    Edit Bonus
-                  </button>
-                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Top Referrers (no edits) */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Top Referrers</h2>
+        <div className="rounded-xl border border-zinc-800 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-900/70">
+              <tr className="[&>th]:text-left [&>th]:px-3 [&>th]:py-2">
+                <th>User</th>
+                <th>Referrals</th>
+                <th>Coins</th>
+                <th>Joined</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800">
+              {loadingTop && (
+                <tr><td colSpan={4} className="px-3 py-6 text-center opacity-70">Loading…</td></tr>
+              )}
+              {!loadingTop && topItems.length === 0 && (
+                <tr><td colSpan={4} className="px-3 py-6 text-center opacity-70">No referrers yet.</td></tr>
+              )}
+              {!loadingTop && topItems.map((u) => (
+                <tr key={u._id} className="[&>td]:px-3 [&>td]:py-2">
+                  <td className="text-sm">
+                    <div className="font-medium">
+                      {u.username ? `@${u.username}` : (u.firstName || u.lastName ? `${u.firstName || ""} ${u.lastName || ""}`.trim() : u._id)}
+                    </div>
+                    <div className="opacity-70 text-xs">{u.referralCode ? `code: ${u.referralCode}` : "—"}</div>
+                  </td>
+                  <td>{u.referralCount ?? 0}</td>
+                  <td>{Number(u.coins ?? 0).toFixed(4)}</td>
+                  <td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {err && <div className="text-sm text-red-400">{err}</div>}
     </div>

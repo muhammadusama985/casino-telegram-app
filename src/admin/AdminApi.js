@@ -154,23 +154,22 @@ export const adminUsers = {
 };
 
 // --- at bottom of file ---
+// in src/admin/AdminApi.js
 export const adminReferrals = {
-  async list(params = {}) {
+  list(params = {}) {
     const qs = new URLSearchParams(params).toString();
-    return api(`/admin/referrals/list${qs ? `?${qs}` : ""}`);
+    return api(`/admin/referrals${qs ? `?${qs}` : ""}`);
   },
-  async exportCSV(params = {}) {
+  exportCSV(params = {}) {
     const qs = new URLSearchParams(params).toString();
-    // fetch raw text (CSV)
-    const p = `/admin/referrals/export${qs ? `?${qs}` : ""}`;
-    const res = await fetch(
-      ( (import.meta.env.VITE_API?.replace(/\/+$/, "") || "") + p ),
-      { headers: getHeaders(), method: "GET" }
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.text();
+    return api(`/admin/referrals/export${qs ? `?${qs}` : ""}`);
+  },
+  top(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return api(`/admin/referrals/top${qs ? `?${qs}` : ""}`);
   },
 };
+
 
 
 // ---------- TRANSACTIONS ----------
