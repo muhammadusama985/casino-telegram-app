@@ -23,7 +23,7 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[240px_1fr]">
       <aside className="hidden lg:block border-r border-zinc-800 p-4 space-y-2">
-        <div className="text-lg font-semibold text-white mb-2">Admin</div>
+        <div className="text-lg font-semibold mb-2 text-black">Admin</div>
         <nav className="space-y-1">
           {nav.map((n) => (
             <NavLink
@@ -33,8 +33,8 @@ export default function AdminLayout() {
               className={({ isActive }) =>
                 `block px-3 py-2 rounded-lg text-sm ${
                   isActive
-                    ? "bg-zinc-800 text-white"
-                    : "hover:bg-zinc-900 text-zinc-300"
+                    ? "bg-zinc-800 text-white" // active = white text
+                    : "hover:bg-zinc-900 text-black" // default = black text
                 }`
               }
             >
@@ -53,7 +53,7 @@ export default function AdminLayout() {
       <main className="min-h-screen">
         {/* Topbar (mobile) */}
         <div className="lg:hidden border-b border-zinc-800 p-3 flex items-center justify-between">
-          <div className="font-semibold text-white">Admin</div>
+          <div className="font-semibold text-black">Admin</div>
           <button
             onClick={logout}
             className="px-3 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs text-white"
