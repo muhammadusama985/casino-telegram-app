@@ -153,6 +153,26 @@ export const adminUsers = {
   },
 };
 
+// --- at bottom of file ---
+export const adminReferrals = {
+  async list(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    return api(`/admin/referrals/list${qs ? `?${qs}` : ""}`);
+  },
+  async exportCSV(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    // fetch raw text (CSV)
+    const p = `/admin/referrals/export${qs ? `?${qs}` : ""}`;
+    const res = await fetch(
+      ( (import.meta.env.VITE_API?.replace(/\/+$/, "") || "") + p ),
+      { headers: getHeaders(), method: "GET" }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.text();
+  },
+};
+
+
 // ---------- TRANSACTIONS ----------
 export const adminTx = {
   list(params = {}) {
