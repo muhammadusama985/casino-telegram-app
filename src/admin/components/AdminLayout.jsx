@@ -10,7 +10,6 @@ const nav = [
   { to: "/admin/bonuses", label: "Bonuses" },
   { to: "/admin/referrals", label: "Referrals" },
   { to: "/admin/notifications", label: "Notifications" },
-  { to: "/admin/security", label: "Security" },
 ];
 
 export default function AdminLayout() {
