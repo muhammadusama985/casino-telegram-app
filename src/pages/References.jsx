@@ -8,9 +8,6 @@ export default function References() {
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState("");
 
-  // 🔹 NEW: live daily bonus amount from backend
-  const [dailyBonusCoins, setDailyBonusCoins] = useState(null);
-
   async function load() {
     setError("");
     try {
@@ -26,25 +23,6 @@ export default function References() {
   }
 
   useEffect(() => { load(); }, []);
-
-  // 🔹 Fetch the live daily bonus config once on mount
-  useEffect(() => {
-    const BASE = (import.meta.env?.VITE_API || "").replace(/\/+$/, "");
-    if (!BASE) return;
-    (async () => {
-      try {
-        const res = await fetch(`${BASE}/rewards/config`, {
-          headers: { "Content-Type": "application/json" },
-        });
-        const data = await res.json();
-        if (res.ok && typeof data?.dailyBonusCoins === "number") {
-          setDailyBonusCoins(data.dailyBonusCoins);
-        }
-      } catch {
-        // silent fail -> UI will fall back to 0.1 below
-      }
-    })();
-  }, []);
 
   const canClaimToday = (() => {
     if (!summary) return false;
@@ -62,7 +40,7 @@ export default function References() {
     setClaiming(true);
     try {
       const r = await rewards.dailyClaim();
-      alert(`Daily claimed: +${r?.rewardAdded ?? (dailyBonusCoins ?? 0.1)} coin`);
+      alert(`Daily claimed: +${r?.rewardAdded ?? 0} coin`);
       await load();
     } catch (e) {
       alert(
@@ -121,7 +99,6 @@ export default function References() {
 
   const refLink = summary?.referralLink || "";
   const refCode = summary?.referralCode || "";
-  const dailyText = (dailyBonusCoins ?? 0.1); // fallback to 0.1 if backend not available
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6">
@@ -131,12 +108,13 @@ export default function References() {
       <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 backdrop-blur-sm p-4 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.6)]">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold tracking-tight">Rewards</h2>
+          
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <div className="text-sm font-medium">Daily login reward</div>
-            <div className="text-xs opacity-70">Claim +{dailyText} coin once per day</div>
+            <div className="text-xs opacity-70">Claim  coin once per day</div>
           </div>
           <button
             onClick={handleClaim}
@@ -149,7 +127,7 @@ export default function References() {
                 : "bg-zinc-800 cursor-not-allowed text-zinc-400",
             ].join(" ")}
           >
-            {claiming ? "Claiming…" : canClaimToday ? `Claim +${dailyText}` : "Already claimed"}
+            {claiming ? "Claiming…" : canClaimToday ? "Claim " : "Already claimed"}
           </button>
         </div>
       </section>
@@ -261,6 +239,8 @@ export default function References() {
             </div>
           ))}
         </div>
+
+     
       </section>
     </div>
   );
