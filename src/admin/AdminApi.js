@@ -63,6 +63,18 @@ async function handle(res) {
   return data;
 }
 
+// ---------- BONUSES (Daily + Referral) ----------
+export const adminBonuses = {
+  get() {
+    return api('/admin/bonuses');
+  },
+  save(partial) {
+    // partial can include { dailyBonusCoins } or { referralPer10Coins }
+    return api('/admin/bonuses', { method: 'POST', body: partial });
+  },
+};
+
+
 // ---------- generic API wrapper ----------
 export async function api(path, { method = "GET", body, headers } = {}) {
   // Ensure leading slash in path
