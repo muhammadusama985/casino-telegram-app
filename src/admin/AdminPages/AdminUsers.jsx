@@ -13,19 +13,22 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
+  // small on-screen debug to verify you're hitting the correct server
   const [sys, setSys] = useState(null);
 
   const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
 
-  const [adjustUser, setAdjustUser] = useState(null);
+  // --- modal state (2 & 2a) ---
+  const [adjustUser, setAdjustUser] = useState(null); // { _id, username, ... }
   const [delta, setDelta] = useState("");
-  const [banUser, setBanUser] = useState(null);
+  const [banUser, setBanUser] = useState(null);       // { _id, username, banned, ... }
   const [banReason, setBanReason] = useState("");
 
   async function fetchList({ query = q, pageNum = page } = {}) {
     setLoading(true);
     setErr("");
     try {
+      // Debug ping: confirms FE talks to the same backend (shows dbName & totalUsers)
       try {
         const s = await adminApiRaw("/admin/debug/system");
         setSys(s);
@@ -47,10 +50,11 @@ export default function AdminUsers() {
   }
 
   useEffect(() => {
-    fetchList();
+    fetchList(); // initial load
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ----- handlers for modals -----
   async function doAdjust() {
     try {
       const amt = Number(delta);
@@ -58,7 +62,7 @@ export default function AdminUsers() {
       await adminUsers.adjustBalance({ userId: adjustUser._id, delta: amt, reason: "manual" });
       setAdjustUser(null);
       setDelta("");
-      await fetchList();
+      await fetchList(); // refresh
     } catch (e) {
       alert(e?.message || "Adjust failed");
     }
@@ -69,7 +73,7 @@ export default function AdminUsers() {
       await adminUsers.ban({ userId: banUser._id, is, reason: banReason });
       setBanUser(null);
       setBanReason("");
-      await fetchList();
+      await fetchList(); // refresh
     } catch (e) {
       alert(e?.message || "Ban/unban failed");
     }
@@ -94,7 +98,7 @@ export default function AdminUsers() {
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onSearch()}
             placeholder="Search by username, tgId, referralCode…"
-            className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm w-64 text-white"
+            className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm w-64 text-white placeholder:text-zinc-400"
           />
           <button
             onClick={onSearch}
@@ -186,12 +190,7 @@ export default function AdminUsers() {
                         Ban
                       </button>
                     )}
-                    <button
-                      onClick={() => alert("Logs modal TODO")}
-                      className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white"
-                    >
-                      Logs
-                    </button>
+                    {/* Logs button removed as requested */}
                   </td>
                 </tr>
               ))}
@@ -227,14 +226,14 @@ export default function AdminUsers() {
 
       {err && <div className="text-sm text-red-400">{err}</div>}
 
-      {/* Debug inspector */}
+      {/* Debug inspector (helps confirm the FE base URL & backend match) */}
       <details className="text-xs opacity-60">
         <summary>Debug</summary>
         <pre className="whitespace-pre-wrap break-all">
 {JSON.stringify(
   {
     base: import.meta.env.VITE_API || "(no VITE_API)",
-    sys,
+    sys,                           // { ok, dbName, totalUsers } if reachable
     total,
     rowsLen: rows.length,
   },
@@ -253,7 +252,7 @@ export default function AdminUsers() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold">Adjust Balance</h3>
+              <h3 className="text-lg font-semibold text-white">Adjust Balance</h3>
               <button
                 onClick={() => { setAdjustUser(null); setDelta(""); }}
                 className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs text-white"
@@ -263,19 +262,19 @@ export default function AdminUsers() {
             </div>
 
             <div className="text-sm mb-3">
-              <div className="opacity-70">User</div>
-              <div className="font-medium">
+              <div className="text-zinc-300">User</div>
+              <div className="font-medium text-white">
                 {adjustUser.username || `${adjustUser.firstName || ""} ${adjustUser.lastName || ""}`.trim() || "—"}
               </div>
               <div className="text-xs opacity-60">{adjustUser._id}</div>
             </div>
 
-            <label className="text-sm opacity-70">Delta (use negative to remove)</label>
+            <label className="text-sm text-zinc-300">Delta (use negative to remove)</label>
             <input
               value={delta}
               onChange={(e) => setDelta(e.target.value)}
               placeholder="+100 or -100"
-              className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white"
+              className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-400"
             />
 
             <div className="mt-4 flex justify-end gap-2">
@@ -301,7 +300,7 @@ export default function AdminUsers() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold">{banUser?.banned?.is ? "Unban User" : "Ban User"}</h3>
+              <h3 className="text-lg font-semibold text-white">{banUser?.banned?.is ? "Unban User" : "Ban User"}</h3>
               <button
                 onClick={() => { setBanUser(null); setBanReason(""); }}
                 className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs text-white"
@@ -311,8 +310,8 @@ export default function AdminUsers() {
             </div>
 
             <div className="text-sm mb-3">
-              <div className="opacity-70">User</div>
-              <div className="font-medium">
+              <div className="text-zinc-300">User</div>
+              <div className="font-medium text-white">
                 {banUser.username || `${banUser.firstName || ""} ${banUser.lastName || ""}`.trim() || "—"}
               </div>
               <div className="text-xs opacity-60">{banUser._id}</div>
@@ -320,12 +319,12 @@ export default function AdminUsers() {
 
             {!banUser?.banned?.is && (
               <>
-                <label className="text-sm opacity-70">Reason</label>
+                <label className="text-sm text-zinc-300">Reason</label>
                 <textarea
                   value={banReason}
                   onChange={(e) => setBanReason(e.target.value)}
                   placeholder="Reason (optional)"
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm h-24 text-white"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm h-24 text-white placeholder:text-zinc-400"
                 />
               </>
             )}
