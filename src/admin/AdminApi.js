@@ -94,24 +94,69 @@ export async function api(path, { method = "GET", body, headers } = {}) {
 }
 
 // ---------- AUTH ----------
+// ---------- AUTH (Admin) ----------
 export const adminAuth = {
-  async login(password) {
-    const email = import.meta.env.VITE_ADMIN_EMAIL || "admin@casino.local";
+  /**
+   * Step 1: password check.
+   * - If 2FA is disabled -> returns { token } and stores it.
+   * - If 2FA is enabled   -> returns { needOtp: true } (no token yet).
+   *
+   * @param {string} password
+   * @param {string} email - optional; defaults to VITE_ADMIN_EMAIL or "admin@casino.local"
+   */
+  async loginStep1(password, email) {
+    const adminEmail = email || import.meta.env.VITE_ADMIN_EMAIL || "admin@casino.local";
     const r = await api("/admin/auth/login", {
       method: "POST",
-      body: { email, password },
+      body: { email: adminEmail, password },
     });
-    if (!r?.token) throw new Error("no-token");
+
+    if (r?.token) {
+      setAdminToken(r.token);
+      return { ok: true, token: r.token, needOtp: false };
+    }
+    if (r?.needOtp) {
+      return { ok: true, needOtp: true, cooldown: r.cooldown || 0 };
+    }
+    throw new Error("Unexpected login response");
+  },
+
+  /**
+   * Step 2: submit OTP (only after needOtp=true).
+   * Stores token on success.
+   *
+   * @param {string} otp
+   * @param {string} email - optional; defaults to VITE_ADMIN_EMAIL or "admin@casino.local"
+   */
+  async verifyOtp(otp, email) {
+    const adminEmail = email || import.meta.env.VITE_ADMIN_EMAIL || "admin@casino.local";
+    const r = await api("/admin/auth/login/otp", {
+      method: "POST",
+      body: { email: adminEmail, otp },
+    });
+    if (!r?.token) throw new Error("No token in OTP response");
     setAdminToken(r.token);
-    return r;
+    return { ok: true, token: r.token };
   },
+
+  /**
+   * Convenience: single-call helper that tries step1 and returns:
+   * - { token } when 2FA disabled
+   * - { needOtp: true } when 2FA enabled (no token yet)
+   */
+  async login(password, email) {
+    return this.loginStep1(password, email);
+  },
+
   async me() {
-    return api("/admin/me"); // make sure your backend exposes this behind requireAdmin
+    return api("/admin/me");
   },
+
   logout() {
     setAdminToken("");
   },
 };
+
 
 // ---------- USERS ----------
 export const adminUsers = {
