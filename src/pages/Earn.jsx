@@ -1,7 +1,7 @@
 // src/pages/Earn.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import side from "../assets/side.jpg";                 // ← hero background
-import referralHero from "../assets/side.jpg"; // ← right artwork
+import referralHero from "../assets/side.jpg";         // ← right artwork
 
 function CopyField({ label, value, onCopy }) {
   return (
@@ -63,8 +63,67 @@ function StatRow({ icon = "👥", label, value = "0" }) {
 export default function Earn() {
   const [period, setPeriod] = useState("month");
 
-  // Example affiliate link; replace with your bot username / user code.
-  const affiliate = useMemo(() => "t.me/yourbot/?start=Q0xKb2sxN0s", []);
+  // Affiliate link + stats you already show
+  const [affiliate, setAffiliate] = useState("t.me/yourbot/?start=Q0xKb2sxN0s");
+  const [invitedCount, setInvitedCount] = useState(0);
+  const [referralsWagered, setReferralsWagered] = useState(0);
+  const [commission, setCommission] = useState(0);
+
+  // 🔴 New: dynamic bonus values
+  const [dailyBonusCoins, setDailyBonusCoins] = useState(null);
+  const [referralPer10, setReferralPer10] = useState(null);
+
+  // Load affiliate + invited count
+  useEffect(() => {
+    const BASE = (import.meta.env?.VITE_API || "").replace(/\/+$/, "");
+    const userId =
+      localStorage.getItem("userId") ||
+      localStorage.getItem("_id") ||
+      "";
+
+    if (!BASE || !userId) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`${BASE}/referrals/summary`, {
+          headers: { "Content-Type": "application/json", "x-user-id": userId },
+        });
+        const data = await res.json();
+        if (res.ok && data) {
+          const link = data.referralLink || data.referralLinkCached || affiliate;
+          setAffiliate(link);
+          setInvitedCount(Number(data.referralCount || 0));
+          // If you add these later, fill them in:
+          // setReferralsWagered(Number(data.totalReferredWager || 0));
+          // setCommission(Number(data.totalCommission || 0));
+        }
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🔴 Load bonus config (daily + referral per 10)
+  useEffect(() => {
+    const BASE = (import.meta.env?.VITE_API || "").replace(/\/+$/, "");
+    if (!BASE) return;
+
+    (async () => {
+      try {
+        const res = await fetch(`${BASE}/rewards/config`, {
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await res.json();
+        if (res.ok && data) {
+          if (typeof data.dailyBonusCoins === "number") {
+            setDailyBonusCoins(data.dailyBonusCoins);
+          }
+          if (typeof data.referralPer10 === "number") {
+            setReferralPer10(data.referralPer10);
+          }
+        }
+      } catch {}
+    })();
+  }, []);
 
   const copy = async (text) => {
     try {
@@ -72,12 +131,17 @@ export default function Earn() {
     } catch {}
   };
 
+  const fmtMoney = (n) =>
+    (Number(n || 0)).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
   return (
     <div className="bg-[#0e0e10] text-white">
       <div className="px-4 pb-28">
-        {/* Hero banner (left text, right image) */}
+        {/* Hero */}
         <div className="rounded-2xl overflow-hidden bg-gradient-to-r from-zinc-900 to-zinc-950 relative">
-          {/* background image (dynamic) */}
           <div className="absolute inset-0 opacity-20">
             <img src={side} alt="" className="w-full h-full object-cover" />
           </div>
@@ -92,7 +156,6 @@ export default function Earn() {
             </div>
           </div>
 
-          {/* right-side artwork */}
           <div className="absolute right-0 bottom-0 w-40 md:w-48 z-10">
             <img
               src={referralHero}
@@ -103,11 +166,7 @@ export default function Earn() {
         </div>
 
         {/* Affiliate link */}
-        <CopyField
-          label="Your affiliate link"
-          value={affiliate}
-          onCopy={() => copy(affiliate)}
-        />
+        <CopyField label="Your affiliate link" value={affiliate} onCopy={() => copy(affiliate)} />
 
         {/* Statistics */}
         <div className="mt-5">
@@ -115,28 +174,35 @@ export default function Earn() {
           <PeriodTabs period={period} setPeriod={setPeriod} />
         </div>
 
-        {/* Stat rows */}
-        <StatRow icon="👥" label="Invited users:" value="0" />
-        <StatRow icon="💲" label="Referrals wagered:" value="0.00 €" />
-        <StatRow icon="🏦" label="Your commission:" value="0.00 €" />
+        {/* Stat rows (unchanged) */}
+        <StatRow icon="👥" label="Invited users:" value={String(invitedCount)} />
+        <StatRow icon="💲" label="Referrals wagered:" value={`${fmtMoney(referralsWagered)} €`} />
+        <StatRow icon="🏦" label="Your commission:" value={`${fmtMoney(commission)} €`} />
 
-        {/* Commission strip */}
+        {/* Commission strip (unchanged) */}
         <div className="mt-6 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="h-7 w-7 grid place-items-center rounded-full bg-zinc-800">✚</span>
             <span className="text-zinc-300">Your commission:</span>
           </div>
-          <div className="text-white">0.00 €</div>
+          <div className="text-white">{fmtMoney(commission)} €</div>
         </div>
 
-        {/* Notes */}
+        {/* Notes — just two extra lines with your live values */}
         <div className="mt-4 text-sm text-zinc-400 space-y-2">
+          {dailyBonusCoins != null && (
+            <p>Daily bonus: {dailyBonusCoins} coins.</p>
+          )}
+          {referralPer10 != null && (
+            <p>Referral milestone: {referralPer10} coins per 10 invites.</p>
+          )}
+
           <p>Earnings are paid monthly to your account in USDT.</p>
           <p>You earn 25% from house edge from all invited players.</p>
           <p>You do not earn from bonus balance wagering.</p>
         </div>
 
-        {/* Footer */}
+        {/* Footer (unchanged) */}
         <div className="mt-8 text-xs text-zinc-400 space-y-2">
           <p>
             18+ only | Play responsibly | <span className="underline">Terms apply</span> v1.2.0
