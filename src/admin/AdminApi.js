@@ -236,6 +236,19 @@ export const adminNotifications = {
 };
 
 
+// ---------- DASHBOARD ----------
+export const adminDashboard = {
+  summary() {
+    return api('/admin/dashboard/summary');
+  },
+  timeseries(metric, days = 30) {
+    const qs = new URLSearchParams({ metric, days: String(days) }).toString();
+    return api(`/admin/dashboard/timeseries?${qs}`);
+  },
+};
+
+
+
 
 
 
