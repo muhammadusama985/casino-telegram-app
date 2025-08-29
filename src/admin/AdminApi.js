@@ -158,7 +158,7 @@ export const adminUsers = {
 export const adminReferrals = {
   list(params = {}) {
     const qs = new URLSearchParams(params).toString();
-    return api(`/admin/referrals${qs ? `?${qs}` : ""}`);
+    return api(`/admin/referrals/list${qs ? `?${qs}` : ""}`);
   },
   exportCSV(params = {}) {
     const qs = new URLSearchParams(params).toString();
@@ -169,6 +169,7 @@ export const adminReferrals = {
     return api(`/admin/referrals/top${qs ? `?${qs}` : ""}`);
   },
 };
+
 
 
 
