@@ -96,7 +96,6 @@ import AdminGames from "./admin/AdminPages/AdminGames";
 import AdminBonuses from "./admin/AdminPages/AdminBonuses";
 import AdminReferrals from "./admin/AdminPages/AdminReferrals";
 import AdminNotifications from "./admin/AdminPages/AdminNotifications";
-import AdminSecurity from "./admin/AdminPages/AdminSecurity";
 
 export default function App() {
   return (
@@ -144,7 +143,6 @@ export default function App() {
               <Route path="bonuses" element={<AdminBonuses />} />
               <Route path="referrals" element={<AdminReferrals />} />
               <Route path="notifications" element={<AdminNotifications />} />
-              <Route path="security" element={<AdminSecurity />} />
             </Route>
           </Route>
 

@@ -94,52 +94,24 @@ export async function api(path, { method = "GET", body, headers } = {}) {
 }
 
 // ---------- AUTH ----------
-// ---------- AUTH (Admin) ----------
-// src/admin/AdminApi.js
-// ... keep your existing file, only replace the adminAuth section:
-
 export const adminAuth = {
-  async login(email, password) {
-    // 1) try password login
+  async login(password) {
+    const email = import.meta.env.VITE_ADMIN_EMAIL || "admin@casino.local";
     const r = await api("/admin/auth/login", {
       method: "POST",
       body: { email, password },
     });
-
-    // If 2FA disabled, backend returns { token }
-    if (r?.token) {
-      setAdminToken(r.token);
-      return { ok: true };
-    }
-
-    // If 2FA enabled, backend returns { needOtp: true, cooldown? }
-    if (r?.needOtp) {
-      return { needOtp: true, cooldown: r.cooldown || 0 };
-    }
-
-    throw new Error("unexpected-login-response");
-  },
-
-  async loginOtp(email, otp) {
-    const r = await api("/admin/auth/login/otp", {
-      method: "POST",
-      body: { email, otp },
-    });
     if (!r?.token) throw new Error("no-token");
     setAdminToken(r.token);
-    return { ok: true };
+    return r;
   },
-
   async me() {
-    return api("/admin/me");
+    return api("/admin/me"); // make sure your backend exposes this behind requireAdmin
   },
-
   logout() {
     setAdminToken("");
   },
 };
-
-
 
 // ---------- USERS ----------
 export const adminUsers = {
@@ -262,23 +234,4 @@ export const adminNotifications = {
 };
 
 
-// src/admin/AdminApi.js (add near other exports)
-export const adminSecurity = {
-  // audits already exist on backend as GET /admin/audits
-  listAudits({ userId, limit = 100 } = {}) {
-    const qs = new URLSearchParams({ ...(userId ? { userId } : {}), limit: String(limit) }).toString();
-    return api(`/admin/audits${qs ? `?${qs}` : ""}`);
-  },
-
-  // 2FA (routes below in backend section)
-  setup2FA() {
-    return api("/admin/security/2fa/setup", { method: "POST" });
-  },
-  enable2FA({ token }) {
-    return api("/admin/security/2fa/enable", { method: "POST", body: { token } });
-  },
-  reset2FA() {
-    return api("/admin/security/2fa/reset", { method: "POST" });
-  },
-};
 
