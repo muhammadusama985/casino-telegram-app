@@ -95,57 +95,39 @@ export async function api(path, { method = "GET", body, headers } = {}) {
 
 // ---------- AUTH ----------
 // ---------- AUTH (Admin) ----------
+// src/admin/AdminApi.js
+// ... keep your existing file, only replace the adminAuth section:
+
 export const adminAuth = {
-  /**
-   * Step 1: password check.
-   * - If 2FA is disabled -> returns { token } and stores it.
-   * - If 2FA is enabled   -> returns { needOtp: true } (no token yet).
-   *
-   * @param {string} password
-   * @param {string} email - optional; defaults to VITE_ADMIN_EMAIL or "admin@casino.local"
-   */
-  async loginStep1(password, email) {
-    const adminEmail = email || import.meta.env.VITE_ADMIN_EMAIL || "admin@casino.local";
+  async login(email, password) {
+    // 1) try password login
     const r = await api("/admin/auth/login", {
       method: "POST",
-      body: { email: adminEmail, password },
+      body: { email, password },
     });
 
+    // If 2FA disabled, backend returns { token }
     if (r?.token) {
       setAdminToken(r.token);
-      return { ok: true, token: r.token, needOtp: false };
+      return { ok: true };
     }
+
+    // If 2FA enabled, backend returns { needOtp: true, cooldown? }
     if (r?.needOtp) {
-      return { ok: true, needOtp: true, cooldown: r.cooldown || 0 };
+      return { needOtp: true, cooldown: r.cooldown || 0 };
     }
-    throw new Error("Unexpected login response");
+
+    throw new Error("unexpected-login-response");
   },
 
-  /**
-   * Step 2: submit OTP (only after needOtp=true).
-   * Stores token on success.
-   *
-   * @param {string} otp
-   * @param {string} email - optional; defaults to VITE_ADMIN_EMAIL or "admin@casino.local"
-   */
-  async verifyOtp(otp, email) {
-    const adminEmail = email || import.meta.env.VITE_ADMIN_EMAIL || "admin@casino.local";
+  async loginOtp(email, otp) {
     const r = await api("/admin/auth/login/otp", {
       method: "POST",
-      body: { email: adminEmail, otp },
+      body: { email, otp },
     });
-    if (!r?.token) throw new Error("No token in OTP response");
+    if (!r?.token) throw new Error("no-token");
     setAdminToken(r.token);
-    return { ok: true, token: r.token };
-  },
-
-  /**
-   * Convenience: single-call helper that tries step1 and returns:
-   * - { token } when 2FA disabled
-   * - { needOtp: true } when 2FA enabled (no token yet)
-   */
-  async login(password, email) {
-    return this.loginStep1(password, email);
+    return { ok: true };
   },
 
   async me() {
@@ -156,6 +138,7 @@ export const adminAuth = {
     setAdminToken("");
   },
 };
+
 
 
 // ---------- USERS ----------
