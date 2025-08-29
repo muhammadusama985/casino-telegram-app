@@ -233,3 +233,24 @@ export const adminNotifications = {
   },
 };
 
+
+// src/admin/AdminApi.js (add near other exports)
+export const adminSecurity = {
+  // audits already exist on backend as GET /admin/audits
+  listAudits({ userId, limit = 100 } = {}) {
+    const qs = new URLSearchParams({ ...(userId ? { userId } : {}), limit: String(limit) }).toString();
+    return api(`/admin/audits${qs ? `?${qs}` : ""}`);
+  },
+
+  // 2FA (routes below in backend section)
+  setup2FA() {
+    return api("/admin/security/2fa/setup", { method: "POST" });
+  },
+  enable2FA({ token }) {
+    return api("/admin/security/2fa/enable", { method: "POST", body: { token } });
+  },
+  reset2FA() {
+    return api("/admin/security/2fa/reset", { method: "POST" });
+  },
+};
+
