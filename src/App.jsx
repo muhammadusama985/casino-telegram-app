@@ -95,7 +95,6 @@ import AdminTransactions from "./admin/AdminPages/AdminTransactions";
 import AdminGames from "./admin/AdminPages/AdminGames";
 import AdminBonuses from "./admin/AdminPages/AdminBonuses";
 import AdminReferrals from "./admin/AdminPages/AdminReferrals";
-import AdminReports from "./admin/AdminPages/AdminReports";
 import AdminNotifications from "./admin/AdminPages/AdminNotifications";
 import AdminSecurity from "./admin/AdminPages/AdminSecurity";
 
@@ -144,7 +143,6 @@ export default function App() {
               <Route path="games" element={<AdminGames />} />
               <Route path="bonuses" element={<AdminBonuses />} />
               <Route path="referrals" element={<AdminReferrals />} />
-              <Route path="reports" element={<AdminReports />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="security" element={<AdminSecurity />} />
             </Route>
