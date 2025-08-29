@@ -13,22 +13,19 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // small on-screen debug to verify you're hitting the correct server
   const [sys, setSys] = useState(null);
 
   const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
 
-  // --- modal state (2 & 2a) ---
-  const [adjustUser, setAdjustUser] = useState(null); // { _id, username, ... }
+  const [adjustUser, setAdjustUser] = useState(null);
   const [delta, setDelta] = useState("");
-  const [banUser, setBanUser] = useState(null);       // { _id, username, banned, ... }
+  const [banUser, setBanUser] = useState(null);
   const [banReason, setBanReason] = useState("");
 
   async function fetchList({ query = q, pageNum = page } = {}) {
     setLoading(true);
     setErr("");
     try {
-      // Debug ping: confirms FE talks to the same backend (shows dbName & totalUsers)
       try {
         const s = await adminApiRaw("/admin/debug/system");
         setSys(s);
@@ -50,11 +47,10 @@ export default function AdminUsers() {
   }
 
   useEffect(() => {
-    fetchList(); // initial load
+    fetchList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ----- handlers for modals -----
   async function doAdjust() {
     try {
       const amt = Number(delta);
@@ -62,7 +58,7 @@ export default function AdminUsers() {
       await adminUsers.adjustBalance({ userId: adjustUser._id, delta: amt, reason: "manual" });
       setAdjustUser(null);
       setDelta("");
-      await fetchList(); // refresh
+      await fetchList();
     } catch (e) {
       alert(e?.message || "Adjust failed");
     }
@@ -73,7 +69,7 @@ export default function AdminUsers() {
       await adminUsers.ban({ userId: banUser._id, is, reason: banReason });
       setBanUser(null);
       setBanReason("");
-      await fetchList(); // refresh
+      await fetchList();
     } catch (e) {
       alert(e?.message || "Ban/unban failed");
     }
@@ -98,11 +94,11 @@ export default function AdminUsers() {
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onSearch()}
             placeholder="Search by username, tgId, referralCode…"
-            className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm w-64"
+            className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm w-64 text-white"
           />
           <button
             onClick={onSearch}
-            className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm"
+            className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm text-white"
           >
             Search
           </button>
@@ -165,7 +161,7 @@ export default function AdminUsers() {
                   <td className="flex gap-2 flex-wrap">
                     <button
                       onClick={() => setAdjustUser(u)}
-                      className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700"
+                      className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white"
                     >
                       Adjust
                     </button>
@@ -175,7 +171,7 @@ export default function AdminUsers() {
                           setBanUser(u);
                           setBanReason("");
                         }}
-                        className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700"
+                        className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white"
                       >
                         Unban
                       </button>
@@ -185,14 +181,14 @@ export default function AdminUsers() {
                           setBanUser(u);
                           setBanReason("");
                         }}
-                        className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700"
+                        className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white"
                       >
                         Ban
                       </button>
                     )}
                     <button
                       onClick={() => alert("Logs modal TODO")}
-                      className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700"
+                      className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white"
                     >
                       Logs
                     </button>
@@ -214,14 +210,14 @@ export default function AdminUsers() {
             <button
               disabled={page <= 1}
               onClick={() => fetchList({ pageNum: page - 1 })}
-              className="px-3 py-1 rounded bg-zinc-800 disabled:opacity-50"
+              className="px-3 py-1 rounded bg-zinc-800 disabled:opacity-50 text-white"
             >
               Prev
             </button>
             <button
               disabled={page >= pages}
               onClick={() => fetchList({ pageNum: page + 1 })}
-              className="px-3 py-1 rounded bg-zinc-800 disabled:opacity-50"
+              className="px-3 py-1 rounded bg-zinc-800 disabled:opacity-50 text-white"
             >
               Next
             </button>
@@ -231,14 +227,14 @@ export default function AdminUsers() {
 
       {err && <div className="text-sm text-red-400">{err}</div>}
 
-      {/* Debug inspector (helps confirm the FE base URL & backend match) */}
+      {/* Debug inspector */}
       <details className="text-xs opacity-60">
         <summary>Debug</summary>
         <pre className="whitespace-pre-wrap break-all">
 {JSON.stringify(
   {
     base: import.meta.env.VITE_API || "(no VITE_API)",
-    sys,                           // { ok, dbName, totalUsers } if reachable
+    sys,
     total,
     rowsLen: rows.length,
   },
@@ -260,7 +256,7 @@ export default function AdminUsers() {
               <h3 className="text-lg font-semibold">Adjust Balance</h3>
               <button
                 onClick={() => { setAdjustUser(null); setDelta(""); }}
-                className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs"
+                className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs text-white"
               >
                 ✕
               </button>
@@ -279,19 +275,19 @@ export default function AdminUsers() {
               value={delta}
               onChange={(e) => setDelta(e.target.value)}
               placeholder="+100 or -100"
-              className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm"
+              className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white"
             />
 
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => { setAdjustUser(null); setDelta(""); }}
-                className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
+                className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm text-white"
               >
                 Cancel
               </button>
               <button
                 onClick={doAdjust}
-                className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm"
+                className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm text-white"
               >
                 Apply
               </button>
@@ -308,7 +304,7 @@ export default function AdminUsers() {
               <h3 className="text-lg font-semibold">{banUser?.banned?.is ? "Unban User" : "Ban User"}</h3>
               <button
                 onClick={() => { setBanUser(null); setBanReason(""); }}
-                className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs"
+                className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs text-white"
               >
                 ✕
               </button>
@@ -329,7 +325,7 @@ export default function AdminUsers() {
                   value={banReason}
                   onChange={(e) => setBanReason(e.target.value)}
                   placeholder="Reason (optional)"
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm h-24"
+                  className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm h-24 text-white"
                 />
               </>
             )}
@@ -337,7 +333,7 @@ export default function AdminUsers() {
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => { setBanUser(null); setBanReason(""); }}
-                className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm"
+                className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm text-white"
               >
                 Cancel
               </button>
@@ -345,14 +341,14 @@ export default function AdminUsers() {
               {banUser?.banned?.is ? (
                 <button
                   onClick={() => doBan(false)}
-                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm"
+                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm text-white"
                 >
                   Unban
                 </button>
               ) : (
                 <button
                   onClick={() => doBan(true)}
-                  className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm"
+                  className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm text-white"
                 >
                   Ban
                 </button>
