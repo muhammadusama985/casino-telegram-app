@@ -9,7 +9,6 @@ const nav = [
   { to: "/admin/games", label: "Games" },
   { to: "/admin/bonuses", label: "Bonuses" },
   { to: "/admin/referrals", label: "Referrals" },
-  { to: "/admin/reports", label: "Reports" },
   { to: "/admin/notifications", label: "Notifications" },
   { to: "/admin/security", label: "Security" },
 ];
