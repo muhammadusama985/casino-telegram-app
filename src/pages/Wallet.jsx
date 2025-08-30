@@ -94,6 +94,65 @@ export default function Wallet() {
     };
   }, []);
 
+  // Hide everything in the TonConnect modal except Tonkeeper
+useEffect(() => {
+  // when the connect modal opens, strip non-Tonkeeper options
+  const unsubscribe = ui.onModalStateChange(({ opened }) => {
+    if (!opened) return;
+
+    const scrub = () => {
+      try {
+        // find the modal container by its heading text (works across skins)
+        const modalRoot = Array.from(document.querySelectorAll("div"))
+          .find((el) => /connect your ton wallet/i.test(el.textContent || ""));
+
+        if (!modalRoot) return;
+
+        // 1) kill the big "Connect Wallet in Telegram" button
+        Array.from(modalRoot.querySelectorAll("button")).forEach((btn) => {
+          const t = (btn.textContent || "").toLowerCase();
+          if (t.includes("connect wallet in telegram")) {
+            btn.style.display = "none";
+          }
+        });
+
+        // 2) hide non-Tonkeeper wallet tiles and “Choose other application” label
+        Array.from(modalRoot.querySelectorAll("button, a, div")).forEach((el) => {
+          const txt = (el.textContent || "").toLowerCase().trim();
+
+          // remove other wallet options
+          if (txt.includes("mytonwallet") || txt.includes("tonhub")) {
+            (el.closest("button") || el).style.display = "none";
+          }
+
+          // remove category caption + “View all wallets” entry
+          if (txt === "choose other application" || txt.includes("view all wallets")) {
+            el.style.display = "none";
+          }
+        });
+      } catch {}
+    };
+
+    // initial scrub (modal content renders async)
+    setTimeout(scrub, 0);
+
+    // keep scrubbing as modal re-renders
+    const mo = new MutationObserver(() => scrub());
+    mo.observe(document.body, { childList: true, subtree: true });
+
+    // stop when modal closes
+    const off = ui.onModalStateChange((s) => {
+      if (!s.opened) {
+        mo.disconnect();
+        off?.();
+      }
+    });
+  });
+
+  return () => unsubscribe?.();
+}, [ui]);
+
+
   // Helpful TonConnect logs
   useEffect(() => {
     const off1 = ui.onStatusChange((info) => console.log("[TonConnect status]", info));
