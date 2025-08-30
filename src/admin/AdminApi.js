@@ -32,11 +32,7 @@ function getHeaders(extra = {}) {
   // For ngrok, bypass the browser interstitial
   if (IS_NGROK) headers["ngrok-skip-browser-warning"] = "1";
 
-  // TEMP: show token once per reload (helps confirm it's sent)
-  if (token && !window.__ADMIN_TOKEN_ALERTED__) {
-    window.__ADMIN_TOKEN_ALERTED__ = true;
-    alert(`Admin token (first 20 chars): ${token.slice(0, 20)}…`);
-  }
+ 
 
   return headers;
 }
