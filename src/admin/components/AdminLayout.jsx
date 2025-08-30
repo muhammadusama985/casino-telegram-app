@@ -1,5 +1,6 @@
 // src/admin/layout/AdminLayout.jsx
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect } from "react"; // ⬅️ add this
 import { adminAuth } from "../AdminApi";
 
 const nav = [
@@ -15,9 +16,28 @@ const nav = [
 export default function AdminLayout() {
   const navigate = useNavigate();
 
+  // ⬇️ Disable browser back while this layout is mounted
+  useEffect(() => {
+    const block = () => {
+      // push a dummy history state so going back just re-pushes current URL
+      window.history.pushState(null, "", window.location.href);
+    };
+
+    block(); // seed once on mount
+    const onPopState = () => block();
+    window.addEventListener("popstate", onPopState);
+
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, []);
+
   function logout() {
-    adminAuth.logout();
-    navigate("/admin/login", { replace: true });
+    const confirmed = window.confirm("Are you sure you want to logout?");
+    if (confirmed) {
+      adminAuth.logout();
+      navigate("/admin/login", { replace: true });
+    }
   }
 
   return (

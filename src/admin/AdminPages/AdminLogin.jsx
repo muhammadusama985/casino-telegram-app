@@ -35,7 +35,7 @@ export default function AdminLogin() {
       {/* Big page heading */}
       <div className="mb-6 text-center">
         <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 drop-shadow-[0_0_25px_rgba(255,215,0,0.25)]">
-          Lucky Casino Game Admin
+          Imperial Casino Game Admin
         </h1>
       </div>
 

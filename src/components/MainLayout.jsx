@@ -112,7 +112,7 @@ export default function MainLayout() {
     <div className="min-h-screen bg-black text-white">
       {/* Mini header */}
       <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-950/60">
-        <h1 className="text-lg font-semibold">Lucky Bot</h1>
+        <h1 className="text-lg font-semibold">Imperial Casino</h1>
       </div>
 
       {/* TopBar gets live coins */}

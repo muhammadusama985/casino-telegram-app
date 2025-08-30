@@ -137,7 +137,7 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center p-5 text-center">
             <h1 className="text-4xl font-extrabold leading-tight">
-              LUCKY BOT{"\n"}CASINO
+              IMPERIAL{"\n"}CASINO
             </h1>
             <p className="text-lg text-zinc-300 mt-3">
               Your premium casino experience!
