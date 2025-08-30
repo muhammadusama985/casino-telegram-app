@@ -21,18 +21,25 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className="relative min-h-screen grid grid-cols-1 lg:grid-cols-[240px_1fr] overflow-hidden
-      bg-gradient-to-br from-[#0b0b13] via-black to-[#0b0b13]
-      bg-[radial-gradient(60rem_40rem_at_20%_0%,rgba(244,208,63,0.07),transparent),radial-gradient(50rem_35rem_at_110%_100%,rgba(168,85,247,0.08),transparent)]
-      [background-image:linear-gradient(transparent,transparent),repeating-linear-gradient(0deg,rgba(255,255,255,0.04)_0px,rgba(255,255,255,0.04)_1px,transparent_1px,transparent_24px)]
-    ">
+    <div
+      className="relative min-h-screen grid grid-cols-1 lg:grid-cols-[240px_1fr] overflow-hidden
+                 bg-black text-yellow-300"
+    >
+      {/* Background gold glows (visual only) */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -top-44 -left-44 h-[44rem] w-[44rem] rounded-full blur-3xl opacity-15 bg-[radial-gradient(closest-side,rgba(250,204,21,0.35),transparent)] motion-safe:animate-[pulse_3.5s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[-10rem] right-[-10rem] h-[40rem] w-[40rem] rounded-full blur-3xl opacity-10 bg-[radial-gradient(closest-side,rgba(234,179,8,0.35),transparent)] motion-safe:animate-[pulse_4s_ease-in-out_infinite]" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-[radial-gradient(50%_100%_at_50%_100%,rgba(250,204,21,0.20),transparent)]" />
+      </div>
+
       {/* SIDE NAV */}
-      <aside className="hidden lg:block p-4 space-y-3 border-r border-white/10
-        bg-white/10 backdrop-blur-xl rounded-r-3xl
-        shadow-[0_0_50px_rgba(244,208,63,0.20),0_0_80px_rgba(168,85,247,0.12)]
-        ring-1 ring-amber-300/20
-      ">
-        <div className="text-lg font-extrabold mb-2 text-black tracking-tight">
+      <aside
+        className="hidden lg:block p-4 space-y-3 border-r border-yellow-500/25
+                   bg-zinc-950/80 backdrop-blur-xl rounded-r-3xl
+                   ring-1 ring-yellow-400/20
+                   shadow-[0_0_30px_rgba(250,204,21,0.28)]"
+      >
+        <div className="text-lg font-extrabold mb-2 tracking-tight text-yellow-100 drop-shadow-[0_0_12px_rgba(250,204,21,0.55)]">
           Admin
         </div>
 
@@ -44,10 +51,12 @@ export default function AdminLayout() {
               end={n.end}
               className={({ isActive }) =>
                 `block px-3 py-2 rounded-xl text-sm transition-all duration-200 tracking-wide
-                ${isActive
-                  ? "bg-zinc-900 text-white ring-1 ring-amber-300/40 shadow-[0_0_22px_rgba(244,208,63,0.30)]"
-                  : "bg-white/90 text-black hover:bg-white hover:ring-1 hover:ring-amber-300/30 hover:shadow-[0_10px_28px_-10px_rgba(244,208,63,0.35)] hover:translate-x-[1px]"
-                }`
+                 ring-1
+                 ${
+                   isActive
+                     ? "bg-zinc-950 text-yellow-100 ring-yellow-400/40 shadow-[0_0_22px_rgba(250,204,21,0.35)]"
+                     : "bg-black/60 text-yellow-300 ring-yellow-500/20 hover:bg-black/80 hover:shadow-[0_10px_28px_-10px_rgba(250,204,21,0.35)]"
+                 }`
               }
             >
               {n.label}
@@ -57,8 +66,8 @@ export default function AdminLayout() {
 
         <button
           onClick={logout}
-          className="mt-4 w-full px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-sm text-white
-            ring-1 ring-amber-300/25 shadow-[0_0_22px_rgba(244,208,63,0.25)] transition-all duration-200"
+          className="mt-4 w-full px-3 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-900 text-sm text-white
+                     ring-1 ring-yellow-400/25 shadow-[0_0_22px_rgba(250,204,21,0.25)] transition-all duration-200"
         >
           Logout
         </button>
@@ -67,14 +76,15 @@ export default function AdminLayout() {
       {/* MAIN */}
       <main className="min-h-screen relative">
         {/* Topbar (mobile) */}
-        <div className="lg:hidden border-b border-white/10 p-3 flex items-center justify-between
-          bg-white/70 backdrop-blur-md shadow-[0_8px_30px_rgba(0,0,0,0.25)]
-        ">
-          <div className="font-semibold text-black">Admin</div>
+        <div
+          className="lg:hidden border-b border-yellow-500/25 p-3 flex items-center justify-between
+                     bg-zinc-950/80 backdrop-blur-md shadow-[0_8px_30px_rgba(0,0,0,0.45)]"
+        >
+          <div className="font-semibold text-yellow-100 drop-shadow-[0_0_10px_rgba(250,204,21,0.45)]">Admin</div>
           <button
             onClick={logout}
-            className="px-3 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-xs text-white
-              ring-1 ring-amber-300/25 transition"
+            className="px-3 py-1 rounded bg-zinc-950 hover:bg-zinc-900 text-xs text-white
+                       ring-1 ring-yellow-400/25 transition"
           >
             Logout
           </button>
