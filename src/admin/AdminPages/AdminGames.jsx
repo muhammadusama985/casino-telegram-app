@@ -50,21 +50,19 @@ export default function AdminGames() {
       </h1>
 
       <div className="grid sm:grid-cols-2 gap-6">
-        {/* Global RTP (BIGGER, GLOW) */}
-        <div className="relative overflow-hidden rounded-3xl border-2 border-yellow-500/40 ring-2 ring-yellow-400/20 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-6 md:p-8 space-y-4 min-h-[280px] md:min-h-[320px] shadow-[0_0_55px_rgba(250,204,21,0.35)] hover:shadow-[0_0_80px_rgba(250,204,21,0.45)] transition">
-          {/* inner glow layers */}
+        {/* Global RTP — STACKED & NEARLY FULL CARD */}
+        <div className="relative overflow-hidden rounded-3xl border-2 border-yellow-500/40 ring-2 ring-yellow-400/20 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-6 md:p-8 min-h-[360px] shadow-[0_0_55px_rgba(250,204,21,0.35)] hover:shadow-[0_0_80px_rgba(250,204,21,0.45)] transition">
           <div className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen bg-[radial-gradient(120%_60%_at_50%_120%,rgba(250,204,21,0.10),transparent)] motion-safe:animate-[pulse_3.8s_ease-in-out_infinite]" />
-          <div className="pointer-events-none absolute -top-24 -right-24 h-64 w-64 rounded-full blur-2xl opacity-20 bg-yellow-400/40" />
-
-          <h2 className="text-2xl font-bold text-yellow-100 drop-shadow-[0_0_12px_rgba(250,204,21,0.55)]">
+          <h2 className="text-2xl font-bold text-yellow-100 drop-shadow-[0_0_12px_rgba(250,204,21,0.55)] mb-4">
             Global RTP
           </h2>
 
-          <div className="flex flex-wrap gap-3">
+          {/* STACK column fills most of the card */}
+          <div className="flex flex-col gap-4 h-full">
             <select
               value={globalGame}
               onChange={(e) => setGlobalGame(e.target.value)}
-              className="bg-black/60 border border-yellow-500/40 rounded-xl px-4 py-3 text-base text-yellow-100 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
+              className="w-full bg-black/60 border-2 border-yellow-500/40 rounded-2xl px-5 py-4 text-lg text-yellow-100 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
             >
               <option value="coinflip">coinflip</option>
               <option value="dice">dice</option>
@@ -76,40 +74,40 @@ export default function AdminGames() {
               value={globalRtp}
               onChange={(e) => setGlobalRtp(e.target.value)}
               placeholder="0.90"
-              className="bg-black/60 border border-yellow-500/40 rounded-xl px-4 py-3 w-28 text-base text-yellow-100 placeholder-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
+              className="w-full bg-black/60 border-2 border-yellow-500/40 rounded-2xl px-5 py-4 text-lg text-yellow-100 placeholder-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
             />
 
-            <button
-              onClick={saveGlobal}
-              className="px-5 py-3 rounded-xl text-sm font-medium text-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-200 hover:from-yellow-200 hover:to-amber-200 ring-1 ring-yellow-400/40 shadow-[0_0_24px_rgba(250,204,21,0.45)] hover:shadow-[0_0_36px_rgba(250,204,21,0.55)] active:translate-y-px transition"
-            >
-              Save
-            </button>
+            <div className="mt-auto">
+              <button
+                onClick={saveGlobal}
+                className="w-full px-6 py-4 rounded-2xl text-lg font-semibold text-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-200 hover:from-yellow-200 hover:to-amber-200 ring-1 ring-yellow-400/40 shadow-[0_0_28px_rgba(250,204,21,0.45)] hover:shadow-[0_0_40px_rgba(250,204,21,0.55)] active:translate-y-px transition"
+              >
+                Save
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Per-user RTP (BIGGER, GLOW) */}
-        <div className="relative overflow-hidden rounded-3xl border-2 border-yellow-500/40 ring-2 ring-yellow-400/20 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-6 md:p-8 space-y-4 min-h-[280px] md:min-h-[320px] shadow-[0_0_55px_rgba(250,204,21,0.35)] hover:shadow-[0_0_80px_rgba(250,204,21,0.45)] transition">
-          {/* inner glow layers */}
+        {/* Per-user RTP — STACKED & NEARLY FULL CARD */}
+        <div className="relative overflow-hidden rounded-3xl border-2 border-yellow-500/40 ring-2 ring-yellow-400/20 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 p-6 md:p-8 min-h-[420px] shadow-[0_0_55px_rgba(250,204,21,0.35)] hover:shadow-[0_0_80px_rgba(250,204,21,0.45)] transition">
           <div className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen bg-[radial-gradient(120%_60%_at_50%_120%,rgba(250,204,21,0.10),transparent)] motion-safe:animate-[pulse_4.1s_ease-in-out_infinite]" />
-          <div className="pointer-events-none absolute -bottom-24 -left-24 h-64 w-64 rounded-full blur-2xl opacity-20 bg-amber-400/40" />
-
-          <h2 className="text-2xl font-bold text-yellow-100 drop-shadow-[0_0_12px_rgba(250,204,21,0.55)]">
+          <h2 className="text-2xl font-bold text-yellow-100 drop-shadow-[0_0_12px_rgba(250,204,21,0.55)] mb-4">
             Per-user RTP
           </h2>
 
-          <input
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            placeholder="User ID"
-            className="w-full bg-black/60 border border-yellow-500/40 rounded-xl px-4 py-3 text-base text-yellow-100 placeholder-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
-          />
+          {/* STACK column fills most of the card */}
+          <div className="flex flex-col gap-4 h-full">
+            <input
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              placeholder="User ID"
+              className="w-full bg-black/60 border-2 border-yellow-500/40 rounded-2xl px-5 py-4 text-lg text-yellow-100 placeholder-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
+            />
 
-          <div className="flex flex-wrap gap-3">
             <select
               value={userGame}
               onChange={(e) => setUserGame(e.target.value)}
-              className="bg-black/60 border border-yellow-500/40 rounded-xl px-4 py-3 text-base text-yellow-100 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
+              className="w-full bg-black/60 border-2 border-yellow-500/40 rounded-2xl px-5 py-4 text-lg text-yellow-100 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
             >
               <option value="coinflip">coinflip</option>
               <option value="dice">dice</option>
@@ -121,15 +119,17 @@ export default function AdminGames() {
               value={userRtp}
               onChange={(e) => setUserRtp(e.target.value)}
               placeholder="0.90"
-              className="bg-black/60 border border-yellow-500/40 rounded-xl px-4 py-3 w-28 text-base text-yellow-100 placeholder-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
+              className="w-full bg-black/60 border-2 border-yellow-500/40 rounded-2xl px-5 py-4 text-lg text-yellow-100 placeholder-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
             />
 
-            <button
-              onClick={saveUser}
-              className="px-5 py-3 rounded-xl text-sm font-medium text-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-200 hover:from-yellow-200 hover:to-amber-200 ring-1 ring-yellow-400/40 shadow-[0_0_24px_rgba(250,204,21,0.45)] hover:shadow-[0_0_36px_rgba(250,204,21,0.55)] active:translate-y-px transition"
-            >
-              Save
-            </button>
+            <div className="mt-auto">
+              <button
+                onClick={saveUser}
+                className="w-full px-6 py-4 rounded-2xl text-lg font-semibold text-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-200 hover:from-yellow-200 hover:to-amber-200 ring-1 ring-yellow-400/40 shadow-[0_0_28px_rgba(250,204,21,0.45)] hover:shadow-[0_0_40px_rgba(250,204,21,0.55)] active:translate-y-px transition"
+              >
+                Save
+              </button>
+            </div>
           </div>
         </div>
       </div>
