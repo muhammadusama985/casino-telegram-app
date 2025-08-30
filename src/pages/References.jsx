@@ -8,6 +8,10 @@ export default function References() {
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState("");
 
+  // NEW: state for applying someone else's referral code
+  const [applyCode, setApplyCode] = useState("");
+  const [applying, setApplying] = useState(false);
+
   async function load() {
     setError("");
     try {
@@ -76,6 +80,23 @@ export default function References() {
     }
   }
 
+  // NEW: apply someone else's referral code (one-time)
+  async function handleApplyCode() {
+    const code = String(applyCode || "").trim().toUpperCase();
+    if (!code) return alert("Enter a referral code first.");
+    setApplying(true);
+    try {
+      const r = await referrals.applyCode(code);
+      alert(r?.message || "Referral code applied!");
+      setApplyCode("");
+      await load(); // refresh counts/coins/reward log
+    } catch (e) {
+      alert(e?.payload?.error || e?.message || "Failed to apply code");
+    } finally {
+      setApplying(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-4 space-y-6">
@@ -108,7 +129,6 @@ export default function References() {
       <section className="rounded-2xl border border-zinc-800/70 bg-zinc-900/60 backdrop-blur-sm p-4 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.6)]">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold tracking-tight">Rewards</h2>
-          
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -168,26 +188,28 @@ export default function References() {
               >
                 Get referral link
               </button>
+
+              {/* NEW: Copy referral CODE (replaces old "copy link" button) */}
               <button
                 onClick={async () => {
-                  if (!refLink) return alert("No referral link to copy");
+                  if (!refCode) return alert("No referral code to copy");
                   try {
-                    await navigator.clipboard.writeText(refLink);
-                    alert("Referral link copied!");
+                    await navigator.clipboard.writeText(refCode);
+                    alert("Referral code copied!");
                   } catch {
                     const el = document.createElement("input");
-                    el.value = refLink;
+                    el.value = refCode;
                     document.body.appendChild(el);
                     el.select();
                     el.setSelectionRange(0, 99999);
                     const ok = document.execCommand("copy");
                     document.body.removeChild(el);
-                    alert(ok ? "Referral link copied!" : "Could not copy link.");
+                    alert(ok ? "Referral code copied!" : "Could not copy code.");
                   }
                 }}
                 className="px-3 py-2 rounded-xl text-xs font-medium bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition-all active:scale-[0.98]"
               >
-                Copy
+                Copy code
               </button>
             </div>
           </div>
@@ -215,6 +237,34 @@ export default function References() {
             </div>
           </div>
         </div>
+
+        {/* --- Apply someone else's code (one-time) --- */}
+        <div className="pt-3 mt-3 border-t border-zinc-800/60">
+          <div className="text-sm opacity-80 mb-2">Have a friend’s code? Enter it once:</div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={applyCode}
+              onChange={(e) => setApplyCode(e.target.value)}
+              placeholder="Enter referral code"
+              className="flex-1 bg-zinc-800/90 text-white rounded-xl px-3 py-2 text-xs border border-zinc-700/70 focus:outline-none focus:ring-2 focus:ring-emerald-600/60"
+            />
+            <button
+              onClick={handleApplyCode}
+              disabled={applying || !applyCode.trim()}
+              className={[
+                "px-3 py-2 rounded-xl text-xs font-medium transition-all",
+                applying
+                  ? "bg-zinc-800 cursor-not-allowed text-zinc-400"
+                  : "bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 active:scale-[0.98]",
+              ].join(" ")}
+            >
+              {applying ? "Applying…" : "Apply code"}
+            </button>
+          </div>
+          <div className="text-[11px] opacity-60 mt-1">
+            You can apply a code only once and not your own code.
+          </div>
+        </div>
       </section>
 
       {/* Recent reward activity */}
@@ -239,8 +289,6 @@ export default function References() {
             </div>
           ))}
         </div>
-
-     
       </section>
     </div>
   );

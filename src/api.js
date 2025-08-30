@@ -115,6 +115,14 @@ export const referrals = {
     const link = r?.referralLink || r?.referralLinkCached || "";
     return { ...r, referralLink: link };
   },
+    // NEW: enter someone else's referral code once
+  async applyCode(code) {
+    return api("/referrals/apply-code", {
+      method: "POST",
+      body: { code },
+    });
+  },
+
 };
 
 // ---------- Users ----------
@@ -183,6 +191,8 @@ export const wallet = {
   },
 };
 
+
+
 // ---------- Games ----------
 export const games = {
   async bet({ game, stakeCoins, input }) {
@@ -232,3 +242,4 @@ export async function getBalance() {
   }
   return num;
 }
+
