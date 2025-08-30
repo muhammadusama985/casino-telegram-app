@@ -85,12 +85,20 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4 bg-black text-yellow-300">
+      {/* Background gold glows (purely decorative) */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -top-32 -left-32 h-[36rem] w-[36rem] rounded-full blur-3xl opacity-15 bg-[radial-gradient(closest-side,rgba(250,204,21,0.35),transparent)] motion-safe:animate-[pulse_3.5s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[-8rem] right-[-8rem] h-[32rem] w-[32rem] rounded-full blur-3xl opacity-10 bg-[radial-gradient(closest-side,rgba(234,179,8,0.35),transparent)] motion-safe:animate-[pulse_4s_ease-in-out_infinite]" />
+      </div>
+
       {/* Header + search */}
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Users</h1>
-          <p className="text-sm opacity-70">Search, filter, adjust balances, and ban/unban.</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-300 to-amber-300 drop-shadow-[0_0_18px_rgba(250,204,21,0.45)]">
+            Users
+          </h1>
+          <p className="text-sm text-yellow-300/85">Search, filter, adjust balances, and ban/unban.</p>
         </div>
         <div className="flex gap-2">
           <input
@@ -98,11 +106,11 @@ export default function AdminUsers() {
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && onSearch()}
             placeholder="Search by username, tgId, referralCode…"
-            className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm w-64 text-white placeholder:text-zinc-400"
+            className="bg-black/60 border border-yellow-500/25 rounded-lg px-3 py-2 text-sm w-64 text-yellow-100 placeholder:text-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
           />
           <button
             onClick={onSearch}
-            className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm text-white"
+            className="px-3 py-2 rounded-lg text-sm text-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-200 hover:from-yellow-200 hover:to-amber-200 ring-1 ring-yellow-400/30 shadow-[0_0_20px_rgba(250,204,21,0.35)] hover:shadow-[0_0_28px_rgba(250,204,21,0.45)] active:translate-y-px transition"
           >
             Search
           </button>
@@ -110,10 +118,12 @@ export default function AdminUsers() {
       </header>
 
       {/* Table */}
-      <div className="rounded-xl border border-zinc-800 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-900/70">
-            <tr className="[&>th]:text-left [&>th]:px-3 [&>th]:py-2">
+      <div className="relative rounded-2xl border border-yellow-500/30 ring-1 ring-yellow-400/20 bg-zinc-950/90 overflow-hidden shadow-[0_0_30px_rgba(250,204,21,0.28)]">
+        {/* subtle inner glow */}
+        <div className="pointer-events-none absolute inset-0 opacity-60 mix-blend-screen bg-[radial-gradient(120%_60%_at_50%_120%,rgba(250,204,21,0.08),transparent)]" />
+        <table className="w-full text-sm border-separate border-spacing-0">
+          <thead className="bg-black/80">
+            <tr className="[&>th]:text-left [&>th]:px-3 [&>th]:py-2 [&>th]:text-yellow-200 [&>th]:border-b [&>th]:border-yellow-500/40 [&>th:first-child]:border-l [&>th:last-child]:border-r [&>th]:border-yellow-500/30">
               <th>User</th>
               <th>tgId</th>
               <th>Coins</th>
@@ -123,10 +133,10 @@ export default function AdminUsers() {
               <th className="w-56">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="bg-black/40">
             {loading && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center opacity-70">
+                <td colSpan={7} className="px-3 py-6 text-center text-yellow-300/80">
                   Loading…
                 </td>
               </tr>
@@ -134,7 +144,7 @@ export default function AdminUsers() {
 
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center opacity-70">
+                <td colSpan={7} className="px-3 py-6 text-center text-yellow-300/80">
                   No users found.
                 </td>
               </tr>
@@ -142,14 +152,17 @@ export default function AdminUsers() {
 
             {!loading &&
               rows.map((u) => (
-                <tr key={u._id} className="[&>td]:px-3 [&>td]:py-2">
-                  <td>
-                    <div className="font-medium">
+                <tr
+                  key={u._id}
+                  className="[&>td]:px-3 [&>td]:py-2 [&>td]:border-b [&>td]:border-yellow-500/20 hover:bg-black/60 transition-colors"
+                >
+                  <td className="border-l border-yellow-500/20">
+                    <div className="font-medium text-yellow-100 drop-shadow-[0_0_6px_rgba(250,204,21,0.35)]">
                       {u.username ||
                         `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
                         "—"}
                     </div>
-                    <div className="text-xs opacity-70">{u._id}</div>
+                    <div className="text-xs text-yellow-300/70">{u._id}</div>
                   </td>
                   <td>{u.tgId || "—"}</td>
                   <td>{Number(u.coins || 0).toFixed(2)}</td>
@@ -162,10 +175,10 @@ export default function AdminUsers() {
                       <span className="text-emerald-400">active</span>
                     )}
                   </td>
-                  <td className="flex gap-2 flex-wrap">
+                  <td className="flex gap-2 flex-wrap border-r border-yellow-500/20">
                     <button
                       onClick={() => setAdjustUser(u)}
-                      className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white"
+                      className="px-2 py-1 rounded bg-black/60 hover:bg-black/80 text-yellow-200 ring-1 ring-yellow-500/30 shadow-[0_0_12px_rgba(250,204,21,0.25)] transition"
                     >
                       Adjust
                     </button>
@@ -175,7 +188,7 @@ export default function AdminUsers() {
                           setBanUser(u);
                           setBanReason("");
                         }}
-                        className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white"
+                        className="px-2 py-1 rounded bg-black/60 hover:bg-black/80 text-yellow-200 ring-1 ring-yellow-500/30 shadow-[0_0_12px_rgba(250,204,21,0.25)] transition"
                       >
                         Unban
                       </button>
@@ -185,12 +198,11 @@ export default function AdminUsers() {
                           setBanUser(u);
                           setBanReason("");
                         }}
-                        className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white"
+                        className="px-2 py-1 rounded bg-red-600/80 hover:bg-red-500 text-white ring-1 ring-red-400/40 shadow-[0_0_14px_rgba(239,68,68,0.35)] transition"
                       >
                         Ban
                       </button>
                     )}
-                    {/* Logs button removed as requested */}
                   </td>
                 </tr>
               ))}
@@ -200,7 +212,7 @@ export default function AdminUsers() {
 
       {/* Footer row: counts & pagination */}
       <div className="flex items-center justify-between">
-        <div className="text-xs opacity-60">
+        <div className="text-xs text-yellow-300/70">
           total: {total} • page: {page}/{pages}
         </div>
 
@@ -209,14 +221,14 @@ export default function AdminUsers() {
             <button
               disabled={page <= 1}
               onClick={() => fetchList({ pageNum: page - 1 })}
-              className="px-3 py-1 rounded bg-zinc-800 disabled:opacity-50 text-white"
+              className="px-3 py-1 rounded bg-black/60 hover:bg-black/80 disabled:opacity-50 text-yellow-200 ring-1 ring-yellow-500/30 shadow-[0_0_12px_rgba(250,204,21,0.25)] transition"
             >
               Prev
             </button>
             <button
               disabled={page >= pages}
               onClick={() => fetchList({ pageNum: page + 1 })}
-              className="px-3 py-1 rounded bg-zinc-800 disabled:opacity-50 text-white"
+              className="px-3 py-1 rounded bg-black/60 hover:bg-black/80 disabled:opacity-50 text-yellow-200 ring-1 ring-yellow-500/30 shadow-[0_0_12px_rgba(250,204,21,0.25)] transition"
             >
               Next
             </button>
@@ -227,7 +239,7 @@ export default function AdminUsers() {
       {err && <div className="text-sm text-red-400">{err}</div>}
 
       {/* Debug inspector (helps confirm the FE base URL & backend match) */}
-      <details className="text-xs opacity-60">
+      <details className="text-xs text-yellow-300/70">
         <summary>Debug</summary>
         <pre className="whitespace-pre-wrap break-all">
 {JSON.stringify(
@@ -249,44 +261,44 @@ export default function AdminUsers() {
 
       {/* Adjust Balance Modal */}
       {adjustUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="w-full max-w-md rounded-2xl border border-yellow-500/30 ring-1 ring-yellow-400/20 bg-zinc-950 p-4 shadow-[0_0_30px_rgba(250,204,21,0.28)]">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white">Adjust Balance</h3>
+              <h3 className="text-lg font-semibold text-yellow-100 drop-shadow-[0_0_12px_rgba(250,204,21,0.55)]">Adjust Balance</h3>
               <button
                 onClick={() => { setAdjustUser(null); setDelta(""); }}
-                className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs text-white"
+                className="px-2 py-1 rounded bg-black/60 hover:bg-black/80 text-xs text-yellow-200 ring-1 ring-yellow-500/30 transition"
               >
                 ✕
               </button>
             </div>
 
             <div className="text-sm mb-3">
-              <div className="text-zinc-300">User</div>
-              <div className="font-medium text-white">
+              <div className="text-yellow-300/85">User</div>
+              <div className="font-medium text-yellow-100">
                 {adjustUser.username || `${adjustUser.firstName || ""} ${adjustUser.lastName || ""}`.trim() || "—"}
               </div>
-              <div className="text-xs opacity-60">{adjustUser._id}</div>
+              <div className="text-xs text-yellow-300/70">{adjustUser._id}</div>
             </div>
 
-            <label className="text-sm text-zinc-300">Delta (use negative to remove)</label>
+            <label className="text-sm text-yellow-300/85">Delta (use negative to remove)</label>
             <input
               value={delta}
               onChange={(e) => setDelta(e.target.value)}
               placeholder="+100 or -100"
-              className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-400"
+              className="w-full mt-1 bg-black/60 border border-yellow-500/25 rounded-lg px-3 py-2 text-sm text-yellow-100 placeholder:text-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
             />
 
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => { setAdjustUser(null); setDelta(""); }}
-                className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm text-white"
+                className="px-3 py-2 rounded-lg bg-black/60 hover:bg-black/80 text-sm text-yellow-200 ring-1 ring-yellow-500/30 shadow-[0_0_12px_rgba(250,204,21,0.25)] transition"
               >
                 Cancel
               </button>
               <button
                 onClick={doAdjust}
-                className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm text-white"
+                className="px-3 py-2 rounded-lg text-sm text-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-200 hover:from-yellow-200 hover:to-amber-200 ring-1 ring-yellow-400/30 shadow-[0_0_20px_rgba(250,204,21,0.35)] hover:shadow-[0_0_26px_rgba(250,204,21,0.45)] active:translate-y-px transition"
               >
                 Apply
               </button>
@@ -297,34 +309,34 @@ export default function AdminUsers() {
 
       {/* Ban / Unban Modal */}
       {banUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="w-full max-w-md rounded-2xl border border-yellow-500/30 ring-1 ring-yellow-400/20 bg-zinc-950 p-4 shadow-[0_0_30px_rgba(250,204,21,0.28)]">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white">{banUser?.banned?.is ? "Unban User" : "Ban User"}</h3>
+              <h3 className="text-lg font-semibold text-yellow-100 drop-shadow-[0_0_12px_rgba(250,204,21,0.55)]">{banUser?.banned?.is ? "Unban User" : "Ban User"}</h3>
               <button
                 onClick={() => { setBanUser(null); setBanReason(""); }}
-                className="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-xs text-white"
+                className="px-2 py-1 rounded bg-black/60 hover:bg-black/80 text-xs text-yellow-200 ring-1 ring-yellow-500/30 transition"
               >
                 ✕
               </button>
             </div>
 
             <div className="text-sm mb-3">
-              <div className="text-zinc-300">User</div>
-              <div className="font-medium text-white">
+              <div className="text-yellow-300/85">User</div>
+              <div className="font-medium text-yellow-100">
                 {banUser.username || `${banUser.firstName || ""} ${banUser.lastName || ""}`.trim() || "—"}
               </div>
-              <div className="text-xs opacity-60">{banUser._id}</div>
+              <div className="text-xs text-yellow-300/70">{banUser._id}</div>
             </div>
 
             {!banUser?.banned?.is && (
               <>
-                <label className="text-sm text-zinc-300">Reason</label>
+                <label className="text-sm text-yellow-300/85">Reason</label>
                 <textarea
                   value={banReason}
                   onChange={(e) => setBanReason(e.target.value)}
                   placeholder="Reason (optional)"
-                  className="w-full mt-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm h-24 text-white placeholder:text-zinc-400"
+                  className="w-full mt-1 bg-black/60 border border-yellow-500/25 rounded-lg px-3 py-2 text-sm h-24 text-yellow-100 placeholder:text-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
                 />
               </>
             )}
@@ -332,7 +344,7 @@ export default function AdminUsers() {
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => { setBanUser(null); setBanReason(""); }}
-                className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sm text-white"
+                className="px-3 py-2 rounded-lg bg-black/60 hover:bg-black/80 text-sm text-yellow-200 ring-1 ring-yellow-500/30 shadow-[0_0_12px_rgba(250,204,21,0.25)] transition"
               >
                 Cancel
               </button>
@@ -340,14 +352,14 @@ export default function AdminUsers() {
               {banUser?.banned?.is ? (
                 <button
                   onClick={() => doBan(false)}
-                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm text-white"
+                  className="px-3 py-2 rounded-lg text-sm text-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-200 hover:from-yellow-200 hover:to-amber-200 ring-1 ring-yellow-400/30 shadow-[0_0_20px_rgba(250,204,21,0.35)] hover:shadow-[0_0_26px_rgba(250,204,21,0.45)] active:translate-y-px transition"
                 >
                   Unban
                 </button>
               ) : (
                 <button
                   onClick={() => doBan(true)}
-                  className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-sm text-white"
+                  className="px-3 py-2 rounded-lg bg-red-600/80 hover:bg-red-500 text-sm text-white ring-1 ring-red-400/40 shadow-[0_0_18px_rgba(239,68,68,0.40)] transition"
                 >
                   Ban
                 </button>
