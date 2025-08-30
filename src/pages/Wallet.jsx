@@ -120,50 +120,65 @@ export default function Wallet() {
   }, [connectedAddress]);
 
   // Tonkeeper-only connect flow
-  const connectTonkeeper = async () => {
+// Tonkeeper-only connect flow
+const connectTonkeeper = async () => {
+  try {
+    // Make sure TonConnect doesn’t reuse a previously selected generic wallet
     try {
-      // localStorage.removeItem("ton-connect-ui_last-wallet"); // one-time reset if needed
+      localStorage.removeItem("ton-connect-ui_last-wallet");
+    } catch {}
 
-      const wallets = await ui.getWallets();
-      const tk = wallets.find(
-        (w) =>
-          (w.appName && w.appName.toLowerCase() === "tonkeeper") ||
-          /tonkeeper/i.test(w.name)
+    const wallets = await ui.getWallets();
+
+    // Find Tonkeeper robustly (names differ across platforms/builds)
+    const tk = wallets.find((w) => {
+      const name = (w.name || w.appName || "").toLowerCase();
+      const about = (w.aboutUrl || "").toLowerCase();
+      return (
+        name.includes("tonkeeper") ||
+        about.includes("tonkeeper.com")
       );
+    });
 
-      if (!tk) {
-        const go = confirm("Tonkeeper not found. Open the install page?");
-        if (go) window.open("https://tonkeeper.com/download", "_blank", "noopener,noreferrer");
-        return;
-      }
-
-      // Deep-link or extension flow
-      await ui.connectWallet(tk);
-    } catch (err) {
-      console.warn("connectWallet error:", err);
-
-      // Fallback: universal link
-      try {
-        const wallets = await ui.getWallets();
-        const tk = wallets.find(
-          (w) =>
-            (w.appName && w.appName.toLowerCase() === "tonkeeper") ||
-            /tonkeeper/i.test(w.name)
-        );
-        if (tk?.universalLink) {
-          const link = tk.universalLink;
-          if (WebApp?.openTelegramLink) WebApp.openTelegramLink(link);
-          else window.open(link, "_blank", "noopener,noreferrer") || (window.location.href = link);
-          return;
-        }
-      } catch (fallbackErr) {
-        console.warn("universalLink fallback failed:", fallbackErr);
-      }
-
-      const go = confirm("Could not open Tonkeeper. Install Tonkeeper?");
+    if (!tk) {
+      const go = confirm("Tonkeeper not found. Open the install page?");
       if (go) window.open("https://tonkeeper.com/download", "_blank", "noopener,noreferrer");
+      return;
     }
-  };
+
+    // Try direct connect to Tonkeeper (no multi-wallet modal)
+    await ui.connectWallet(tk);
+    return;
+  } catch (err) {
+    console.warn("connectWallet error:", err);
+  }
+
+  // Hard fallback: open Tonkeeper’s universal link directly (still Tonkeeper-only)
+  try {
+    const wallets = await ui.getWallets();
+    const tk = wallets.find((w) => {
+      const name = (w.name || w.appName || "").toLowerCase();
+      const about = (w.aboutUrl || "").toLowerCase();
+      return name.includes("tonkeeper") || about.includes("tonkeeper.com");
+    });
+
+    if (tk?.universalLink) {
+      const link = tk.universalLink;
+      if (WebApp?.openTelegramLink) {
+        WebApp.openTelegramLink(link);
+      } else {
+        window.open(link, "_blank", "noopener,noreferrer") || (window.location.href = link);
+      }
+      return;
+    }
+  } catch (fallbackErr) {
+    console.warn("universalLink fallback failed:", fallbackErr);
+  }
+
+  const go = confirm("Could not open Tonkeeper. Install Tonkeeper?");
+  if (go) window.open("https://tonkeeper.com/download", "_blank", "noopener,noreferrer");
+};
+
 
   // Send TON with the mandatory comment
   const transferTon = async () => {
