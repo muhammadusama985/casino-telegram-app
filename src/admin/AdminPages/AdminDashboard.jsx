@@ -42,13 +42,13 @@ export default function AdminDashboard() {
     <div className="relative space-y-6 p-1 bg-black text-yellow-300">
       {/* Subtle gold glows (decorative only) */}
       <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-44 -left-44 h-[44rem] w-[44rem] rounded-full blur-3xl opacity-15 bg-[radial-gradient(closest-side,rgba(250,204,21,0.35),transparent)]" />
-        <div className="absolute bottom-[-10rem] right-[-10rem] h-[40rem] w-[40rem] rounded-full blur-3xl opacity-10 bg-[radial-gradient(closest-side,rgba(234,179,8,0.35),transparent)]" />
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-[radial-gradient(50%_100%_at_50%_100%,rgba(250,204,21,0.20),transparent)]" />
+        <div className="absolute -top-44 -left-44 h-[44rem] w-[44rem] rounded-full blur-3xl opacity-15 bg-[radial-gradient(closest-side,rgba(250,204,21,0.35),transparent)] motion-safe:animate-[pulse_3s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[-10rem] right-[-10rem] h-[40rem] w-[40rem] rounded-full blur-3xl opacity-10 bg-[radial-gradient(closest-side,rgba(234,179,8,0.35),transparent)] motion-safe:animate-[pulse_3.5s_ease-in-out_infinite]" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-[radial-gradient(50%_100%_at_50%_100%,rgba(250,204,21,0.20),transparent)] motion-safe:animate-[pulse_4s_ease-in-out_infinite]" />
       </div>
 
       <header>
-        <h1 className="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-300 to-amber-300 drop-shadow-[0_0_22px_rgba(250,204,21,0.55)]">
+        <h1 className="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-300 to-amber-300 drop-shadow-[0_0_22px_rgba(250,204,21,0.55)] motion-safe:animate-[pulse_3.2s_ease-in-out_infinite]">
           Dashboard
         </h1>
         <p className="text-sm text-yellow-300/85 drop-shadow-[0_0_8px_rgba(250,204,21,0.35)]">
@@ -70,12 +70,12 @@ export default function AdminDashboard() {
                        transition will-change-transform hover:shadow-[0_0_48px_rgba(250,204,21,0.40)] hover:ring-yellow-400/30"
           >
             {/* inner glow layer */}
-            <div className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen bg-[radial-gradient(120%_60%_at_50%_120%,rgba(250,204,21,0.10),transparent)]" />
+            <div className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen bg-[radial-gradient(120%_60%_at_50%_120%,rgba(250,204,21,0.10),transparent)] motion-safe:animate-[pulse_3.8s_ease-in-out_infinite]" />
 
             <div className="text-xs text-yellow-300/85 drop-shadow-[0_0_6px_rgba(250,204,21,0.35)]">
               {k.label}
             </div>
-            <div className="mt-2 text-2xl font-semibold text-yellow-100 drop-shadow-[0_0_14px_rgba(250,204,21,0.55)]">
+            <div className="mt-2 text-2xl font-semibold text-yellow-100 drop-shadow-[0_0_14px_rgba(250,204,21,0.55)] motion-safe:animate-[pulse_3.6s_ease-in-out_infinite]">
               {loading ? "…" : k.value}
             </div>
 
@@ -89,7 +89,7 @@ export default function AdminDashboard() {
       <section className="grid gap-3 lg:grid-cols-2">
         {/* Users chart */}
         <div className="relative overflow-hidden rounded-2xl border border-yellow-500/25 bg-zinc-950/90 p-4 ring-1 ring-yellow-400/20 shadow-[0_0_30px_rgba(250,204,21,0.28)] transition hover:shadow-[0_0_48px_rgba(250,204,21,0.40)] hover:ring-yellow-400/30">
-          <div className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen bg-[radial-gradient(120%_60%_at_50%_120%,rgba(250,204,21,0.10),transparent)]" />
+          <div className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen bg-[radial-gradient(120%_60%_at_50%_120%,rgba(250,204,21,0.10),transparent)] motion-safe:animate-[pulse_3.5s_ease-in-out_infinite]" />
           <div className="font-medium mb-2 text-yellow-100 drop-shadow-[0_0_12px_rgba(250,204,21,0.55)]">
             New Users (Last 30 days)
           </div>
@@ -133,7 +133,7 @@ export default function AdminDashboard() {
 
         {/* Transactions chart */}
         <div className="relative overflow-hidden rounded-2xl border border-yellow-500/25 bg-zinc-950/90 p-4 ring-1 ring-yellow-400/20 shadow-[0_0_30px_rgba(250,204,21,0.28)] transition hover:shadow-[0_0_48px_rgba(250,204,21,0.40)] hover:ring-yellow-400/30">
-          <div className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen bg-[radial-gradient(120%_60%_at_50%_120%,rgba(250,204,21,0.10),transparent)]" />
+          <div className="pointer-events-none absolute inset-0 opacity-70 mix-blend-screen bg-[radial-gradient(120%_60%_at_50%_120%,rgba(250,204,21,0.10),transparent)] motion-safe:animate-[pulse_3.9s_ease-in-out_infinite]" />
           <div className="font-medium mb-2 text-yellow-100 drop-shadow-[0_0_12px_rgba(250,204,21,0.55)]">
             Transactions (Last 30 days)
           </div>
