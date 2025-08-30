@@ -57,8 +57,8 @@ export default function AdminGames() {
             Global RTP
           </h2>
 
-          {/* STACK column fills most of the card */}
-          <div className="flex flex-col gap-4 h-full">
+          {/* STACK column */}
+          <div className="flex flex-col gap-4">
             <select
               value={globalGame}
               onChange={(e) => setGlobalGame(e.target.value)}
@@ -77,7 +77,8 @@ export default function AdminGames() {
               className="w-full bg-black/60 border-2 border-yellow-500/40 rounded-2xl px-5 py-4 text-lg text-yellow-100 placeholder-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
             />
 
-            <div className="mt-auto">
+            {/* Save button slightly above bottom */}
+            <div className="mt-6">
               <button
                 onClick={saveGlobal}
                 className="w-full px-6 py-4 rounded-2xl text-lg font-semibold text-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-200 hover:from-yellow-200 hover:to-amber-200 ring-1 ring-yellow-400/40 shadow-[0_0_28px_rgba(250,204,21,0.45)] hover:shadow-[0_0_40px_rgba(250,204,21,0.55)] active:translate-y-px transition"
@@ -95,8 +96,8 @@ export default function AdminGames() {
             Per-user RTP
           </h2>
 
-          {/* STACK column fills most of the card */}
-          <div className="flex flex-col gap-4 h-full">
+          {/* STACK column */}
+          <div className="flex flex-col gap-4">
             <input
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
@@ -122,7 +123,8 @@ export default function AdminGames() {
               className="w-full bg-black/60 border-2 border-yellow-500/40 rounded-2xl px-5 py-4 text-lg text-yellow-100 placeholder-yellow-300/60 outline-none focus:ring-2 focus:ring-yellow-400/40 focus:border-yellow-300 transition"
             />
 
-            <div className="mt-auto">
+            {/* Save button slightly above bottom */}
+            <div className="mt-6">
               <button
                 onClick={saveUser}
                 className="w-full px-6 py-4 rounded-2xl text-lg font-semibold text-black bg-gradient-to-r from-yellow-300 via-amber-300 to-yellow-200 hover:from-yellow-200 hover:to-amber-200 ring-1 ring-yellow-400/40 shadow-[0_0_28px_rgba(250,204,21,0.45)] hover:shadow-[0_0_40px_rgba(250,204,21,0.55)] active:translate-y-px transition"
