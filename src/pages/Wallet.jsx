@@ -1,7 +1,7 @@
 // src/pages/Wallet.jsx
 import { useEffect, useMemo, useState } from "react";
 import WebApp from "@twa-dev/sdk";
-import { api } from "../api"; 
+import { api } from "../api";
 import { useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { beginCell } from "@ton/ton";
 
@@ -23,7 +23,7 @@ function FieldRow({ label, value, readOnly = true, onChange, onCopy }) {
         <input
           value={value}
           readOnly={readOnly}
-          onChange={onChange || (() => {})}
+          onChange={onChange || (() => { })}
           className="flex-1 bg-transparent px-4 py-3 text-white outline-none"
         />
         {onCopy && (
@@ -51,6 +51,8 @@ export default function Wallet() {
 
   const [amountTon, setAmountTon] = useState("");
   const [sending, setSending] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
 
   const connectedAddress = useMemo(() => {
     return (
@@ -102,22 +104,29 @@ export default function Wallet() {
   }, [connectedAddress]);
 
   // disconnect wallet
-  const disconnectWallet = async () => {
-    try {
-      await ui.disconnect(); // TonConnect
-      await api("/wallet/disconnect", { method: "POST" }); // backend: remove from user.wallets[]
-      alert("Wallet disconnected.");
-      window.dispatchEvent(new Event("balance:refresh")); // optional
-    } catch (e) {
-      console.error("Disconnect failed:", e);
-      alert("Failed to disconnect wallet.");
-    }
-  };
+ const disconnectWallet = async () => {
+  // confirmation
+  const sure = window.confirm("Are you sure you want to disconnect your wallet?");
+  if (!sure) return;
+
+  try {
+    setDisconnecting(true);
+    await ui.disconnect(); // TonConnect
+    await api("/wallet/disconnect", { method: "POST" }); // remove from DB
+    alert("Wallet disconnected.");
+    window.dispatchEvent(new Event("balance:refresh")); // optional
+  } catch (e) {
+    console.error("Disconnect failed:", e);
+    alert("Failed to disconnect wallet.");
+  } finally {
+    setDisconnecting(false);
+  }
+};
 
   const connectTonkeeper = async () => {
     try {
       localStorage.removeItem("ton-connect-ui_last-wallet");
-    } catch {}
+    } catch { }
     const wallets = await ui.getWallets();
     const tk = wallets.find((w) => {
       const name = (w.name || w.appName || "").toLowerCase();
@@ -167,7 +176,7 @@ export default function Wallet() {
   const copy = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-    } catch {}
+    } catch { }
   };
 
   return (
@@ -192,10 +201,12 @@ export default function Wallet() {
               </div>
               <button
                 onClick={disconnectWallet}
-                className="w-full h-12 rounded-xl bg-red-600 text-white font-semibold"
+                disabled={disconnecting}
+                className="w-full h-12 rounded-xl bg-red-600 text-white font-semibold disabled:opacity-50"
               >
-                Disconnect Wallet
+                {disconnecting ? "Disconnecting…" : "Disconnect Wallet"}
               </button>
+
             </>
           )}
 
