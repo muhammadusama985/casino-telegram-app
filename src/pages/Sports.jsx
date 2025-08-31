@@ -1,5 +1,6 @@
 // src/pages/Sports.jsx
 import { useEffect, useMemo, useState } from "react";
+import { sports } from "../api"; // ← NEW: import your api.js sports helpers
 
 /**
  * New minimalist design: dark glass background, neon accents, compact scoreboard cards,
@@ -232,32 +233,21 @@ export default function Sports() {
     return { title: "Cricket — Live", hint: "Source: CricketData" };
   }, [sport]);
 
+  // 🔁 FETCH via api.js (no raw fetch)
   async function fetchMatches() {
     setRefreshing(true);
     setErr("");
     try {
-      let urls = [];
-      if (sport === "football") {
-        urls = [
-          "/api/sports/live?status=LIVE",
-          "/api/sports/live?status=IN_PLAY",
-          "/api/sports/live?status=SCHEDULED",
-        ];
-      } else if (sport === "nba") {
-        urls = ["/api/sports/nba/live"];
-      } else {
-        urls = ["/api/sports/cricket/live"];
-      }
-
       let got = [];
-      for (const u of urls) {
-        const r = await fetch(u);
-        if (!r.ok) continue;
-        const data = await r.json();
-        if (data?.matches?.length) {
-          got = data.matches;
-          break;
-        }
+      if (sport === "football") {
+        const r = await sports.footballBest(); // tries LIVE → IN_PLAY → SCHEDULED
+        got = r?.matches || [];
+      } else if (sport === "nba") {
+        const r = await sports.nba();
+        got = r?.matches || [];
+      } else {
+        const r = await sports.cricket();
+        got = r?.matches || [];
       }
       setMatches(got);
     } catch (e) {

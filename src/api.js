@@ -24,7 +24,7 @@ function setTgProfile(obj) {
 function getHeaders(extra = {}) {
   const uid = getUserId();
   return {
-    "Content-Type": "application/json",
+    "Content-Type": "application/json", "ngrok-skip-browser-warning": "true", 
     ...(uid ? { "x-user-id": uid } : {}),
     ...extra,
   };
@@ -32,18 +32,35 @@ function getHeaders(extra = {}) {
 
 async function handle(res) {
   const text = await res.text();
+  const trimmed = text.trim().toLowerCase();
+
+  // Catch HTML/doctype early
+  if (trimmed.startsWith("<!doctype") || trimmed.startsWith("<html")) {
+    const snippet = text.slice(0, 200).replace(/\s+/g, " ");
+    const err = new Error(`Non-JSON response. Snippet: ${snippet}`);
+    err.status = res.status;
+    err.payload = { raw: snippet };
+    throw err;
+  }
+
   let data;
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+
   if (!res.ok) {
     const msg = data?.error || data?.message || `HTTP ${res.status}`;
     const err = new Error(msg);
     err.status = res.status;
     err.payload = data;
-    console.error('[api.handle] Error:', err.status, err.message, err.payload);
+    console.error("[api.handle] Error:", err.status, err.message, err.payload);
     throw err;
   }
   return data;
 }
+
 
 export async function api(path, { method = "GET", body, headers } = {}) {
   console.log('[api] request:', method, BASE_URL + path, body || null);
@@ -243,3 +260,37 @@ export async function getBalance() {
   return num;
 }
 
+
+
+// ---------- Sports ----------
+export const sports = {
+  // Football via your backend proxy to football-data.org
+  football(status = "LIVE") {
+    // status: LIVE | IN_PLAY | SCHEDULED | FINISHED ...
+    return api(`/api/sports/live?status=${encodeURIComponent(status)}`);
+  },
+
+  // NBA via your backend proxy to balldontlie live box scores
+  nba() {
+    return api(`/api/sports/nba/live`);
+  },
+
+  // Cricket via your backend proxy to CricketData currentMatches
+  cricket() {
+    return api(`/api/sports/cricket/live`);
+  },
+
+  // Helper: try LIVE -> IN_PLAY -> SCHEDULED (handy for UI)
+  async footballBest() {
+    const order = ["LIVE", "IN_PLAY", "SCHEDULED"];
+    for (const st of order) {
+      try {
+        const r = await this.football(st);
+        if (r?.matches?.length) return r;
+      } catch {
+        /* try next */
+      }
+    }
+    return { matches: [], count: 0 };
+  },
+};
