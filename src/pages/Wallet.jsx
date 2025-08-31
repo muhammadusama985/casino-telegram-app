@@ -364,19 +364,15 @@
 // src/pages/Wallet.jsx
 import { useEffect, useMemo, useState } from "react";
 import WebApp from "@twa-dev/sdk";
-import { api } from "../api"; // no getBalance here; MainLayout listens to balance:refresh
+import { api } from "../api";
 import { useTonWallet, useTonConnectUI } from "@tonconnect/ui-react";
 import { beginCell } from "@ton/ton";
 
 // ---- utils ----
-
-// opcode(0) + stringTail(text) -> BOC base64
 function textCommentPayload(text) {
   const cell = beginCell().storeUint(0, 32).storeStringTail(text).endCell();
   return cell.toBoc().toString("base64");
 }
-
-// TON -> nanotons (string)
 const toNanoStr = (v) => {
   const n = Number(v);
   if (!isFinite(n) || n <= 0) return "0";
@@ -423,13 +419,38 @@ export default function Wallet() {
   const [sending, setSending] = useState(false);
 
   const connectedAddress = useMemo(() => {
-    // Try multiple shapes TonConnect might return
-    return (
-      tonWallet?.account?.address ||
-      tonWallet?.address ||
-      ""
-    );
+    return tonWallet?.account?.address || tonWallet?.address || "";
   }, [tonWallet]);
+
+  // --- 1) On mount: restrict TonConnect to Tonkeeper only (kills other icons) ---
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        // forget previous wallet choice so UI doesn't reopen the multi-picker
+        try {
+          localStorage.removeItem("ton-connect-ui_last-wallet");
+        } catch {}
+
+        const list = await ui.getWallets();
+        const tonkeeper = list.find((w) => {
+          const name = (w.name || w.appName || "").toLowerCase();
+          const about = (w.aboutUrl || "").toLowerCase();
+          return name.includes("tonkeeper") || about.includes("tonkeeper.com");
+        });
+
+        if (alive && tonkeeper) {
+          // hard allowlist ONLY Tonkeeper
+          await ui.setWalletsList([tonkeeper]);
+        }
+      } catch (e) {
+        console.warn("[Tonkeeper allowlist]", e);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [ui]);
 
   // Fetch a fresh deposit intent on mount
   useEffect(() => {
@@ -457,65 +478,7 @@ export default function Wallet() {
     };
   }, []);
 
-  // Hide everything in the TonConnect modal except Tonkeeper
-  useEffect(() => {
-    // when the connect modal opens, strip non-Tonkeeper options
-    const unsubscribe = ui.onModalStateChange(({ opened }) => {
-      if (!opened) return;
-
-      const scrub = () => {
-        try {
-          // find the modal container by its heading text (works across skins)
-          const modalRoot = Array.from(document.querySelectorAll("div"))
-            .find((el) => /connect your ton wallet/i.test(el.textContent || ""));
-
-          if (!modalRoot) return;
-
-          // 1) kill the big "Connect Wallet in Telegram" button
-          Array.from(modalRoot.querySelectorAll("button")).forEach((btn) => {
-            const t = (btn.textContent || "").toLowerCase();
-            if (t.includes("connect wallet in telegram")) {
-              btn.style.display = "none";
-            }
-          });
-
-          // 2) hide non-Tonkeeper wallet tiles and “Choose other application” label
-          Array.from(modalRoot.querySelectorAll("button, a, div")).forEach((el) => {
-            const txt = (el.textContent || "").toLowerCase().trim();
-
-            // remove other wallet options
-            if (txt.includes("mytonwallet") || txt.includes("tonhub")) {
-              (el.closest("button") || el).style.display = "none";
-            }
-
-            // remove category caption + “View all wallets” entry
-            if (txt === "choose other application" || txt.includes("view all wallets")) {
-              el.style.display = "none";
-            }
-          });
-        } catch {}
-      };
-
-      // initial scrub (modal content renders async)
-      setTimeout(scrub, 0);
-
-      // keep scrubbing as modal re-renders
-      const mo = new MutationObserver(() => scrub());
-      mo.observe(document.body, { childList: true, subtree: true });
-
-      // stop when modal closes
-      const off = ui.onModalStateChange((s) => {
-        if (!s.opened) {
-          mo.disconnect();
-          off?.();
-        }
-      });
-    });
-
-    return () => unsubscribe?.();
-  }, [ui]);
-
-  // Helpful TonConnect logs
+  // Helpful TonConnect logs (optional)
   useEffect(() => {
     const off1 = ui.onStatusChange((info) => console.log("[TonConnect status]", info));
     const off2 = ui.onModalStateChange((state) => console.log("[TonConnect modal]", state));
@@ -525,7 +488,7 @@ export default function Wallet() {
     };
   }, [ui]);
 
-  // When a wallet is connected, persist it on backend (optional but nice)
+  // Persist connected wallet (optional)
   useEffect(() => {
     (async () => {
       if (!connectedAddress) return;
@@ -540,20 +503,15 @@ export default function Wallet() {
     })();
   }, [connectedAddress]);
 
-  // ---- Tonkeeper-only connect method (added) ----
+  // --- 2) Connect method: open ONLY Tonkeeper (no wallet list, no "View all") ---
   const connectTonkeeper = async () => {
-    // clear any previous generic selection to avoid multi-wallet sticky state
     try {
-      localStorage.removeItem("ton-connect-ui_last-wallet");
-    } catch {}
+      // ensure modal never shows other wallets
+      try {
+        localStorage.removeItem("ton-connect-ui_last-wallet");
+      } catch {}
 
-    // light UA check to tweak messaging (no UI/logic changes elsewhere)
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-
-    try {
       const wallets = await ui.getWallets();
-
-      // find Tonkeeper across platforms/builds
       const tk = wallets.find((w) => {
         const name = (w.name || w.appName || "").toLowerCase();
         const about = (w.aboutUrl || "").toLowerCase();
@@ -561,25 +519,33 @@ export default function Wallet() {
       });
 
       if (!tk) {
-        const go = confirm(
-          isMobile
-            ? "Tonkeeper app not detected. Open the install page?"
-            : "Tonkeeper extension not detected. Open the install page?"
-        );
+        const go = confirm("Tonkeeper not found. Open the install page?");
         if (go) window.open("https://tonkeeper.com/download", "_blank", "noopener,noreferrer");
         return;
       }
 
-      // try direct connect (extension on desktop if present; app on mobile)
-      try {
-        await ui.connectWallet(tk);
+      // If the SDK supports it, open Tonkeeper's single-wallet modal (no list).
+      if (typeof ui.openSingleWalletModal === "function") {
+        await ui.openSingleWalletModal(tk);
         return;
-      } catch (directErr) {
-        console.warn("direct connect failed, attempting universalLink", directErr);
       }
 
-      // fallback: open Tonkeeper universal deep link (guides install if missing)
-      if (tk.universalLink) {
+      // Otherwise connect directly (extension on desktop; app on mobile)
+      await ui.connectWallet(tk);
+      return;
+    } catch (err) {
+      console.warn("connectWallet(tk) failed, trying universal link", err);
+    }
+
+    // Final fallback: universal link deep-open (guides install if missing)
+    try {
+      const wallets = await ui.getWallets();
+      const tk = wallets.find((w) => {
+        const name = (w.name || w.appName || "").toLowerCase();
+        const about = (w.aboutUrl || "").toLowerCase();
+        return name.includes("tonkeeper") || about.includes("tonkeeper.com");
+      });
+      if (tk?.universalLink) {
         const link = tk.universalLink;
         if (WebApp?.openTelegramLink) {
           WebApp.openTelegramLink(link);
@@ -588,17 +554,28 @@ export default function Wallet() {
         }
         return;
       }
+    } catch {}
 
-      // last-resort: take user to downloads
-      const go = confirm("Could not open Tonkeeper. Install Tonkeeper?");
-      if (go) window.open("https://tonkeeper.com/download", "_blank", "noopener,noreferrer");
-    } catch (err) {
-      console.warn("Tonkeeper connect error:", err);
-      const go = confirm("Could not open Tonkeeper. Install Tonkeeper?");
-      if (go) window.open("https://tonkeeper.com/download", "_blank", "noopener,noreferrer");
-    }
+    const go = confirm("Could not open Tonkeeper. Install Tonkeeper?");
+    if (go) window.open("https://tonkeeper.com/download", "_blank", "noopener,noreferrer");
   };
-  // ---- end connect method ----
+
+  // --- 3) Guard: if the generic list still pops somehow, kill it immediately ---
+  useEffect(() => {
+    const off = ui.onModalStateChange((s) => {
+      if (!s.opened) return;
+      // if a generic list sneaks in, close it and reopen single-wallet flow
+      const hasWalletGrid =
+        document.querySelector('[data-tc-wallets-list]') ||
+        /Choose other application/i.test(document.body.textContent || "");
+      if (hasWalletGrid) {
+        ui.closeModal();
+        // re-run the strict connect
+        setTimeout(() => connectTonkeeper(), 0);
+      }
+    });
+    return () => off?.();
+  }, [ui]);
 
   // Send TON with the mandatory comment
   const transferTon = async () => {
@@ -615,17 +592,14 @@ export default function Wallet() {
         messages: [
           {
             address: adminAddress,
-            amount: toNanoStr(amt), // TON → nanotons
+            amount: toNanoStr(amt),
             payload: textCommentPayload(comment),
           },
         ],
       });
-
-      // Let MainLayout refresh balance after watcher credits
       setTimeout(() => {
         window.dispatchEvent(new Event("balance:refresh"));
       }, 4000);
-
       alert("Transfer submitted. We will credit coins after confirmation.");
       setAmountTon("");
     } catch (e) {
@@ -658,7 +632,8 @@ export default function Wallet() {
             </button>
           ) : (
             <div className="w-full h-12 rounded-xl bg-emerald-800/40 border border-emerald-700 grid place-items-center text-emerald-300">
-              ✅ Tonkeeper connected {connectedAddress ? `(${connectedAddress.slice(0, 4)}…${connectedAddress.slice(-4)})` : ""}
+              ✅ Tonkeeper connected{" "}
+              {connectedAddress ? `(${connectedAddress.slice(0, 4)}…${connectedAddress.slice(-4)})` : ""}
             </div>
           )}
 
@@ -687,7 +662,7 @@ export default function Wallet() {
             onChange={(e) => setAmountTon(e.target.value)}
           />
 
-          <FieldRow
+        <FieldRow
             label="Treasury / Admin TON address"
             value={adminAddress || (loadingIntent ? "Loading…" : "—")}
             onCopy={() => adminAddress && copy(adminAddress)}
@@ -719,3 +694,4 @@ export default function Wallet() {
     </div>
   );
 }
+
