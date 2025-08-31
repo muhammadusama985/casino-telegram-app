@@ -58,6 +58,7 @@ export default function Wallet() {
   // UX
   const [amountTon, setAmountTon] = useState("");
   const [sending, setSending] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false); // <-- NEW
 
   const connectedAddress = useMemo(() => {
     // Try multiple shapes TonConnect might return
@@ -165,6 +166,47 @@ export default function Wallet() {
     }
   };
 
+  // --- NEW: Disconnect Tonkeeper, confirm, show loading, and clear server-side wallets ---
+  const disconnectTonkeeper = async () => {
+    if (!tonWallet) return;
+    const ok = confirm("Disconnect Tonkeeper wallet?");
+    if (!ok) return;
+
+    try {
+      setDisconnecting(true);
+
+      // 1) Disconnect from TonConnect UI (removes active session)
+      try {
+        if (typeof ui.disconnect === "function") {
+          await ui.disconnect();
+        } else if (typeof ui.resetConnection === "function") {
+          await ui.resetConnection();
+        }
+      } catch (e) {
+        console.warn("TonConnect disconnect failed (continuing):", e);
+      }
+
+      // 2) Clear saved wallet(s) on backend
+      try {
+        await api("/wallet/disconnect", { method: "POST" });
+      } catch (e) {
+        console.warn("Backend /wallet/disconnect failed:", e?.message || e);
+      }
+
+      // Optional: nudge any listeners (e.g., balance refresh)
+      setTimeout(() => {
+        window.dispatchEvent(new Event("balance:refresh"));
+      }, 500);
+
+      alert("Wallet disconnected.");
+    } catch (e) {
+      console.error("Disconnect error:", e);
+      alert("Failed to disconnect. Please try again.");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
   // Send TON with the mandatory comment
   const transferTon = async () => {
     const amt = parseFloat(amountTon);
@@ -212,7 +254,7 @@ export default function Wallet() {
       <div className="px-4 pb-28">
         <h2 className="mt-2 text-2xl font-semibold">Wallet</h2>
 
-        {/* CONNECT TONKEEPER */}
+        {/* CONNECT / STATUS + DISCONNECT */}
         <div className="mt-4">
           {!tonWallet ? (
             <button
@@ -222,8 +264,19 @@ export default function Wallet() {
               Connect Tonkeeper
             </button>
           ) : (
-            <div className="w-full h-12 rounded-xl bg-emerald-800/40 border border-emerald-700 grid place-items-center text-emerald-300">
-              ✅ Tonkeeper connected {connectedAddress ? `(${connectedAddress.slice(0, 4)}…${connectedAddress.slice(-4)})` : ""}
+            <div className="grid gap-2">
+              <div className="w-full h-12 rounded-xl bg-emerald-800/40 border border-emerald-700 grid place-items-center text-emerald-300">
+                ✅ Tonkeeper connected {connectedAddress ? `(${connectedAddress.slice(0, 4)}…${connectedAddress.slice(-4)})` : ""}
+              </div>
+
+              {/* NEW: Disconnect button */}
+              <button
+                onClick={disconnectTonkeeper}
+                disabled={disconnecting}
+                className="w-full h-12 rounded-xl bg-zinc-800 text-zinc-200 border border-zinc-700 font-semibold disabled:opacity-60"
+              >
+                {disconnecting ? "Disconnecting…" : "Disconnect wallet"}
+              </button>
             </div>
           )}
 
