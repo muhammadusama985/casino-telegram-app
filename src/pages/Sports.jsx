@@ -33,15 +33,9 @@ function LiveDot({ on = false }) {
 function Header({ sport, setSport, refreshing, setForceRefresh }) {
   return (
     <header className="sticky top-0 z-20 backdrop-blur-xl bg-[#0b0b0e]/70 border-b border-white/5">
-      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-3">
-        <div className="flex items-center gap-2 mr-2">
-          <div className="h-9 w-9 grid place-items-center rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/10">
-            🧠
-          </div>
-          <div className="text-lg font-semibold tracking-wide">Imperial <span className="text-zinc-300">Scores</span></div>
-        </div>
-
-        <nav className="ml-auto flex items-center gap-2 rounded-xl p-1 bg-black/50 border border-white/10">
+      <div className="mx-auto max-w-6xl px-4 py-3">
+        {/* Sport icons row */}
+        <nav className="flex items-center gap-2 rounded-xl p-1 bg-black/50 border border-white/10">
           {SPORT_DEFS.map((s) => {
             const active = sport === s.key;
             return (
@@ -63,17 +57,21 @@ function Header({ sport, setSport, refreshing, setForceRefresh }) {
           })}
         </nav>
 
-        <button
-          onClick={() => setForceRefresh((v) => v + 1)}
-          className="ml-2 h-9 px-3 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-zinc-200 text-sm transition-colors"
-          title="Refresh"
-        >
-          {refreshing ? "Refreshing…" : "Refresh"}
-        </button>
+        {/* Refresh button below icons */}
+        <div className="mt-2 flex justify-end">
+          <button
+            onClick={() => setForceRefresh((v) => v + 1)}
+            className="h-9 px-3 rounded-lg bg-white/10 hover:bg-white/20 border border-white/10 text-zinc-200 text-sm transition-colors"
+            title="Refresh"
+          >
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
       </div>
     </header>
   );
 }
+
 
 function SectionTitle({ title, hint, live = false }) {
   return (
