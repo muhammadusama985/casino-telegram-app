@@ -1522,27 +1522,25 @@ function BackButtonInline({ to = "/" }) {
 }
 
 /* ===================== LOTTIE COIN with WAIT→RESOLVE flow (HEAD/TAIL) ===================== */
+/* ===================== LOTTIE COIN with HEAD/TAIL CENTER OVERLAY ===================== */
 const Coin3DLottie = forwardRef(function Coin3DLottie({ ariaFace = "H" }, ref) {
   const wrapRef = useRef(null);
-  const coinRef = useRef(null);       // Lottie instance for the coin motion
-  const bgRef = useRef(null);         // Lottie instance for the coin background glow
+  const coinRef = useRef(null); // coin motion Lottie
+  const bgRef = useRef(null);   // background Lottie (glow/ring)
 
   // If your JSON frame count differs, tweak these:
-  const TOTAL = 1140;         // total frames (approx from your JSON)
-  const HEADS_FRAME = 80;     // landing pose for HEAD
-  const TAILS_FRAME = 570;    // landing pose for TAIL (roughly 180° apart)
-  const FINAL_SPIN_SEGMENT = [0, 360]; // quick resolve burst
+  const HEADS_FRAME = 80;
+  const TAILS_FRAME = 570;
+  const FINAL_SPIN_SEGMENT = [0, 360];
 
   const playResolve = async (targetFrame) => {
     try {
-      coinRef.current?.setSpeed(2.0); // faster resolve
-      // quick spin burst
+      coinRef.current?.setSpeed(2.0); // faster settle
       await new Promise((r) => {
         coinRef.current?.playSegments(FINAL_SPIN_SEGMENT, true);
-        const t = setTimeout(r, 350); // ~0.35s burst
+        const t = setTimeout(r, 350);
         return () => clearTimeout(t);
       });
-      // snap to target
       coinRef.current?.goToAndStop(targetFrame, true);
     } catch {}
   };
@@ -1551,8 +1549,8 @@ const Coin3DLottie = forwardRef(function Coin3DLottie({ ariaFace = "H" }, ref) {
     startWaiting() {
       try {
         coinRef.current?.setSpeed(1.0);
-        coinRef.current?.play();   // loop while waiting
-        bgRef.current?.play();     // loop background
+        coinRef.current?.play();  // loop
+        bgRef.current?.play();    // loop
       } catch {}
     },
     resolve(desired) {
@@ -1560,7 +1558,7 @@ const Coin3DLottie = forwardRef(function Coin3DLottie({ ariaFace = "H" }, ref) {
       return new Promise((resolve) => {
         (async () => {
           try {
-            coinRef.current?.stop(); // stop loop before resolve burst
+            coinRef.current?.stop();
             await playResolve(target);
           } finally {
             resolve();
@@ -1584,7 +1582,7 @@ const Coin3DLottie = forwardRef(function Coin3DLottie({ ariaFace = "H" }, ref) {
       role="img"
       aria-label={ariaFace === "H" ? "Head" : "Tail"}
     >
-      {/* Background ring / coin background (always looping) */}
+      {/* Background ring (always looping) */}
       <div className="absolute inset-0">
         <Lottie
           lottieRef={bgRef}
@@ -1595,7 +1593,7 @@ const Coin3DLottie = forwardRef(function Coin3DLottie({ ariaFace = "H" }, ref) {
         />
       </div>
 
-      {/* Foreground coin motion */}
+      {/* Foreground coin (has the baked-in 'B') */}
       <div className="absolute inset-0">
         <Lottie
           lottieRef={coinRef}
@@ -1606,20 +1604,42 @@ const Coin3DLottie = forwardRef(function Coin3DLottie({ ariaFace = "H" }, ref) {
         />
       </div>
 
-      {/* HEAD / TAIL overlay text (center). Replaces old symbols. */}
+      {/* --- Center cover to hide the 'B' symbol --- */}
+      {/* This is a circular “plug” that matches the coin’s inner gradient so it looks native */}
       <div className="absolute inset-0 grid place-items-center pointer-events-none" aria-hidden="true">
+        <div
+          style={{
+            width: "56%",                 // adjust 52–60% if needed
+            height: "56%",
+            borderRadius: "50%",
+            border: "2px solid rgba(255,255,255,.22)",
+            boxShadow: "0 0 0 6px rgba(0,0,0,.12) inset",
+            background: `
+              radial-gradient(circle at 35% 30%, rgba(255,255,255,.60), rgba(255,255,255,0) 40%),
+              radial-gradient(circle at 65% 70%, rgba(0,0,0,.25), rgba(0,0,0,0) 60%),
+              linear-gradient(135deg, #FFD76A, #FFA928 40%, #E37B00 80%, #8E4B00)
+            `,
+            // small z-index bump to sit above the B but below the text
+            zIndex: 2,
+          }}
+        />
+      </div>
+
+      {/* HEAD / TAIL text on top of the cover */}
+      <div className="absolute inset-0 grid place-items-center pointer-events-none" aria-hidden="true" style={{ zIndex: 3 }}>
         <span
           style={{
-            fontSize: "clamp(22px, 4.5vw, 28px)",
+            fontSize: "clamp(28px, 5vw, 34px)",
             fontWeight: 800,
             letterSpacing: "1px",
             color: "#ffdf86",
             textShadow: "0 1px 0 #b07c00, 0 -1px 1px rgba(255,255,255,0.6)",
           }}
         >
-          {ariaFace === "H" ? "HEAD" : "TAIL"}
+          {ariaFace === "H" ? "H" : "T"}
         </span>
       </div>
     </div>
   );
 });
+
