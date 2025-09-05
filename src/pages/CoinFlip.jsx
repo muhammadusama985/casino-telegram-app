@@ -1504,12 +1504,14 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   }), []);
 
   // prebuild sparks
-  const sparks = Array.from({ length: 16 }, (_, i) => {
-    const angle = i * (360 / 16);
-    const delay = (i % 8) * 0.12;
-    const sym = i % 2 ? "€" : "$";
-    return { angle, delay, sym, key: i };
-  });
+// prebuild sparks — more points for even edge coverage
+const sparks = Array.from({ length: 24 }, (_, i) => {
+  const angle = i * (360 / 24);     // every 15°
+  const delay = (i % 12) * 0.10;    // subtle stagger
+  const sym = i % 2 ? "€" : "$";
+  return { angle, delay, sym, key: i };
+});
+
 
   return (
     <div className="coinflip-scene" style={{ perspective: "1200px" }}>
@@ -1631,50 +1633,68 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         .coinflip-overlay-back  { transform: rotateY(180deg) translateZ(calc(var(--thickness) / 2 + 0.2px)); }
 
         /* rotating rim highlight (thin donut) */
-        .coinflip-ring-css {
-          position: absolute; inset: 0; border-radius: 50%;
-          -webkit-mask-image: radial-gradient(circle at 50% 50%,
-            transparent calc(50% - 34%),
-            black      calc(50% - 31%),
-            black      calc(50% - 24%),
-            transparent calc(50% - 21%)
-          );
-          mask-image: radial-gradient(circle at 50% 50%,
-            transparent calc(50% - 34%),
-            black      calc(50% - 31%),
-            black      calc(50% - 24%),
-            transparent calc(50% - 21%)
-          );
-          background:
-            conic-gradient(from 0deg,
-              rgba(255,255,255,0) 0deg,
-              rgba(255,255,255,0) 308deg,
-              rgba(255,255,255,.95) 320deg,
-              rgba(255,255,255,0) 350deg,
-              rgba(255,255,255,0) 360deg
-            );
-          filter: blur(0.6px); mix-blend-mode: screen;
-          animation: coin-rim-spin 1.2s linear infinite;
-        }
+      .coinflip-ring-css {
+  position: absolute; inset: 0; border-radius: 50%;
+  /* Clip to a very thin ring at the outermost edge (≈5px thick) */
+  -webkit-mask-image: radial-gradient(circle closest-side,
+    transparent calc(100% - 5px),
+    black      calc(100% - 5px)
+  );
+  mask-image: radial-gradient(circle closest-side,
+    transparent calc(100% - 5px),
+    black      calc(100% - 5px)
+  );
+
+  /* bright arc sweeping around the rim */
+  background:
+    conic-gradient(from 0deg,
+      rgba(255,255,255,0) 0deg,
+      rgba(255,255,255,0) 300deg,
+      rgba(255,255,255,1) 330deg,
+      rgba(255,255,255,0) 360deg
+    );
+  filter: blur(0.4px);
+  mix-blend-mode: screen;
+  animation: coin-rim-spin 1.1s linear infinite;
+}
+
         @keyframes coin-rim-spin { to { transform: rotate(360deg); } }
 
         /* sparks */
-        .coinflip-sparks-css { position: absolute; inset: 0; }
-        .coinflip-spark {
-          position: absolute; left: 50%; top: 50%;
-          transform-origin: center center;
-          font-size: 10px; font-weight: 800; color: #FFE08A;
-          text-shadow: 0 1px 0 #b07c00, 0 -1px 1px rgba(255,255,255,0.5);
-          opacity: 0; animation: coin-spark 1.8s linear infinite;
-          animation-delay: var(--d, 0s);
-          transform: rotate(var(--a)) translateY(-35%) rotate(calc(var(--a) * -1));
-        }
-        @keyframes coin-spark {
-          0%   { opacity: 0; transform: rotate(var(--a)) translateY(-35%) rotate(calc(var(--a) * -1)) scale(0.85); filter: blur(0.4px); }
-          10%  { opacity: 1; transform: rotate(var(--a)) translateY(-38%) rotate(calc(var(--a) * -1)) scale(0.95); }
-          60%  { opacity: .9; transform: rotate(var(--a)) translateY(-44%) rotate(calc(var(--a) * -1)) scale(1.0); }
-          100% { opacity: 0; transform: rotate(var(--a)) translateY(-52%) rotate(calc(var(--a) * -1)) scale(1.05); filter: blur(0.8px); }
-        }
+       .coinflip-sparks-css {
+  position: absolute; inset: 0; border-radius: 50%;
+  /* confine sparks visually to the last edge */
+  -webkit-mask-image: radial-gradient(circle closest-side,
+    transparent calc(100% - 10px),
+    black      100%
+  );
+  mask-image: radial-gradient(circle closest-side,
+    transparent calc(100% - 10px),
+    black      100%
+  );
+}
+
+     .coinflip-spark {
+  position: absolute; left: 50%; top: 50%;
+  transform-origin: center center;
+  font-size: 9px; font-weight: 800; color: #fff;           /* white symbols */
+  text-shadow:
+    0 0 6px rgba(255,255,255,0.85),
+    0 0 12px rgba(255,255,255,0.35);
+  opacity: 0;
+  animation: coin-spark 1.6s linear infinite;
+  animation-delay: var(--d, 0s);
+  /* start on the outer rim (-50%), keep glyph upright */
+  transform: rotate(var(--a)) translateY(-50%) rotate(calc(var(--a) * -1));
+}
+
+@keyframes coin-spark {
+  0%   { opacity: 0; transform: rotate(var(--a)) translateY(-50%) rotate(calc(var(--a) * -1)) scale(0.85); filter: blur(0.2px); }
+  10%  { opacity: 1; transform: rotate(var(--a)) translateY(-52%) rotate(calc(var(--a) * -1)) scale(0.95); }
+  60%  { opacity: .95; transform: rotate(var(--a)) translateY(-56%) rotate(calc(var(--a) * -1)) scale(1.0); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(-62%) rotate(calc(var(--a) * -1)) scale(1.05); filter: blur(0.6px); }
+}
+
 
         @media (prefers-reduced-motion: reduce) {
           .coinflip-wait { animation-duration: 0.01ms; }
