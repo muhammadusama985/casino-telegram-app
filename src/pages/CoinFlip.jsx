@@ -1650,7 +1650,8 @@ const sparks = Array.from({ length: 24 }, (_, i) => {
     conic-gradient(from 0deg,
       rgba(255,255,255,0) 0deg,
       rgba(255,255,255,0) 300deg,
-      rgba(255,255,255,1) 330deg,
+/* orange glow arc */
+rgba(255,120,0,1)
       rgba(255,255,255,0) 360deg
     );
   filter: blur(0.4px);
