@@ -1173,63 +1173,49 @@
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
 
-import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
+import flipSound from "../assets/diceRoll.mp3";
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
 
-// format helpers
+// helpers
 const fmt = (n) =>
-  Number(n).toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
+  Number(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 function formatCoins(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return "0";
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-const STREAK_BOOST_PER_WIN = 0.05;   // UI-only boost per consecutive win (must match backend cfg)
-const BASE_PAYOUT_PCT       = 0.90;  // 90% profit baseline (must match backend cfg)
-const PAYOUT_CAP            = 1.0;   // cap profit at 100% of stake (must match backend cfg)
-const TRAIL_LEN             = 10;
+const STREAK_BOOST_PER_WIN = 0.05;
+const BASE_PAYOUT_PCT = 0.90;
+const PAYOUT_CAP = 1.0;
+const TRAIL_LEN = 10;
 
 export default function Coinflip() {
-  // balance
   const [coins, setCoins] = useState(0);
-
-  // game state
   const [bet, setBet] = useState(1);
-  const [baseCoef, setBaseCoef] = useState(1.95); // default shown coef
+  const [baseCoef, setBaseCoef] = useState(1.95);
   const [streak, setStreak] = useState(0);
   const [round, setRound] = useState(1);
   const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?"));
   const [flipping, setFlipping] = useState(false);
   const [resultMsg, setResultMsg] = useState("");
-  const [face, setFace] = useState("H"); // H->$, T->€
-
-  // coin animation API ref
+  const [face, setFace] = useState("H"); // H/T
   const coinApiRef = useRef(null);
 
-  // coefficient shown: base when no streak; boosted when streak > 0
   const effectiveCoef = useMemo(
     () => Number((baseCoef * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak))).toFixed(2)),
     [baseCoef, streak]
   );
-
-  // EFFECTIVE payout% that will be CREDITED on win (matches backend: 0.90 * (1 + 0.05*streak), capped)
   const effectivePayoutPct = useMemo(() => {
     const boosted = BASE_PAYOUT_PCT * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak));
     return Math.min(PAYOUT_CAP, Math.max(0.01, Number(boosted)));
   }, [streak]);
-
-  // “Take” bar shows the PROFIT (not total return)
   const potentialProfit = useMemo(() => {
     const stake = Math.max(0, Number(bet || 0));
     return Math.floor((stake * effectivePayoutPct + Number.EPSILON) * 100) / 100;
   }, [bet, effectivePayoutPct]);
 
-  /* ---------- balance bootstrap ---------- */
   useEffect(() => {
     let stopPolling = () => {};
     (async () => {
@@ -1278,7 +1264,6 @@ export default function Coinflip() {
     };
   }, []);
 
-  /* ---------- actions ---------- */
   const placeBet = async (side) => {
     if (flipping) return;
     const stake = Math.max(1, Math.floor(Number(bet || 0)));
@@ -1288,22 +1273,17 @@ export default function Coinflip() {
     setFlipping(true);
     setResultMsg("");
 
-    // 1) Start spin immediately (no message yet)
     try { new Audio(flipSound).play().catch(() => {}); } catch {}
     try { coinApiRef.current?.startWaiting(); } catch {}
 
     try {
-      // 2) Ask backend
       const res = await games.coinflip(stake, side === "H" ? "H" : "T", { streak });
-
-      // sync default coef from engine if provided (optional)
       const m = Number(res?.details?.m);
       if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
       const landed = (res?.details?.landed === "T") ? "T" : "H";
-      setFace(landed); // update ARIA/semantics
+      setFace(landed);
 
-      // 3) Resolve the spin to the correct side, then show result/message
       await (coinApiRef.current?.resolve(landed) ?? Promise.resolve());
 
       if (Number.isFinite(res?.newBalance)) {
@@ -1313,9 +1293,8 @@ export default function Coinflip() {
       setRound((r) => r + 1);
 
       if (res?.result === "win") {
-        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN)); // fill bubble with result
+        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN));
         setStreak((s) => s + 1);
-
         const profit = Number(res?.payout || 0);
         const msg = `🎉 You Win! +${fmt(profit)}`;
         setResultMsg(msg);
@@ -1324,7 +1303,6 @@ export default function Coinflip() {
       } else {
         setStreak(0);
         setTrail(Array(TRAIL_LEN).fill("?"));
-
         const msg = `❌ You Lose! -${fmt(stake)}`;
         setResultMsg(msg);
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
@@ -1333,7 +1311,6 @@ export default function Coinflip() {
 
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
-      // stop any waiting spin on error
       try { coinApiRef.current?.stop(); } catch {}
       const msg = String(e?.message || "");
       if (msg.includes("insufficient-funds")) alert("Not enough coins.");
@@ -1347,7 +1324,7 @@ export default function Coinflip() {
 
   return (
     <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
-      {/* Coins header (match Dice) */}
+      {/* header */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <BackButtonInline to="/" />
@@ -1358,7 +1335,7 @@ export default function Coinflip() {
         </div>
       </div>
 
-      {/* top bubbles */}
+      {/* bubbles */}
       <div className="flex items-center justify-center gap-3 px-4 pt-2">
         {trail.map((ch, i) => (
           <div
@@ -1379,15 +1356,12 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin (CSS 3D coin) */}
         <div className="relative mx-4 flex items-center justify-center" style={{ width: 160, height: 160 }}>
           <Coin3D ref={coinApiRef} ariaFace={face} />
         </div>
 
         <div className="text-right">
-          <div className="text-2xl font-extrabold leading-none">
-            x{effectiveCoef.toFixed(2)}
-          </div>
+          <div className="text-2xl font-extrabold leading-none">x{effectiveCoef.toFixed(2)}</div>
           <div className="uppercase tracking-wider text-white/60 text-sm">Coef</div>
         </div>
       </div>
@@ -1397,9 +1371,7 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("H")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
-            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
-          }`}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`}
         >
           <div className="flex items-center gap-3">
             <MiniCoin symbol="$" />
@@ -1409,9 +1381,7 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("T")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
-            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
-          }`}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`}
         >
           <div className="flex items-center gap-3">
             <MiniCoin symbol="€" />
@@ -1424,30 +1394,13 @@ export default function Coinflip() {
       <div className="px-4 mt-6">
         <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
           <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
-            <button
-              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
-              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
-            >−</button>
-            <div className="text-center">
-              <span className="text-3xl font-extrabold">{fmt(bet)}</span>
-            </div>
-            <button
-              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
-              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
-            >+</button>
+            <button onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))} className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none">−</button>
+            <div className="text-center"><span className="text-3xl font-extrabold">{fmt(bet)}</span></div>
+            <button onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))} className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none">+</button>
           </div>
-
           <div className="mt-4">
-            <div
-              className="w-full rounded-xl py-3 text-center font-semibold"
-              style={{
-                background:
-                  "linear-gradient(90deg, rgba(255,165,0,0.25) 0%, rgba(255,120,0,0.35) 100%)",
-              }}
-            >
-              <div className="text-lg">
-                {fmt(potentialProfit)} 
-              </div>
+            <div className="w-full rounded-xl py-3 text-center font-semibold" style={{ background: "linear-gradient(90deg, rgba(255,165,0,0.25) 0%, rgba(255,120,0,0.35) 100%)" }}>
+              <div className="text-lg">{fmt(potentialProfit)}</div>
               <div className="text-sm opacity-60 -mt-1">Take</div>
             </div>
           </div>
@@ -1457,13 +1410,7 @@ export default function Coinflip() {
       {/* result toast */}
       {resultMsg && (
         <div className="px-4 mt-4">
-          <div
-            className={`rounded-xl px-4 py-3 text-center font-semibold ${
-              resultMsg.includes("Win")
-                ? "bg-emerald-600/30 text-emerald-200"
-                : "bg-rose-600/30 text-rose-200"
-            }`}
-          >
+          <div className={`rounded-xl px-4 py-3 text-center font-semibold ${resultMsg.includes("Win") ? "bg-emerald-600/30 text-emerald-200" : "bg-rose-600/30 text-rose-200"}`}>
             {resultMsg}
           </div>
         </div>
@@ -1479,8 +1426,7 @@ function MiniCoin({ symbol = "$" }) {
     <span
       className="inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold"
       style={{
-        background:
-          "radial-gradient(60% 60% at 50% 40%, #FFD76A 0%, #FFA928 55%, #E37B00 100%)",
+        background: "radial-gradient(60% 60% at 50% 40%, #FFD76A 0%, #FFA928 55%, #E37B00 100%)",
         boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
         color: "#402A00",
       }}
@@ -1493,13 +1439,9 @@ function MiniCoin({ symbol = "$" }) {
 
 function BackButtonInline({ to = "/" }) {
   const onClick = () => {
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      window.location.assign(to);
-    }
+    if (window.history.length > 1) window.history.back();
+    else window.location.assign(to);
   };
-
   return (
     <button
       onClick={onClick}
@@ -1508,84 +1450,63 @@ function BackButtonInline({ to = "/" }) {
       style={{ background: "rgba(255,255,255,0.04)" }}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2"
-              strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </button>
   );
 }
 
-
-/* ===================== 3D CSS COIN with WAIT->RESOLVE flow + EDGE FX ===================== */
+/* ===================== COIN (CSS 3D) + EDGE FX FIXED ===================== */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const coinRef = useRef(null);
   const waitTimerRef = useRef(null);
 
   function clearTimers() {
-    if (waitTimerRef.current) {
-      clearTimeout(waitTimerRef.current);
-      waitTimerRef.current = null;
-    }
+    if (waitTimerRef.current) { clearTimeout(waitTimerRef.current); waitTimerRef.current = null; }
   }
 
   useImperativeHandle(ref, () => ({
-    // Begin indefinite spin while waiting for backend
     startWaiting() {
-      const el = coinRef.current;
-      if (!el) return;
+      const el = coinRef.current; if (!el) return;
       clearTimers();
-      el.classList.remove("coinflip-anim");
-      // reflow
+      el.classList.remove("coinflip-anim"); // reflow
       // eslint-disable-next-line no-unused-expressions
       el.offsetWidth;
       el.classList.add("coinflip-wait");
     },
-    // Resolve to 'H' or 'T' and return a Promise that fulfills after the animation ends
     resolve(desired) {
-      const el = coinRef.current;
-      if (!el) return Promise.resolve();
-
-      // remove waiting loop
+      const el = coinRef.current; if (!el) return Promise.resolve();
       el.classList.remove("coinflip-wait");
-
-      const spins = Math.floor(1 + Math.random() * 1); // 1–2 spins (fast)
+      const spins = Math.floor(1 + Math.random() * 1);
       const yawStart = (Math.random() * 18 - 9).toFixed(2) + "deg";
       const yawEnd = (Math.random() * 24 - 12).toFixed(2) + "deg";
-      const duration = Math.floor(450 + Math.random() * 240); // ~0.45–0.69s
+      const duration = Math.floor(450 + Math.random() * 240);
       const half = desired === "T" ? 0.5 : 0;
-
       el.style.setProperty("--spins", String(spins));
       el.style.setProperty("--half", String(half));
       el.style.setProperty("--duration", duration + "ms");
       el.style.setProperty("--yawStart", yawStart);
       el.style.setProperty("--yawEnd", yawEnd);
-
-      // trigger final deterministic flip
       el.classList.remove("coinflip-anim");
       // eslint-disable-next-line no-unused-expressions
       el.offsetWidth;
       el.classList.add("coinflip-anim");
-
       return new Promise((resolve) => {
-        waitTimerRef.current = setTimeout(() => {
-          resolve();
-        }, duration + 60);
+        waitTimerRef.current = setTimeout(() => { resolve(); }, duration + 60);
       });
     },
-    // Stop any animation (used on error)
     stop() {
-      const el = coinRef.current;
-      if (!el) return;
+      const el = coinRef.current; if (!el) return;
       clearTimers();
       el.classList.remove("coinflip-wait");
       el.classList.remove("coinflip-anim");
     },
   }), []);
 
-  // Build small currency sparks around the rim (CSS-driven)
+  // prebuild sparks
   const sparks = Array.from({ length: 16 }, (_, i) => {
-    const angle = i * (360 / 16);               // 22.5° increments
-    const delay = (i % 8) * 0.12;               // staggered loop
+    const angle = i * (360 / 16);
+    const delay = (i % 8) * 0.12;
     const sym = i % 2 ? "€" : "$";
     return { angle, delay, sym, key: i };
   });
@@ -1597,24 +1518,18 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         className="coinflip-coin"
         role="img"
         aria-label={ariaFace === "H" ? "Heads" : "Tails"}
-        style={{
-          ['--size']: '160px',
-          ['--thickness']: '12px',
-        }}
+        style={{ ['--size']: '160px', ['--thickness']: '12px' }}
       >
-        {/* FRONT → Heads = H */}
+        {/* FRONT face */}
         <div className="coinflip-face coinflip-front"><CoinFace symbol="H" front /></div>
 
-        {/* ---- EDGE FX LAYER (rotating highlight + tiny $/€ bursts) ---- */}
-        <div className="coinflip-overlay" aria-hidden>
-          {/* Rotating rim highlight (thin annulus) */}
+        {/* EDGE FX — FRONT (sit slightly above the front face) */}
+        <div className="coinflip-overlay-front" aria-hidden>
           <div className="coinflip-ring-css" />
-
-          {/* Sparks: small $/€ that emerge from the edge and fade */}
           <div className="coinflip-sparks-css">
             {sparks.map((s) => (
               <span
-                key={s.key}
+                key={`f-${s.key}`}
                 className="coinflip-spark"
                 style={{ ['--a']: `${s.angle}deg`, ['--d']: `${s.delay}s` }}
               >
@@ -1624,13 +1539,28 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           </div>
         </div>
 
-        {/* BACK → Tails = T */}
+        {/* BACK face */}
         <div className="coinflip-face coinflip-back"><CoinFace symbol="T" /></div>
+
+        {/* EDGE FX — BACK (glued to the back face) */}
+        <div className="coinflip-overlay-back" aria-hidden>
+          <div className="coinflip-ring-css" />
+          <div className="coinflip-sparks-css">
+            {sparks.map((s) => (
+              <span
+                key={`b-${s.key}`}
+                className="coinflip-spark"
+                style={{ ['--a']: `${s.angle}deg`, ['--d']: `${s.delay + 0.06}s` }}
+              >
+                {s.sym}
+              </span>
+            ))}
+          </div>
+        </div>
 
         <div className="coinflip-shadow" aria-hidden />
       </div>
 
-      {/* coin styles */}
       <style>{`
         .coinflip-coin {
           width: var(--size);
@@ -1640,114 +1570,69 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           user-select: none;
         }
 
-        /* Waiting loop: smooth, continuous flipping (HORIZONTAL) */
-        .coinflip-wait {
-          animation: coinflip-wait 0.9s linear infinite;
-        }
+        /* waiting loop */
+        .coinflip-wait { animation: coinflip-wait 0.9s linear infinite; }
         @keyframes coinflip-wait {
-          0% {
-            transform:
-              rotateY(0turn)
-              rotateX(-6deg)
-              rotateZ(0deg);
-          }
-          100% {
-            transform:
-              rotateY(1turn)
-              rotateX(6deg)
-              rotateZ(3deg);
-          }
+          0%   { transform: rotateY(0turn)  rotateX(-6deg) rotateZ(0deg); }
+          100% { transform: rotateY(1turn)  rotateX(6deg)  rotateZ(3deg); }
         }
 
-        /* Final settle animation (deterministic, HORIZONTAL flip) */
-        .coinflip-coin.coinflip-anim {
-          animation: coinflip-spin var(--duration) cubic-bezier(.2,.7,.2,1) forwards;
-        }
+        /* resolve */
+        .coinflip-coin.coinflip-anim { animation: coinflip-spin var(--duration) cubic-bezier(.2,.7,.2,1) forwards; }
         @keyframes coinflip-spin {
-          0% {
-            transform:
-              rotateY(0turn)
-              rotateX(var(--yawStart))
-              rotateZ(0deg);
-          }
-          100% {
-            transform:
-              rotateY(calc((var(--spins) + var(--half)) * 1turn))
-              rotateX(var(--yawEnd))
-              rotateZ(3deg);
-          }
+          0%   { transform: rotateY(0turn) rotateX(var(--yawStart)) rotateZ(0deg); }
+          100% { transform: rotateY(calc((var(--spins) + var(--half)) * 1turn)) rotateX(var(--yawEnd)) rotateZ(3deg); }
         }
 
         .coinflip-face {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          backface-visibility: hidden;
-          display: grid;
-          place-items: center;
-          overflow: hidden;
-          box-shadow: 0 2px 1px rgba(0,0,0,.25) inset,
-                      0 10px 24px rgba(0,0,0,.35);
+          position: absolute; inset: 0; border-radius: 50%;
+          backface-visibility: hidden; display: grid; place-items: center; overflow: hidden;
+          box-shadow: 0 2px 1px rgba(0,0,0,.25) inset, 0 10px 24px rgba(0,0,0,.35);
         }
         .coinflip-front {
-          background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.45), rgba(255,255,255,0) 40%),
-                      radial-gradient(circle at 65% 70%, rgba(0,0,0,.18), rgba(0,0,0,0) 60%),
-                      linear-gradient(135deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
+          background:
+            radial-gradient(circle at 35% 30%, rgba(255,255,255,.45), rgba(255,255,255,0) 40%),
+            radial-gradient(circle at 65% 70%, rgba(0,0,0,.18), rgba(0,0,0,0) 60%),
+            linear-gradient(135deg, var(--coin-gold-1, #FFD76A), var(--coin-gold-2, #FFA928) 38%, var(--coin-gold-3, #E37B00) 62%, var(--coin-gold-4, #8E4B00));
           transform: translateZ(calc(var(--thickness) / 2));
         }
         .coinflip-back {
-          background: radial-gradient(circle at 65% 30%, rgba(255,255,255,.35), rgba(255,255,255,0) 40%),
-                      radial-gradient(circle at 35% 70%, rgba(0,0,0,.22), rgba(0,0,0,0) 60%),
-                      linear-gradient(225deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
+          background:
+            radial-gradient(circle at 65% 30%, rgba(255,255,255,.35), rgba(255,255,255,0) 40%),
+            radial-gradient(circle at 35% 70%, rgba(0,0,0,.22), rgba(0,0,0,0) 60%),
+            linear-gradient(225deg, var(--coin-gold-1, #FFD76A), var(--coin-gold-2, #FFA928) 38%, var(--coin-gold-3, #E37B00) 62%, var(--coin-gold-4, #8E4B00));
           transform: rotateY(180deg) translateZ(calc(var(--thickness) / 2));
         }
 
-        /* ridged edge illusion */
+        /* ridged edge */
         .coinflip-coin::before {
-          content: "";
-          position: absolute;
-          inset: 2.5%;
-          border-radius: 50%;
-          background: repeating-conic-gradient(
-            from 0deg,
-            rgba(0,0,0,.18) 0deg 6deg,
-            rgba(255,255,255,.18) 6deg 12deg
-          );
+          content: ""; position: absolute; inset: 2.5%; border-radius: 50%;
+          background: repeating-conic-gradient(from 0deg, rgba(0,0,0,.18) 0deg 6deg, rgba(255,255,255,.18) 6deg 12deg);
           filter: blur(.3px);
           transform: translateZ(calc(var(--thickness) * -0.5));
-          opacity: .45;
-          pointer-events: none;
+          opacity: .45; pointer-events: none;
         }
 
         .coinflip-shadow {
-          position: absolute;
-          left: 50%;
-          bottom: -22%;
-          width: 60%;
-          height: 16%;
-          transform: translateX(-50%);
-          background: radial-gradient(ellipse at center, rgba(0,0,0,.35), rgba(0,0,0,0));
-          filter: blur(4px);
-          opacity: .7;
-          pointer-events: none;
+          position: absolute; left: 50%; bottom: -22%; width: 60%; height: 16%;
+          transform: translateX(-50%); background: radial-gradient(ellipse at center, rgba(0,0,0,.35), rgba(0,0,0,0));
+          filter: blur(4px); opacity: .7; pointer-events: none;
         }
 
-        /* ---------- EDGE FX (pure CSS) ---------- */
-        .coinflip-overlay {
-          position: absolute;
-          inset: 0;
-          transform-style: preserve-3d;
-          backface-visibility: hidden;
-          pointer-events: none;
-          transform: translateZ(calc(var(--thickness) * 0)); /* mid-plane so visible both sides */
+        /* ----- EDGE FX ON BOTH SIDES ----- */
+        .coinflip-overlay-front,
+        .coinflip-overlay-back {
+          position: absolute; inset: 0; border-radius: 50%;
+          transform-style: preserve-3d; backface-visibility: hidden; pointer-events: none;
         }
+        /* just above the front face */
+        .coinflip-overlay-front { transform: translateZ(calc(var(--thickness) / 2 + 0.2px)); }
+        /* glued to the back face */
+        .coinflip-overlay-back  { transform: rotateY(180deg) translateZ(calc(var(--thickness) / 2 + 0.2px)); }
 
-        /* Rotating rim highlight: thin donut clipped and spun */
+        /* rotating rim highlight (thin donut) */
         .coinflip-ring-css {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          /* clip to annulus */
+          position: absolute; inset: 0; border-radius: 50%;
           -webkit-mask-image: radial-gradient(circle at 50% 50%,
             transparent calc(50% - 34%),
             black      calc(50% - 31%),
@@ -1760,48 +1645,30 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
             black      calc(50% - 24%),
             transparent calc(50% - 21%)
           );
-
-          /* a bright arc on a conic gradient */
           background:
-            conic-gradient(
-              from 0deg,
+            conic-gradient(from 0deg,
               rgba(255,255,255,0) 0deg,
               rgba(255,255,255,0) 308deg,
               rgba(255,255,255,.95) 320deg,
               rgba(255,255,255,0) 350deg,
               rgba(255,255,255,0) 360deg
             );
-          filter: blur(0.6px);
-          mix-blend-mode: screen;
+          filter: blur(0.6px); mix-blend-mode: screen;
           animation: coin-rim-spin 1.2s linear infinite;
         }
-        @keyframes coin-rim-spin {
-          to { transform: rotate(360deg); }
-        }
+        @keyframes coin-rim-spin { to { transform: rotate(360deg); } }
 
-        /* Sparks container (for positioning children at center) */
-        .coinflip-sparks-css {
-          position: absolute;
-          inset: 0;
-        }
-
-        /* Each spark: positioned by angle, travels outward a bit, fades */
+        /* sparks */
+        .coinflip-sparks-css { position: absolute; inset: 0; }
         .coinflip-spark {
-          position: absolute;
-          left: 50%;
-          top: 50%;
+          position: absolute; left: 50%; top: 50%;
           transform-origin: center center;
-          font-size: 10px;
-          font-weight: 800;
-          color: #FFE08A;
+          font-size: 10px; font-weight: 800; color: #FFE08A;
           text-shadow: 0 1px 0 #b07c00, 0 -1px 1px rgba(255,255,255,0.5);
-          opacity: 0;
-          animation: coin-spark 1.8s linear infinite;
+          opacity: 0; animation: coin-spark 1.8s linear infinite;
           animation-delay: var(--d, 0s);
-          /* Start at rim, oriented by angle: rotate -> move up (outward) -> rotate back keeps glyph upright */
-          transform: rotate(var(--a)) translateY(calc(var(--sparkStart, -35%))) rotate(calc(var(--a) * -1));
+          transform: rotate(var(--a)) translateY(-35%) rotate(calc(var(--a) * -1));
         }
-
         @keyframes coin-spark {
           0%   { opacity: 0; transform: rotate(var(--a)) translateY(-35%) rotate(calc(var(--a) * -1)) scale(0.85); filter: blur(0.4px); }
           10%  { opacity: 1; transform: rotate(var(--a)) translateY(-38%) rotate(calc(var(--a) * -1)) scale(0.95); }
@@ -1820,7 +1687,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   );
 });
 
-function CoinFace({ symbol = "H", front = false }) {
+function CoinFace({ symbol = "H" }) {
   return (
     <div
       className="rounded-full grid place-items-center"
