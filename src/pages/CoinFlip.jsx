@@ -594,7 +594,7 @@ import loseSound from "../assets/lose.mp3";
 
 // ⬇️ Lottie background imports
 import Lottie from "lottie-react";
-import flipBg from "../assets/Flipcoin_background.json";
+import flipBg from "../assets/lottie/Flipcoin_background.json";
 
 // format helpers
 const fmt = (n) =>
