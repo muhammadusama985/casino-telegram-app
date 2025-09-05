@@ -592,7 +592,7 @@ import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
 
-// Lottie background for coin area only
+// Lottie background for the coin circle only
 import Lottie from "lottie-react";
 import flipBg from "../assets/lottie/Flipcoin_background.json";
 
@@ -612,6 +612,10 @@ const STREAK_BOOST_PER_WIN = 0.05;   // UI-only boost per consecutive win (must 
 const BASE_PAYOUT_PCT       = 0.90;  // 90% profit baseline (must match backend cfg)
 const PAYOUT_CAP            = 1.0;   // cap profit at 100% of stake (must match backend cfg)
 const TRAIL_LEN             = 10;
+
+// Coin box constants (easy to tune)
+const COIN_SIZE = 160;         // px (matches your coin)
+const BG_SCALE  = 1.06;        // slight scale so the Lottie ring hugs the coin edge
 
 export default function Coinflip() {
   // balance
@@ -798,31 +802,48 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin with Lottie background ONLY inside 160x160 box */}
+        {/* center coin area with Lottie background perfectly hugging the coin */}
         <div
           className="relative mx-4 flex items-center justify-center"
-          style={{ width: 160, height: 160 }}
+          style={{ width: COIN_SIZE, height: COIN_SIZE }}
         >
-          {/* Lottie background layer (masked to the box, click-through) */}
-          <Lottie
-            animationData={flipBg}
-            loop
-            autoplay
-            rendererSettings={{ preserveAspectRatio: "xMidYMid slice" }}
+          {/* Lottie circle, always looping, scaled to hug the coin edge */}
+          <div
+            aria-hidden="true"
             style={{
               position: "absolute",
               inset: 0,
-              width: "100%",
-              height: "100%",
-              pointerEvents: "none",
               zIndex: 1,
-              opacity: 0.3,
-              borderRadius: "50%",  // nicely circular
+              pointerEvents: "none",
+              display: "grid",
+              placeItems: "center",
+              // mask to a circle so the glow is perfectly round
+              borderRadius: "50%",
               overflow: "hidden",
-              filter: "blur(0.2px)", // optional tiny soften
             }}
-          />
-          {/* The coin remains on top, unchanged */}
+          >
+            <div
+              style={{
+                width: "100%",
+                height: "100%",
+                transform: `scale(${BG_SCALE})`, // dial this if ring is slightly inside/outside
+                transformOrigin: "center",
+              }}
+            >
+              <Lottie
+                animationData={flipBg}
+                loop
+                autoplay
+                rendererSettings={{ preserveAspectRatio: "xMidYMid slice" }}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* The coin stays centered on top, unchanged */}
           <div className="relative z-10">
             <Coin3D ref={coinApiRef} ariaFace={face} />
           </div>
@@ -1034,7 +1055,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         role="img"
         aria-label={ariaFace === "H" ? "Heads" : "Tails"}
         style={{
-          ["--size"]: "160px",
+          ["--size"]: `${COIN_SIZE}px`,
           ["--thickness"]: "12px",
         }}
       >
