@@ -584,6 +584,7 @@
 
 
 
+
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
@@ -591,10 +592,6 @@ import { telegramAuth, getBalance, games } from "../api";
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
-
-// Lottie background for the coin circle only
-import Lottie from "lottie-react";
-import flipBg from "../assets/Flipcoin_background.json";
 
 // format helpers
 const fmt = (n) =>
@@ -612,10 +609,6 @@ const STREAK_BOOST_PER_WIN = 0.05;   // UI-only boost per consecutive win (must 
 const BASE_PAYOUT_PCT       = 0.90;  // 90% profit baseline (must match backend cfg)
 const PAYOUT_CAP            = 1.0;   // cap profit at 100% of stake (must match backend cfg)
 const TRAIL_LEN             = 10;
-
-// Coin box constants (easy to tune)
-const COIN_SIZE = 160;         // px (matches your coin)
-const BG_SCALE  = 1.06;        // slight scale so the Lottie ring hugs the coin edge
 
 export default function Coinflip() {
   // balance
@@ -802,51 +795,9 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin area with Lottie background perfectly hugging the coin */}
-        <div
-          className="relative mx-4 flex items-center justify-center"
-          style={{ width: COIN_SIZE, height: COIN_SIZE }}
-        >
-          {/* Lottie circle, always looping, scaled to hug the coin edge */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 1,
-              pointerEvents: "none",
-              display: "grid",
-              placeItems: "center",
-              // mask to a circle so the glow is perfectly round
-              borderRadius: "50%",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                transform: `scale(${BG_SCALE})`, // dial this if ring is slightly inside/outside
-                transformOrigin: "center",
-              }}
-            >
-              <Lottie
-                animationData={flipBg}
-                loop
-                autoplay
-                rendererSettings={{ preserveAspectRatio: "xMidYMid slice" }}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                }}
-              />
-            </div>
-          </div>
-
-          {/* The coin stays centered on top, unchanged */}
-          <div className="relative z-10">
-            <Coin3D ref={coinApiRef} ariaFace={face} />
-          </div>
+        {/* center coin: 3D CSS coin, same footprint */}
+        <div className="relative mx-4 flex items-center justify-center" style={{ width: 160, height: 160 }}>
+          <Coin3D ref={coinApiRef} ariaFace={face} />
         </div>
 
         <div className="text-right">
@@ -911,7 +862,7 @@ export default function Coinflip() {
               }}
             >
               <div className="text-lg">
-                {fmt(potentialProfit)}
+                {fmt(potentialProfit)} 
               </div>
               <div className="text-sm opacity-60 -mt-1">Take</div>
             </div>
@@ -1013,10 +964,10 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       // remove waiting loop
       el.classList.remove("coinflip-wait");
 
-      const spins = Math.floor(1 + Math.random() * 1); // 2–3 spins
+const spins = Math.floor(1 + Math.random() * 1); // 2–3 spins
       const yawStart = (Math.random() * 18 - 9).toFixed(2) + "deg";
       const yawEnd = (Math.random() * 24 - 12).toFixed(2) + "deg";
-      const duration = Math.floor(450 + Math.random() * 240); // ~0.52–0.80s
+const duration = Math.floor(450 + Math.random() * 240); // ~0.52–0.80s
       const half = desired === "T" ? 0.5 : 0;
 
       el.style.setProperty("--spins", String(spins));
@@ -1055,8 +1006,8 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         role="img"
         aria-label={ariaFace === "H" ? "Heads" : "Tails"}
         style={{
-          ["--size"]: `${COIN_SIZE}px`,
-          ["--thickness"]: "12px",
+          ['--size']: '160px',
+          ['--thickness']: '12px',
         }}
       >
         {/* FRONT → Heads = H */}
@@ -1068,6 +1019,8 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
 
       {/* coin styles */}
       <style>{`
+        
+
         .coinflip-coin {
           width: var(--size);
           height: var(--size);
@@ -1128,13 +1081,13 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         .coinflip-front {
           background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.45), rgba(255,255,255,0) 40%),
                       radial-gradient(circle at 65% 70%, rgba(0,0,0,.18), rgba(0,0,0,0) 60%),
-                      linear-gradient(135deg, #f4e3b1, #d9ba73 38%, #b7913a 62%, #8e6b24);
+                      linear-gradient(135deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
           transform: translateZ(calc(var(--thickness) / 2));
         }
         .coinflip-back {
           background: radial-gradient(circle at 65% 30%, rgba(255,255,255,.35), rgba(255,255,255,0) 40%),
                       radial-gradient(circle at 35% 70%, rgba(0,0,0,.22), rgba(0,0,0,0) 60%),
-                      linear-gradient(225deg, #f4e3b1, #d9ba73 38%, #b7913a 62%, #8e6b24);
+                      linear-gradient(225deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
           /* switched to Y so faces swap correctly on horizontal flip */
           transform: rotateY(180deg) translateZ(calc(var(--thickness) / 2));
         }
