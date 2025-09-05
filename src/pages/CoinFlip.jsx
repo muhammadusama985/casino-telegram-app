@@ -7,7 +7,6 @@ import { telegramAuth, getBalance, games } from "../api";
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
-import CoinLottie from "../components/CoinLottie";
 
 // format helpers
 const fmt = (n) =>
@@ -214,7 +213,7 @@ export default function Coinflip() {
 
         {/* center coin: 3D CSS coin, same footprint */}
         <div className="relative mx-4 flex items-center justify-center" style={{ width: 160, height: 160 }}>
-<CoinLottie ref={coinApiRef} ariaFace={face} />
+          <Coin3D ref={coinApiRef} ariaFace={face} />
         </div>
 
         <div className="text-right">
@@ -559,11 +558,16 @@ function CoinFace({ symbol = "H", front = false }) {
       style={{
         width: "78%",
         height: "78%",
-        border: "2px solid rgba(255,255,255,.35)",
+        border: "2px solid rgba(255,255,255,.25)",
         boxShadow: "0 0 0 6px rgba(0,0,0,.12) inset",
-        background: front
-          ? "radial-gradient(circle at 40% 35%, rgba(255,255,255,.8), rgba(255,255,255,0) 55%)"
-          : "radial-gradient(circle at 60% 65%, rgba(255,255,255,.8), rgba(255,255,255,0) 55%)",
+        background: `
+          radial-gradient(circle at 35% 30%, rgba(255,255,255,.6), rgba(255,255,255,0) 40%),
+          radial-gradient(circle at 65% 70%, rgba(0,0,0,.25), rgba(0,0,0,0) 60%),
+          linear-gradient(135deg, #FFD76A, #FFA928 40%, #E37B00 80%, #8E4B00)
+        `,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
       <span
@@ -571,8 +575,9 @@ function CoinFace({ symbol = "H", front = false }) {
           fontSize: "clamp(36px, 8vw, 64px)",
           fontWeight: 800,
           letterSpacing: "2px",
-          textShadow: "0 2px 2px rgba(0,0,0,.35)",
-          color: "#FFDF86",
+          color: "#ffdf86",
+          textShadow: "0 1px 0 #b07c00, 0 -1px 1px rgba(255,255,255,0.6)",
+
         }}
       >
         {symbol}
@@ -580,3 +585,4 @@ function CoinFace({ symbol = "H", front = false }) {
     </div>
   );
 }
+
