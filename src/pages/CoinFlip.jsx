@@ -552,129 +552,32 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
 });
 
 function CoinFace({ symbol = "H", front = false }) {
-  // sizes (relative so it scales with your existing 160px coin)
-  const SIZE = "78%";
-  const RIM = "100%";     // outer rim
-  const INNER_RIM = "86%"; // bright ring just inside the rim
-  const PLATE = "76%";     // central plate (where H/T sits)
-
   return (
     <div
-      className="rounded-full"
+      className="rounded-full grid place-items-center"
       style={{
-        width: SIZE,
-        height: SIZE,
-        position: "relative",
-        display: "grid",
-        placeItems: "center",
-        overflow: "hidden",
-        // slight bevel around the whole face (matches your previous boxShadow feel)
-        border: "2px solid rgba(255,255,255,.35)",
+        width: "78%",
+        height: "78%",
+        border: "2px solid rgba(255,255,255,.25)",
         boxShadow: "0 0 0 6px rgba(0,0,0,.12) inset",
+        background: `
+          radial-gradient(circle at 35% 30%, rgba(255,255,255,.6), rgba(255,255,255,0) 40%),
+          radial-gradient(circle at 65% 70%, rgba(0,0,0,.25), rgba(0,0,0,0) 60%),
+          linear-gradient(135deg, #FFD76A, #FFA928 40%, #E37B00 80%, #8E4B00)
+        `,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      {/* === OUTER RIM (dark-to-bright orange) === */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          width: RIM,
-          height: RIM,
-          borderRadius: "50%",
-          background: `
-            radial-gradient(65% 65% at 35% 30%, rgba(255,255,255,.25), rgba(255,255,255,0) 55%),
-            radial-gradient(70% 70% at 65% 70%, rgba(0,0,0,.20), rgba(0,0,0,0) 60%),
-            /* gold/orange sweep like the PNG */
-            linear-gradient(135deg, #FFC44A 0%, #FFA321 50%, #E37500 85%, #C85A00 100%)
-          `,
-          boxShadow:
-            "inset 0 2px 4px rgba(255,255,255,.25), inset 0 -3px 6px rgba(0,0,0,.35), 0 2px 2px rgba(0,0,0,.2)",
-        }}
-      />
-
-      {/* === INNER RING (bright golden band) === */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          width: INNER_RIM,
-          height: INNER_RIM,
-          borderRadius: "50%",
-          background: `
-            radial-gradient(60% 60% at 50% 40%, rgba(255,255,255,.55), rgba(255,255,255,0) 60%),
-            conic-gradient(from 220deg, #FFE07A 0%, #FFC24A 30%, #FFA321 60%, #FFE07A 100%)
-          `,
-          boxShadow:
-            "inset 0 2px 3px rgba(255,255,255,.35), inset 0 -3px 8px rgba(0,0,0,.25)",
-        }}
-      />
-
-      {/* === CENTRAL PLATE (flat light gold circle, where we place H/T) === */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          width: PLATE,
-          height: PLATE,
-          borderRadius: "50%",
-          background: `
-            radial-gradient(55% 55% at 50% 45%, #FFE890 0%, #FFD86C 60%, #FFB53A 100%)
-          `,
-          // soft inner shadow to give the "dish" feel from the PNG
-          boxShadow:
-            "inset 0 10px 18px rgba(255,255,255,.35), inset 0 -10px 18px rgba(0,0,0,.22)",
-          border: "2px solid rgba(255,255,255,.25)",
-        }}
-      />
-
-      {/* === GLOSS HIGHLIGHT (top-left oval sheen) === */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          width: "70%",
-          height: "42%",
-          left: "13%",
-          top: "10%",
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse at center, rgba(255,255,255,.35), rgba(255,255,255,0) 65%)",
-          filter: "blur(0.5px)",
-          pointerEvents: "none",
-          mixBlendMode: "screen",
-          opacity: front ? 0.85 : 0.7, // tiny face-asymmetry like your original
-        }}
-      />
-
-      {/* === BOTTOM SOFT SHADE === */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          width: "80%",
-          height: "50%",
-          left: "10%",
-          bottom: "6%",
-          borderRadius: "50%",
-          background:
-            "radial-gradient(ellipse at center, rgba(0,0,0,.20), rgba(0,0,0,0) 70%)",
-          filter: "blur(1px)",
-          pointerEvents: "none",
-          opacity: 0.8,
-        }}
-      />
-
-      {/* === H / T SYMBOL (embossed) === */}
       <span
         style={{
-          position: "relative",
           fontSize: "clamp(36px, 8vw, 64px)",
           fontWeight: 800,
           letterSpacing: "2px",
           color: "#ffdf86",
           textShadow: "0 1px 0 #b07c00, 0 -1px 1px rgba(255,255,255,0.6)",
-          // tiny vertical nudge to feel optically centered
-          transform: "translateY(1px)",
+
         }}
       >
         {symbol}
@@ -682,5 +585,4 @@ function CoinFace({ symbol = "H", front = false }) {
     </div>
   );
 }
-
 
