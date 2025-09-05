@@ -214,7 +214,7 @@ export default function Coinflip() {
 
         {/* center coin: 3D CSS coin, same footprint */}
         <div className="relative mx-4 flex items-center justify-center" style={{ width: 160, height: 160 }}>
-          <Coin3D ref={coinApiRef} ariaFace={face} />
+<CoinLottie ref={coinApiRef} ariaFace={face} />
         </div>
 
         <div className="text-right">

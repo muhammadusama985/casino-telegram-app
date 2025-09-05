@@ -1,104 +1,95 @@
-// --- CoinLottie.jsx (or inline above Coinflip component) ---
+// src/components/CoinLottie.jsx
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import Lottie from "lottie-react";
-
-import coinAnim from "../assets/lottie/Flip_coin.json";
-import bgAnim from "../assets/lottie/Flipcoin_background.json";
+import animationData from "../assets/Flip_coin.json"; // put your JSON here
 
 /**
- * CoinLottie matches the Coin3D API:
- *  - startWaiting(): loop the coin animation while backend is pending
- *  - resolve(desired): play a short settle and resolve; returns a Promise that fulfills when done
- *  - stop(): stop any animation immediately
+ * Drop-in replacement for Coin3D with the same imperative API:
+ *   - startWaiting(): loop the motion while backend resolves
+ *   - resolve(desired): play a single settle motion, Promise resolves when done
+ *   - stop(): stop/pause any animation
  *
- * Notes:
- *  - If your Lottie has segment markers for Heads/Tails, you can plug them in where noted.
- *  - Otherwise we emulate: loop while waiting, then play ~1.1s settle and stop.
+ * We only change the MOTION to your Lottie file; layout/footprint stays identical.
  */
 const CoinLottie = forwardRef(function CoinLottie({ ariaFace = "H" }, ref) {
-  const coinRef = useRef(null);
-  const bgRef = useRef(null);
-
+  const lottieRef = useRef(null);
+  const doneResolverRef = useRef(null);
   const [loop, setLoop] = useState(false);
-  const [play, setPlay] = useState(false);        // autoplay toggle
-  const [speed, setSpeed] = useState(1);          // playback speed
-  const [key, setKey] = useState(0);              // force remount to restart
+  const [play, setPlay] = useState(false);
 
-  // ensure paused on first render
-  useEffect(() => { setPlay(false); setLoop(false); }, []);
+  // helper: safely stop and clear any "resolve" promise
+  function clearPendingResolve() {
+    if (doneResolverRef.current) {
+      doneResolverRef.current();
+      doneResolverRef.current = null;
+    }
+  }
 
   useImperativeHandle(ref, () => ({
     startWaiting() {
-      // restart from frame 0, set loop
-      setKey((k) => k + 1);
-      setSpeed(1);
+      clearPendingResolve();
       setLoop(true);
       setPlay(true);
+      // restart from frame 0 for a clean loop
+      try { lottieRef.current?.goToAndPlay(0, true); } catch {}
     },
-    resolve(desired /* "H" or "T" */) {
-      // stop looping, play a short one-shot settle, then stop.
-      // If your JSON has segment markers, you can do:
-      //   coinRef.current?.playSegments([startFrameForH, endFrameForH], true);
-      // or tails segment for "T".
+    resolve(/* desired: 'H' | 'T' */) {
+      // We stop looping and play one clean settle animation
+      // (Lottie file doesn’t expose labeled segments, so we use full motion once.)
       setLoop(false);
-      setSpeed(1.1 + Math.random() * 0.3);
-      // kick a one-shot play by remounting and auto-playing once
-      setKey((k) => k + 1);
       setPlay(true);
-
-      // resolve after ~1.1–1.4s (matches your old Coin3D settle)
-      const durationMs = 1100 + Math.floor(Math.random() * 300);
-      return new Promise((res) => setTimeout(() => {
-        // pause on last frame
-        try { coinRef.current?.pause(); } catch {}
-        setPlay(false);
-        res();
-      }, durationMs));
+      try {
+        // Begin from start for a deterministic settle
+        lottieRef.current?.stop();
+        lottieRef.current?.goToAndPlay(0, true);
+      } catch {}
+      return new Promise((resolve) => {
+        doneResolverRef.current = resolve;
+      });
     },
     stop() {
-      try { coinRef.current?.stop(); } catch {}
+      clearPendingResolve();
       setPlay(false);
-      setLoop(false);
+      try { lottieRef.current?.stop(); } catch {}
     },
   }), []);
 
+  // Resolve promise when animation naturally completes (non-looping)
+  useEffect(() => {
+    if (!loop && play) {
+      const id = setInterval(() => {
+        const inst = lottieRef.current;
+        if (!inst) return;
+        const total = inst?.getDuration(true) ?? 0;     // frames
+        const frame = inst?.getCurrentFrame?.() ?? 0;   // current frame
+        // If we’re near the end, finish and resolve once
+        if (total && frame >= total - 1) {
+          clearInterval(id);
+          setPlay(false);
+          if (doneResolverRef.current) {
+            const done = doneResolverRef.current;
+            doneResolverRef.current = null;
+            done();
+          }
+        }
+      }, 30);
+      return () => clearInterval(id);
+    }
+  }, [loop, play]);
+
   return (
     <div
-      className="relative"
-      style={{ width: 160, height: 160 }}  // same footprint as your old coin
+      className="relative mx-4 flex items-center justify-center"
+      style={{ width: 160, height: 160 }}
       role="img"
       aria-label={ariaFace === "H" ? "Heads" : "Tails"}
     >
-      {/* Background FX (optional) */}
       <Lottie
-        key={`bg-${key}`}
-        lottieRef={bgRef}
-        animationData={bgAnim}
+        lottieRef={lottieRef}
+        animationData={animationData}
         loop={loop}
-        autoplay={play && loop}
-        style={{
-          position: "absolute",
-          inset: 0,
-          transform: "scale(0.9)", // keep subtle behind coin
-          pointerEvents: "none",
-        }}
-      />
-
-      {/* Coin */}
-      <Lottie
-        key={`coin-${key}`}
-        lottieRef={coinRef}
-        animationData={coinAnim}
-        loop={loop}
-        autoplay={play}
-        speed={speed}
-        style={{
-          position: "absolute",
-          inset: 0,
-          // Fit the large 1080×1920 animation inside 160×160:
-          transformOrigin: "center",
-          objectFit: "contain",
-        }}
+        autoplay={false}
+        style={{ width: 160, height: 160, pointerEvents: "none" }}
       />
     </div>
   );
