@@ -435,12 +435,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
 
       {/* coin styles */}
       <style>{`
-        :root {
-          --coin-gold-1: #f4e3b1;
-          --coin-gold-2: #d9ba73;
-          --coin-gold-3: #b7913a;
-          --coin-gold-4: #8e6b24;
-        }
+        
 
         .coinflip-coin {
           width: var(--size);
