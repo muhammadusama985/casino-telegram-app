@@ -7,6 +7,7 @@ import { telegramAuth, getBalance, games } from "../api";
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
+import CoinLottie from "../components/CoinLottie";
 
 // format helpers
 const fmt = (n) =>
@@ -213,7 +214,9 @@ export default function Coinflip() {
 
         {/* center coin: 3D CSS coin, same footprint */}
         <div className="relative mx-4 flex items-center justify-center" style={{ width: 160, height: 160 }}>
-          <Coin3D ref={coinApiRef} ariaFace={face} />
+          {/* <Coin3D ref={coinApiRef} ariaFace={face} /> */}
+       <CoinLottie ref={coinApiRef} ariaFace={face} />
+
         </div>
 
         <div className="text-right">
