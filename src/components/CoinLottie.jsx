@@ -1,7 +1,7 @@
 // src/components/CoinLottie.jsx
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import Lottie from "lottie-react";
-import animationData from "../assets/Flip_coin.json"; // put your JSON here
+import animationData from "../assets/lottie/Flip_coin.json"; // put your JSON here
 
 /**
  * Drop-in replacement for Coin3D with the same imperative API:
