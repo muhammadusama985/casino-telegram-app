@@ -1661,39 +1661,37 @@ const sparks = Array.from({ length: 24 }, (_, i) => {
         @keyframes coin-rim-spin { to { transform: rotate(360deg); } }
 
         /* sparks */
-       .coinflip-sparks-css {
-  position: absolute; inset: 0; border-radius: 50%;
-  /* confine sparks visually to the last edge */
+/* sparks (straight-out + fade) */
+.coinflip-sparks-css { position: absolute; inset: 0; border-radius: 50%;
+  /* confine sparks to the very edge area so they appear to originate from rim */
   -webkit-mask-image: radial-gradient(circle closest-side,
-    transparent calc(100% - 10px),
-    black      100%
-  );
+    transparent calc(100% - 10px), black 100%);
   mask-image: radial-gradient(circle closest-side,
-    transparent calc(100% - 10px),
-    black      100%
-  );
+    transparent calc(100% - 10px), black 100%);
 }
 
-     .coinflip-spark {
+.coinflip-spark {
   position: absolute; left: 50%; top: 50%;
   transform-origin: center center;
-  font-size: 9px; font-weight: 800; color: #fff;           /* white symbols */
+  font-size: 9px; font-weight: 800; color: #fff;       /* white glyphs */
   text-shadow:
     0 0 6px rgba(255,255,255,0.85),
     0 0 12px rgba(255,255,255,0.35);
   opacity: 0;
-  animation: coin-spark 1.6s linear infinite;
+  /* NEW: short, straight-out, then disappear */
+  animation: coin-spark-linear 1.2s ease-out infinite;
   animation-delay: var(--d, 0s);
-  /* start on the outer rim (-50%), keep glyph upright */
+  /* start exactly at the rim (-50%), keep upright by rotating back */
   transform: rotate(var(--a)) translateY(-50%) rotate(calc(var(--a) * -1));
 }
 
-@keyframes coin-spark {
-  0%   { opacity: 0; transform: rotate(var(--a)) translateY(-50%) rotate(calc(var(--a) * -1)) scale(0.85); filter: blur(0.2px); }
-  10%  { opacity: 1; transform: rotate(var(--a)) translateY(-52%) rotate(calc(var(--a) * -1)) scale(0.95); }
-  60%  { opacity: .95; transform: rotate(var(--a)) translateY(-56%) rotate(calc(var(--a) * -1)) scale(1.0); }
-  100% { opacity: 0; transform: rotate(var(--a)) translateY(-62%) rotate(calc(var(--a) * -1)) scale(1.05); filter: blur(0.6px); }
+@keyframes coin-spark-linear {
+  0%   { opacity: 0; transform: rotate(var(--a)) translateY(-50%) rotate(calc(var(--a) * -1)) scale(0.9); filter: blur(0.1px); }
+  12%  { opacity: 1; transform: rotate(var(--a)) translateY(-52%) rotate(calc(var(--a) * -1)) scale(1.0); }
+  60%  { opacity: 0.9; transform: rotate(var(--a)) translateY(-58%) rotate(calc(var(--a) * -1)) scale(1.02); }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(-66%) rotate(calc(var(--a) * -1)) scale(1.05); filter: blur(0.6px); }
 }
+
 
 
         @media (prefers-reduced-motion: reduce) {
