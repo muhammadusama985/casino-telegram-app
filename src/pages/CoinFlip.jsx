@@ -1456,7 +1456,7 @@ function BackButtonInline({ to = "/" }) {
   );
 }
 
-/* ===================== COIN (CSS 3D) + EDGE FX FIXED ===================== */
+/* ===================== COIN (CSS 3D) + EDGE FX ===================== */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const coinRef = useRef(null);
   const waitTimerRef = useRef(null);
@@ -1503,15 +1503,13 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     },
   }), []);
 
-  // prebuild sparks
-// prebuild sparks — more points for even edge coverage
-const sparks = Array.from({ length: 24 }, (_, i) => {
-  const angle = i * (360 / 24);     // every 15°
-  const delay = (i % 12) * 0.10;    // subtle stagger
-  const sym = i % 2 ? "€" : "$";
-  return { angle, delay, sym, key: i };
-});
-
+  // more points for even edge coverage
+  const sparks = Array.from({ length: 24 }, (_, i) => {
+    const angle = i * (360 / 24);     // every 15°
+    const delay = (i % 12) * 0.10;    // subtle stagger
+    const sym = i % 2 ? "€" : "$";
+    return { angle, delay, sym, key: i };
+  });
 
   return (
     <div className="coinflip-scene" style={{ perspective: "1200px" }}>
@@ -1523,9 +1521,9 @@ const sparks = Array.from({ length: 24 }, (_, i) => {
         style={{ ['--size']: '160px', ['--thickness']: '12px' }}
       >
         {/* FRONT face */}
-        <div className="coinflip-face coinflip-front"><CoinFace symbol="H" front /></div>
+        <div className="coinflip-face coinflip-front"><CoinFace symbol="H" /></div>
 
-        {/* EDGE FX — FRONT (sit slightly above the front face) */}
+        {/* EDGE FX — FRONT (above front face) */}
         <div className="coinflip-overlay-front" aria-hidden>
           <div className="coinflip-ring-css" />
           <div className="coinflip-sparks-css">
@@ -1544,7 +1542,7 @@ const sparks = Array.from({ length: 24 }, (_, i) => {
         {/* BACK face */}
         <div className="coinflip-face coinflip-back"><CoinFace symbol="T" /></div>
 
-        {/* EDGE FX — BACK (glued to the back face) */}
+        {/* EDGE FX — BACK (above back face) */}
         <div className="coinflip-overlay-back" aria-hidden>
           <div className="coinflip-ring-css" />
           <div className="coinflip-sparks-css">
@@ -1564,6 +1562,10 @@ const sparks = Array.from({ length: 24 }, (_, i) => {
       </div>
 
       <style>{`
+        /* ensure particles can escape + sit above */
+        .coinflip-scene { position: relative; overflow: visible; }
+        .coinflip-coin  { overflow: visible; }
+
         .coinflip-coin {
           width: var(--size);
           height: var(--size);
@@ -1586,6 +1588,7 @@ const sparks = Array.from({ length: 24 }, (_, i) => {
           100% { transform: rotateY(calc((var(--spins) + var(--half)) * 1turn)) rotateX(var(--yawEnd)) rotateZ(3deg); }
         }
 
+        .coinflip-face { z-index: 1; }
         .coinflip-face {
           position: absolute; inset: 0; border-radius: 50%;
           backface-visibility: hidden; display: grid; place-items: center; overflow: hidden;
@@ -1621,78 +1624,67 @@ const sparks = Array.from({ length: 24 }, (_, i) => {
           filter: blur(4px); opacity: .7; pointer-events: none;
         }
 
-        /* ----- EDGE FX ON BOTH SIDES ----- */
+        /* ----- EDGE FX ON BOTH SIDES (render above faces) ----- */
         .coinflip-overlay-front,
         .coinflip-overlay-back {
           position: absolute; inset: 0; border-radius: 50%;
           transform-style: preserve-3d; backface-visibility: hidden; pointer-events: none;
+          z-index: 999; isolation: isolate;  /* on top, own stacking context */
+          overflow: visible;
         }
         /* just above the front face */
         .coinflip-overlay-front { transform: translateZ(calc(var(--thickness) / 2 + 0.2px)); }
         /* glued to the back face */
         .coinflip-overlay-back  { transform: rotateY(180deg) translateZ(calc(var(--thickness) / 2 + 0.2px)); }
 
-        /* rotating rim highlight (thin donut) */
-      .coinflip-ring-css {
-  position: absolute; inset: 0; border-radius: 50%;
-  /* Clip to a very thin ring at the outermost edge (≈5px thick) */
-  -webkit-mask-image: radial-gradient(circle closest-side,
-    transparent calc(100% - 5px),
-    black      calc(100% - 5px)
-  );
-  mask-image: radial-gradient(circle closest-side,
-    transparent calc(100% - 5px),
-    black      calc(100% - 5px)
-  );
-
-  /* bright arc sweeping around the rim */
-  background:
-    conic-gradient(from 0deg,
-      rgba(255,255,255,0) 0deg,
-      rgba(255,255,255,0) 300deg,
-      rgba(255,255,255,1) 330deg,
-      rgba(255,255,255,0) 360deg
-    );
-  filter: blur(0.4px);
-  mix-blend-mode: screen;
-  animation: coin-rim-spin 1.1s linear infinite;
-}
-
+        /* rotating rim highlight (thin donut at the very edge) */
+        .coinflip-ring-css {
+          position: absolute; inset: 0; border-radius: 50%;
+          -webkit-mask-image: radial-gradient(circle closest-side,
+            transparent calc(100% - 5px), black calc(100% - 5px));
+          mask-image: radial-gradient(circle closest-side,
+            transparent calc(100% - 5px), black calc(100% - 5px));
+          background:
+            conic-gradient(from 0deg,
+              rgba(255,255,255,0) 0deg,
+              rgba(255,255,255,0) 300deg,
+              rgba(255,255,255,1) 330deg,
+              rgba(255,255,255,0) 360deg);
+          filter: blur(0.4px);
+          mix-blend-mode: screen;
+          animation: coin-rim-spin 1.1s linear infinite;
+        }
         @keyframes coin-rim-spin { to { transform: rotate(360deg); } }
 
-        /* sparks */
-/* sparks (straight-out + fade) */
-.coinflip-sparks-css { position: absolute; inset: 0; border-radius: 50%;
-  /* confine sparks to the very edge area so they appear to originate from rim */
-  -webkit-mask-image: radial-gradient(circle closest-side,
-    transparent calc(100% - 10px), black 100%);
-  mask-image: radial-gradient(circle closest-side,
-    transparent calc(100% - 10px), black 100%);
-}
+        /* sparks container — allow escape (no masks) */
+        .coinflip-sparks-css {
+          position: absolute; inset: 0; border-radius: 50%;
+          -webkit-mask-image: none !important;
+          mask-image: none !important;
+          overflow: visible;
+        }
 
-.coinflip-spark {
-  position: absolute; left: 50%; top: 50%;
-  transform-origin: center center;
-  font-size: 9px; font-weight: 800; color: #fff;       /* white glyphs */
-  text-shadow:
-    0 0 6px rgba(255,255,255,0.85),
-    0 0 12px rgba(255,255,255,0.35);
-  opacity: 0;
-  /* NEW: short, straight-out, then disappear */
-  animation: coin-spark-linear 1.2s ease-out infinite;
-  animation-delay: var(--d, 0s);
-  /* start exactly at the rim (-50%), keep upright by rotating back */
-  transform: rotate(var(--a)) translateY(-50%) rotate(calc(var(--a) * -1));
-}
+        /* straight-out white symbols, start at exact rim, fly out past coin, above all */
+        .coinflip-spark {
+          position: absolute; left: 50%; top: 50%;
+          transform-origin: center center;
+          font-size: 10px; font-weight: 800; color: #fff;
+          text-shadow:
+            0 0 6px rgba(255,255,255,0.85),
+            0 0 12px rgba(255,255,255,0.35);
+          opacity: 0;
+          z-index: 1000;
+          animation: coin-spark-linear 1.2s ease-out infinite;
+          animation-delay: var(--d, 0s);
+          transform: rotate(var(--a)) translateY(-50%) rotate(calc(var(--a) * -1));
+        }
 
-@keyframes coin-spark-linear {
-  0%   { opacity: 0; transform: rotate(var(--a)) translateY(-50%) rotate(calc(var(--a) * -1)) scale(0.9); filter: blur(0.1px); }
-  12%  { opacity: 1; transform: rotate(var(--a)) translateY(-52%) rotate(calc(var(--a) * -1)) scale(1.0); }
-  60%  { opacity: 0.9; transform: rotate(var(--a)) translateY(-58%) rotate(calc(var(--a) * -1)) scale(1.02); }
-  100% { opacity: 0; transform: rotate(var(--a)) translateY(-66%) rotate(calc(var(--a) * -1)) scale(1.05); filter: blur(0.6px); }
-}
-
-
+        @keyframes coin-spark-linear {
+          0%   { opacity: 0; transform: rotate(var(--a)) translateY(-50%) rotate(calc(var(--a) * -1)) scale(0.9); filter: blur(0.1px); }
+          12%  { opacity: 1; transform: rotate(var(--a)) translateY(-54%) rotate(calc(var(--a) * -1)) scale(1.0); }
+          60%  { opacity: 0.95; transform: rotate(var(--a)) translateY(-62%) rotate(calc(var(--a) * -1)) scale(1.02); }
+          100% { opacity: 0; transform: rotate(var(--a)) translateY(-78%) rotate(calc(var(--a) * -1)) scale(1.05); filter: blur(0.6px); }
+        }
 
         @media (prefers-reduced-motion: reduce) {
           .coinflip-wait { animation-duration: 0.01ms; }
@@ -1738,3 +1730,4 @@ function CoinFace({ symbol = "H" }) {
     </div>
   );
 }
+
