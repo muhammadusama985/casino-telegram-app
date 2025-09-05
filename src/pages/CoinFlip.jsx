@@ -964,10 +964,10 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       // remove waiting loop
       el.classList.remove("coinflip-wait");
 
-const spins = Math.floor(2 + Math.random() * 2); // 2–3 spins
+const spins = Math.floor(1 + Math.random() * 1); // 2–3 spins
       const yawStart = (Math.random() * 18 - 9).toFixed(2) + "deg";
       const yawEnd = (Math.random() * 24 - 12).toFixed(2) + "deg";
-const duration = Math.floor(520 + Math.random() * 280); // ~0.52–0.80s
+const duration = Math.floor(450 + Math.random() * 240); // ~0.52–0.80s
       const half = desired === "T" ? 0.5 : 0;
 
       el.style.setProperty("--spins", String(spins));
