@@ -592,7 +592,7 @@ import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
 
-// ⬇️ Lottie background imports
+// Lottie background for coin area only
 import Lottie from "lottie-react";
 import flipBg from "../assets/lottie/Flipcoin_background.json";
 
@@ -765,147 +765,155 @@ export default function Coinflip() {
   };
 
   return (
-    // Root container now 'relative' so we can layer a BG child inside it
-    <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch relative">
-      {/* Lottie background (click-through, below content) */}
-      <Lottie
-        animationData={flipBg}
-        loop
-        autoplay
-        rendererSettings={{ preserveAspectRatio: "xMidYMid slice" }}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-          zIndex: 1,     // sits under content
-          opacity: 0.28, // subtle; tweak as needed
-        }}
-      />
-
-      {/* Content wrapper above BG */}
-      <div className="relative z-10">
-        {/* Coins header (match Dice) */}
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <BackButtonInline to="/" />
-            <div className="text-sm">
-              <span className="opacity-70 mr-2">Coins: </span>
-              <span className="font-bold">{formatCoins(coins)}</span>
-            </div>
+    <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
+      {/* Coins header (match Dice) */}
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-3">
+          <BackButtonInline to="/" />
+          <div className="text-sm">
+            <span className="opacity-70 mr-2">Coins: </span>
+            <span className="font-bold">{formatCoins(coins)}</span>
           </div>
         </div>
+      </div>
 
-        {/* top bubbles */}
-        <div className="flex items-center justify-center gap-3 px-4 pt-2">
-          {trail.map((ch, i) => (
-            <div
-              key={i}
-              className={`w-8 h-8 rounded-full border-2 ${ch === "?" ? "border-dashed border-white/30" : "border-emerald-400/70"} flex items-center justify-center text-sm`}
-            >
-              <span className={`${ch === "?" ? "opacity-80" : "font-bold"}`}>
-                {ch === "?" ? "?" : ch === "T" ? "€" : "$"}
-              </span>
-            </div>
-          ))}
+      {/* top bubbles */}
+      <div className="flex items-center justify-center gap-3 px-4 pt-2">
+        {trail.map((ch, i) => (
+          <div
+            key={i}
+            className={`w-8 h-8 rounded-full border-2 ${ch === "?" ? "border-dashed border-white/30" : "border-emerald-400/70"} flex items-center justify-center text-sm`}
+          >
+            <span className={`${ch === "?" ? "opacity-80" : "font-bold"}`}>
+              {ch === "?" ? "?" : ch === "T" ? "€" : "$"}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* coin + coef */}
+      <div className="flex items-center justify-between px-6 mt-4">
+        <div className="text-left">
+          <div className="text-2xl font-bold leading-none">{round}</div>
+          <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* coin + coef */}
-        <div className="flex items-center justify-between px-6 mt-4">
-          <div className="text-left">
-            <div className="text-2xl font-bold leading-none">{round}</div>
-            <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
-          </div>
-
-          {/* center coin: 3D CSS coin, same footprint */}
-          <div className="relative mx-4 flex items-center justify-center" style={{ width: 160, height: 160 }}>
+        {/* center coin with Lottie background ONLY inside 160x160 box */}
+        <div
+          className="relative mx-4 flex items-center justify-center"
+          style={{ width: 160, height: 160 }}
+        >
+          {/* Lottie background layer (masked to the box, click-through) */}
+          <Lottie
+            animationData={flipBg}
+            loop
+            autoplay
+            rendererSettings={{ preserveAspectRatio: "xMidYMid slice" }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+              zIndex: 1,
+              opacity: 0.3,
+              borderRadius: "50%",  // nicely circular
+              overflow: "hidden",
+              filter: "blur(0.2px)", // optional tiny soften
+            }}
+          />
+          {/* The coin remains on top, unchanged */}
+          <div className="relative z-10">
             <Coin3D ref={coinApiRef} ariaFace={face} />
           </div>
-
-          <div className="text-right">
-            <div className="text-2xl font-extrabold leading-none">
-              x{effectiveCoef.toFixed(2)}
-            </div>
-            <div className="uppercase tracking-wider text-white/60 text-sm">Coef</div>
-          </div>
         </div>
 
-        {/* choose H/T */}
-        <div className="px-4 mt-6 grid grid-cols-2 gap-3">
-          <button
-            disabled={flipping}
-            onClick={() => placeBet("H")}
-            className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`}
-          >
-            <div className="flex items-center gap-3">
-              <MiniCoin symbol="$" />
-              <span className="text-lg font-semibold tracking-wide">HEADS</span>
-            </div>
-          </button>
-          <button
-            disabled={flipping}
-            onClick={() => placeBet("T")}
-            className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`}
-          >
-            <div className="flex items-center gap-3">
-              <MiniCoin symbol="€" />
-              <span className="text-lg font-semibold tracking-wide">TAILS</span>
-            </div>
-          </button>
-        </div>
-
-        {/* bet + take */}
-        <div className="px-4 mt-6">
-          <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
-            <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
-              <button
-                onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
-                className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
-              >−</button>
-              <div className="text-center">
-                <span className="text-3xl font-extrabold">{fmt(bet)}</span>
-              </div>
-              <button
-                onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
-                className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
-              >+</button>
-            </div>
-
-            <div className="mt-4">
-              <div
-                className="w-full rounded-xl py-3 text-center font-semibold"
-                style={{
-                  background:
-                    "linear-gradient(90deg, rgba(255,165,0,0.25) 0%, rgba(255,120,0,0.35) 100%)",
-                }}
-              >
-                <div className="text-lg">
-                  {fmt(potentialProfit)}
-                </div>
-                <div className="text-sm opacity-60 -mt-1">Take</div>
-              </div>
-            </div>
+        <div className="text-right">
+          <div className="text-2xl font-extrabold leading-none">
+            x{effectiveCoef.toFixed(2)}
           </div>
+          <div className="uppercase tracking-wider text-white/60 text-sm">Coef</div>
         </div>
-
-        {/* result toast */}
-        {resultMsg && (
-          <div className="px-4 mt-4">
-            <div
-              className={`rounded-xl px-4 py-3 text-center font-semibold ${
-                resultMsg.includes("Win")
-                  ? "bg-emerald-600/30 text-emerald-200"
-                  : "bg-rose-600/30 text-rose-200"
-              }`}
-            >
-              {resultMsg}
-            </div>
-          </div>
-        )}
-
-        <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
       </div>
+
+      {/* choose H/T */}
+      <div className="px-4 mt-6 grid grid-cols-2 gap-3">
+        <button
+          disabled={flipping}
+          onClick={() => placeBet("H")}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
+            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <MiniCoin symbol="$" />
+            <span className="text-lg font-semibold tracking-wide">HEADS</span>
+          </div>
+        </button>
+        <button
+          disabled={flipping}
+          onClick={() => placeBet("T")}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
+            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <MiniCoin symbol="€" />
+            <span className="text-lg font-semibold tracking-wide">TAILS</span>
+          </div>
+        </button>
+      </div>
+
+      {/* bet + take */}
+      <div className="px-4 mt-6">
+        <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
+          <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
+            <button
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+            >−</button>
+            <div className="text-center">
+              <span className="text-3xl font-extrabold">{fmt(bet)}</span>
+            </div>
+            <button
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
+            >+</button>
+          </div>
+
+          <div className="mt-4">
+            <div
+              className="w-full rounded-xl py-3 text-center font-semibold"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(255,165,0,0.25) 0%, rgba(255,120,0,0.35) 100%)",
+              }}
+            >
+              <div className="text-lg">
+                {fmt(potentialProfit)}
+              </div>
+              <div className="text-sm opacity-60 -mt-1">Take</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* result toast */}
+      {resultMsg && (
+        <div className="px-4 mt-4">
+          <div
+            className={`rounded-xl px-4 py-3 text-center font-semibold ${
+              resultMsg.includes("Win")
+                ? "bg-emerald-600/30 text-emerald-200"
+                : "bg-rose-600/30 text-rose-200"
+            }`}
+          >
+            {resultMsg}
+          </div>
+        </div>
+      )}
+
+      <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
     </div>
   );
 }
