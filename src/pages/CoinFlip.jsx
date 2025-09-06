@@ -581,14 +581,13 @@
 // }
 
 
-
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
-import bgAnim from "../assets/lottie/Flipcoin_background.json";
-import coinAnim from "../assets/lottie/Flip_coin.json";
+import bgAnim from "../assets/Flipcoin_background.json"; // ring background
+import coinAnim from "../assets/Flip_coin.json";         // the coin itself
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
@@ -623,7 +622,7 @@ export default function Coinflip() {
   const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?"));
   const [flipping, setFlipping] = useState(false);
   const [resultMsg, setResultMsg] = useState("");
-  const [face, setFace] = useState("H"); // H->$, T->€
+  const [face, setFace] = useState("H"); // semantic only
 
   // coin animation API ref
   const coinApiRef = useRef(null);
@@ -634,7 +633,7 @@ export default function Coinflip() {
     [baseCoef, streak]
   );
 
-  // EFFECTIVE payout% that will be CREDITED on win (matches backend: 0.90 * (1 + 0.05*streak), capped)
+  // EFFECTIVE payout% that will be CREDITED on win
   const effectivePayoutPct = useMemo(() => {
     const boosted = BASE_PAYOUT_PCT * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak));
     return Math.min(PAYOUT_CAP, Math.max(0.01, Number(boosted)));
@@ -718,9 +717,9 @@ export default function Coinflip() {
       if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
       const landed = (res?.details?.landed === "T") ? "T" : "H";
-      setFace(landed); // update ARIA/semantics
+      setFace(landed); // semantics only
 
-      // 3) Resolve the spin to the correct side, then show result/message
+      // 3) resolve visual
       await (coinApiRef.current?.resolve(landed) ?? Promise.resolve());
 
       if (Number.isFinite(res?.newBalance)) {
@@ -730,7 +729,7 @@ export default function Coinflip() {
       setRound((r) => r + 1);
 
       if (res?.result === "win") {
-        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN)); // fill bubble with result
+        setTrail((prev) => [landed, ...prev].slice(0, TRAIL_LEN));
         setStreak((s) => s + 1);
 
         const profit = Number(res?.payout || 0);
@@ -750,7 +749,6 @@ export default function Coinflip() {
 
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
-      // stop any waiting spin on error
       try { coinApiRef.current?.stop(); } catch {}
       const msg = String(e?.message || "");
       if (msg.includes("insufficient-funds")) alert("Not enough coins.");
@@ -796,7 +794,7 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin: Lottie ring behind, coin (Lottie while waiting; CSS coin on resolve) */}
+        {/* center coin: Lottie ring behind + Lottie coin perfectly centered */}
         <div
           className="relative mx-4 flex items-center justify-center"
           style={{ width: 160, height: 160 }}
@@ -809,7 +807,7 @@ export default function Coinflip() {
             style={{
               position: "absolute",
               inset: 0,
-              transform: "scale(0.9)", // tweak 0.8–1.0 if needed
+              transform: "scale(0.9)", // fit ring inside the 160×160 square
             }}
             rendererSettings={{
               viewBoxOnly: true,
@@ -817,9 +815,9 @@ export default function Coinflip() {
             }}
           />
 
-          {/* Coin */}
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <Coin3D ref={coinApiRef} ariaFace={face} />
+          {/* Coin from JSON (no CSS coin at all) */}
+          <div style={{ position: "relative", zIndex: 1, width: 160, height: 160 }}>
+            <LottieCoin ref={coinApiRef} />
           </div>
         </div>
 
@@ -913,6 +911,67 @@ export default function Coinflip() {
   );
 }
 
+/* -------------------- LottieCoin (replaces CSS coin) -------------------- */
+const LottieCoin = forwardRef(function LottieCoin(_, ref) {
+  const animRef = useRef(null);
+  const settleTimer = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    startWaiting() {
+      if (!animRef.current) return;
+      try {
+        animRef.current.setSpeed?.(1);
+        animRef.current.setDirection?.(1);
+        animRef.current.play?.();
+        animRef.current.loop = true;
+      } catch {}
+    },
+    resolve(/* desired = 'H'|'T' (visual is neutral) */) {
+      if (!animRef.current) return Promise.resolve();
+      // brief settle burst: speed up for ~1s, then stop at current frame
+      animRef.current.loop = false;
+      try { animRef.current.setSpeed?.(1.6); } catch {}
+      try { animRef.current.play?.(); } catch {}
+      return new Promise((res) => {
+        clearTimeout(settleTimer.current);
+        settleTimer.current = setTimeout(() => {
+          try { animRef.current.pause?.(); } catch {}
+          res();
+        }, 1000);
+      });
+    },
+    stop() {
+      clearTimeout(settleTimer.current);
+      if (!animRef.current) return;
+      try {
+        animRef.current.stop?.();
+        animRef.current.loop = false;
+      } catch {}
+    },
+  }), []);
+
+  return (
+    <Lottie
+      lottieRef={animRef}
+      animationData={coinAnim}
+      loop
+      autoplay
+      style={{
+        position: "absolute",
+        inset: 0,
+        // Fit exactly inside the inner circle of the background:
+        // tweak scale 0.88–0.96 if your background ring stroke is thick/thin
+        transform: "scale(0.92)",
+        pointerEvents: "none",
+      }}
+      rendererSettings={{
+        viewBoxOnly: true,
+        preserveAspectRatio: "xMidYMid slice",
+      }}
+    />
+  );
+});
+
 function MiniCoin({ symbol = "$" }) {
   return (
     <span
@@ -951,283 +1010,5 @@ function BackButtonInline({ to = "/" }) {
               strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </button>
-  );
-}
-
-
-/* ===================== 3D CSS COIN + LOTTIE WRAP (WAIT->RESOLVE flow) ===================== */
-const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
-  const coinRef = useRef(null);         // CSS coin root
-  const waitTimerRef = useRef(null);
-  const [showLottie, setShowLottie] = useState(false); // show Lottie when waiting
-
-  function clearTimers() {
-    if (waitTimerRef.current) {
-      clearTimeout(waitTimerRef.current);
-      waitTimerRef.current = null;
-    }
-  }
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      // Begin indefinite spin while waiting for backend:
-      // - Show Lottie coin loop
-      // - Hide CSS coin anim state
-      startWaiting() {
-        const el = coinRef.current;
-        if (!el) return;
-        clearTimers();
-        setShowLottie(true);
-
-        el.classList.remove("coinflip-anim");
-        // reflow
-        // eslint-disable-next-line no-unused-expressions
-        el.offsetWidth;
-        el.classList.add("coinflip-wait");
-      },
-
-      // Resolve to 'H' or 'T' and return a Promise that fulfills after the animation ends
-      // - Hide Lottie
-      // - Run deterministic CSS flip so we can land Heads/Tails exactly
-      resolve(desired) {
-        const el = coinRef.current;
-        if (!el) return Promise.resolve();
-
-        setShowLottie(false);            // crossfade off Lottie
-
-        // remove waiting loop
-        el.classList.remove("coinflip-wait");
-
-        const spins = Math.floor(3 + Math.random() * 3); // slightly shorter final settle
-        const yawStart = (Math.random() * 18 - 9).toFixed(2) + "deg";
-        const yawEnd = (Math.random() * 24 - 12).toFixed(2) + "deg";
-        const duration = Math.floor(950 + Math.random() * 450); // ~1.0–1.4s
-        const half = desired === "T" ? 0.5 : 0;
-
-        el.style.setProperty("--spins", String(spins));
-        el.style.setProperty("--half", String(half));
-        el.style.setProperty("--duration", duration + "ms");
-        el.style.setProperty("--yawStart", yawStart);
-        el.style.setProperty("--yawEnd", yawEnd);
-
-        // trigger final deterministic flip
-        el.classList.remove("coinflip-anim");
-        // eslint-disable-next-line no-unused-expressions
-        el.offsetWidth;
-        el.classList.add("coinflip-anim");
-
-        return new Promise((resolve) => {
-          waitTimerRef.current = setTimeout(() => {
-            resolve();
-          }, duration + 60);
-        });
-      },
-
-      // Stop any animation (used on error)
-      stop() {
-        const el = coinRef.current;
-        if (!el) return;
-        clearTimers();
-        setShowLottie(false);
-        el.classList.remove("coinflip-wait");
-        el.classList.remove("coinflip-anim");
-      },
-    }),
-    []
-  );
-
-  return (
-    <div className="coinflip-scene" style={{ perspective: "1200px", position: "relative" }}>
-      {/* Lottie Coin (loop during waiting) */}
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          display: showLottie ? "block" : "none",
-          transition: "opacity 120ms ease",
-        }}
-      >
-        <Lottie
-          animationData={coinAnim}
-          loop
-          autoplay
-          style={{
-            position: "absolute",
-            inset: 0,
-            transform: "scale(0.92)", // nudge to fit inside the inner ring
-          }}
-          rendererSettings={{
-            viewBoxOnly: true,
-            preserveAspectRatio: "xMidYMid slice",
-          }}
-        />
-      </div>
-
-      {/* CSS coin (deterministic resolve) */}
-      <div
-        ref={coinRef}
-        className="coinflip-coin"
-        role="img"
-        aria-label={ariaFace === "H" ? "Heads" : "Tails"}
-        style={{
-          ['--size']: '160px',
-          ['--thickness']: '12px',
-          position: "relative",
-          // show CSS coin when not showing Lottie (during resolve/final)
-          opacity: showLottie ? 0 : 1,
-          transition: "opacity 120ms ease",
-        }}
-      >
-        {/* FRONT → Heads = H */}
-        <div className="coinflip-face coinflip-front"><CoinFace symbol="H" front /></div>
-        {/* BACK → Tails = T */}
-        <div className="coinflip-face coinflip-back"><CoinFace symbol="T" /></div>
-        <div className="coinflip-shadow" aria-hidden />
-      </div>
-
-      {/* coin styles */}
-      <style>{`
-        :root {
-          --coin-gold-1: #f4e3b1;
-          --coin-gold-2: #d9ba73;
-          --coin-gold-3: #b7913a;
-          --coin-gold-4: #8e6b24;
-        }
-
-        .coinflip-coin {
-          width: var(--size);
-          height: var(--size);
-          transform-style: preserve-3d;
-          user-select: none;
-        }
-
-        /* Waiting loop (applies to CSS coin root even while Lottie shows) */
-        .coinflip-wait {
-          animation: coinflip-wait 0.9s linear infinite;
-        }
-        @keyframes coinflip-wait {
-          0% {
-            transform:
-              rotateX(0turn)
-              rotateY(-6deg)
-              rotateZ(0deg);
-          }
-          100% {
-            transform:
-              rotateX(1turn)
-              rotateY(6deg)
-              rotateZ(3deg);
-          }
-        }
-
-        /* Final settle animation (deterministic) */
-        .coinflip-coin.coinflip-anim {
-          animation: coinflip-spin var(--duration) cubic-bezier(.2,.7,.2,1) forwards;
-        }
-        @keyframes coinflip-spin {
-          0% {
-            transform:
-              rotateX(0turn)
-              rotateY(var(--yawStart))
-              rotateZ(0deg);
-          }
-          100% {
-            transform:
-              rotateX(calc((var(--spins) + var(--half)) * 1turn))
-              rotateY(var(--yawEnd))
-              rotateZ(3deg);
-          }
-        }
-
-        .coinflip-face {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          backface-visibility: hidden;
-          display: grid;
-          place-items: center;
-          overflow: hidden;
-          box-shadow: 0 2px 1px rgba(0,0,0,.25) inset,
-                      0 10px 24px rgba(0,0,0,.35);
-        }
-        .coinflip-front {
-          background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.45), rgba(255,255,255,0) 40%),
-                      radial-gradient(circle at 65% 70%, rgba(0,0,0,.18), rgba(0,0,0,0) 60%),
-                      linear-gradient(135deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
-          transform: translateZ(calc(var(--thickness) / 2));
-        }
-        .coinflip-back {
-          background: radial-gradient(circle at 65% 30%, rgba(255,255,255,.35), rgba(255,255,255,0) 40%),
-                      radial-gradient(circle at 35% 70%, rgba(0,0,0,.22), rgba(0,0,0,0) 60%),
-                      linear-gradient(225deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
-          transform: rotateX(180deg) translateZ(calc(var(--thickness) / 2));
-        }
-
-        /* ridged edge illusion */
-        .coinflip-coin::before {
-          content: "";
-          position: absolute;
-          inset: 2.5%;
-          border-radius: 50%;
-          background: repeating-conic-gradient(
-            from 0deg,
-            rgba(0,0,0,.18) 0deg 6deg,
-            rgba(255,255,255,.18) 6deg 12deg
-          );
-          filter: blur(.3px);
-          transform: translateZ(calc(var(--thickness) * -0.5));
-          opacity: .45;
-          pointer-events: none;
-        }
-
-        .coinflip-shadow {
-          position: absolute;
-          left: 50%;
-          bottom: -22%;
-          width: 60%;
-          height: 16%;
-          transform: translateX(-50%);
-          background: radial-gradient(ellipse at center, rgba(0,0,0,.35), rgba(0,0,0,0));
-          filter: blur(4px);
-          opacity: .7;
-          pointer-events: none;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .coinflip-wait { animation-duration: 0.01ms; }
-          .coinflip-coin.coinflip-anim { animation-duration: 0.01ms; }
-        }
-      `}</style>
-    </div>
-  );
-});
-
-function CoinFace({ symbol = "H", front = false }) {
-  return (
-    <div
-      className="rounded-full grid place-items-center"
-      style={{
-        width: "78%",
-        height: "78%",
-        border: "2px solid rgba(255,255,255,.35)",
-        boxShadow: "0 0 0 6px rgba(0,0,0,.12) inset",
-        background: front
-          ? "radial-gradient(circle at 40% 35%, rgba(255,255,255,.8), rgba(255,255,255,0) 55%)"
-          : "radial-gradient(circle at 60% 65%, rgba(255,255,255,.8), rgba(255,255,255,0) 55%)",
-      }}
-    >
-      <span
-        style={{
-          fontSize: "clamp(36px, 8vw, 64px)",
-          fontWeight: 800,
-          letterSpacing: "2px",
-          textShadow: "0 2px 2px rgba(0,0,0,.35)",
-          color: "#FFDF86",
-        }}
-      >
-        {symbol}
-      </span>
-    </div>
   );
 }
