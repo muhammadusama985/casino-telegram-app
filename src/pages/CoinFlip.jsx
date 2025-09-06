@@ -586,8 +586,8 @@ import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle }
 import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
-import bgAnim from "../assets/lottie/Flipcoin_background.json"; // ring background
-import coinAnim from "../assets/lottie/Flip_coin.json";         // the coin itself
+import bgAnim from "../assets/Flipcoin_background.json"; // ring background (loops)
+import coinAnim from "../assets/Flip_coin.json";         // coin graphics
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
@@ -622,7 +622,7 @@ export default function Coinflip() {
   const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?"));
   const [flipping, setFlipping] = useState(false);
   const [resultMsg, setResultMsg] = useState("");
-  const [face, setFace] = useState("H"); // semantic only
+  const [face, setFace] = useState("H"); // semantic only (H=heads/BTC, T=tails/TON)
 
   // coin animation API ref
   const coinApiRef = useRef(null);
@@ -704,7 +704,7 @@ export default function Coinflip() {
     setFlipping(true);
     setResultMsg("");
 
-    // 1) Start spin immediately (no message yet)
+    // 1) Start spin only after user selects
     try { new Audio(flipSound).play().catch(() => {}); } catch {}
     try { coinApiRef.current?.startWaiting(); } catch {}
 
@@ -794,12 +794,12 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin: Lottie ring behind + Lottie coin perfectly centered */}
+        {/* center coin: background ring + lottie coin (no CSS coin) */}
         <div
           className="relative mx-4 flex items-center justify-center"
           style={{ width: 160, height: 160 }}
         >
-          {/* Background ring animation (loop) */}
+          {/* Background ring animation (continuous) */}
           <Lottie
             animationData={bgAnim}
             loop
@@ -807,7 +807,7 @@ export default function Coinflip() {
             style={{
               position: "absolute",
               inset: 0,
-              transform: "scale(0.9)", // fit ring inside the 160×160 square
+              transform: "scale(0.9)", // ring snug inside 160×160
             }}
             rendererSettings={{
               viewBoxOnly: true,
@@ -815,7 +815,7 @@ export default function Coinflip() {
             }}
           />
 
-          {/* Coin from JSON (no CSS coin at all) */}
+          {/* Coin (static until selection, flips only while waiting, settles on resolve) */}
           <div style={{ position: "relative", zIndex: 1, width: 160, height: 160 }}>
             <LottieCoin ref={coinApiRef} />
           </div>
@@ -911,64 +911,170 @@ export default function Coinflip() {
   );
 }
 
-/* -------------------- LottieCoin (replaces CSS coin) -------------------- */
+/* -------------------- LottieCoin (only Lottie; BTC=heads, TON=tails) -------------------- */
 const LottieCoin = forwardRef(function LottieCoin(_, ref) {
-  const animRef = useRef(null);
-  const settleTimer = useRef(null);
+  // Three instances:
+  // - waitRef: spins only after selection (startWaiting), then hidden on resolve
+  // - btcRef : paused on a frame where BTC is colored
+  // - tonRef : paused on a frame where TON is colored
+  const waitRef = useRef(null);
+  const btcRef  = useRef(null);
+  const tonRef  = useRef(null);
+
+  // frame picks from your JSON timeline:
+  // - BTC colored only ~ frame 60
+  // - TON colored only ~ frame 200
+  const FRAME_BTC = 60;
+  const FRAME_TON = 200;
+
+  function hideWait() {
+    if (waitRef.current) {
+      try { waitRef.current.stop?.(); } catch {}
+    }
+  }
+  function showWait(loopSpeed = 1.1) {
+    if (!waitRef.current) return;
+    try {
+      waitRef.current.setSpeed?.(loopSpeed);
+      waitRef.current.setDirection?.(1);
+      waitRef.current.loop = true;
+      waitRef.current.play?.();
+    } catch {}
+  }
+  function setBTCColored(show = true) {
+    // btcRef is always colored artwork; we just control visibility via style
+    const el = btcRef.current?.wrapper || btcRef.current?.animationContainer;
+    if (el) el.style.opacity = show ? "1" : "0";
+  }
+  function setTONColored(show = true) {
+    const el = tonRef.current?.wrapper || tonRef.current?.animationContainer;
+    if (el) el.style.opacity = show ? "1" : "0";
+  }
+  function setBTCGray(show = true) {
+    const el = btcRef.current?.wrapper || btcRef.current?.animationContainer;
+    if (el) el.style.filter = show ? "grayscale(1) brightness(0.9)" : "none";
+    if (el && show) el.style.opacity = "0.5";
+  }
+  function setTONGray(show = true) {
+    const el = tonRef.current?.wrapper || tonRef.current?.animationContainer;
+    if (el) el.style.filter = show ? "grayscale(1) brightness(0.9)" : "none";
+    if (el && show) el.style.opacity = "0.5";
+  }
+  function clearFilters() {
+    for (const r of [btcRef, tonRef]) {
+      const el = r.current?.wrapper || r.current?.animationContainer;
+      if (el) { el.style.filter = "none"; el.style.opacity = "1"; }
+    }
+  }
+  function goToFrames() {
+    try { btcRef.current?.goToAndStop?.(FRAME_BTC, true); } catch {}
+    try { tonRef.current?.goToAndStop?.(FRAME_TON, true); } catch {}
+  }
 
   useImperativeHandle(ref, () => ({
+    // initially: nothing spins. We only spin AFTER user selects.
     startWaiting() {
-      if (!animRef.current) return;
-      try {
-        animRef.current.setSpeed?.(1);
-        animRef.current.setDirection?.(1);
-        animRef.current.play?.();
-        animRef.current.loop = true;
-      } catch {}
+      // ensure both still instances are at their frames but hidden until resolve
+      goToFrames();
+      setBTCColored(false);
+      setTONColored(false);
+      clearFilters();
+      showWait(1.15); // subtle loop while waiting
     },
-    resolve(/* desired = 'H'|'T' (visual is neutral) */) {
-      if (!animRef.current) return Promise.resolve();
-      // brief settle burst: speed up for ~1s, then stop at current frame
-      animRef.current.loop = false;
-      try { animRef.current.setSpeed?.(1.6); } catch {}
-      try { animRef.current.play?.(); } catch {}
-      return new Promise((res) => {
-        clearTimeout(settleTimer.current);
-        settleTimer.current = setTimeout(() => {
-          try { animRef.current.pause?.(); } catch {}
-          res();
-        }, 1000);
-      });
+
+    // desired: 'H' → BTC (heads), 'T' → TON (tails)
+    async resolve(desired) {
+      hideWait();
+
+      // Make sure still frames are set
+      goToFrames();
+      // Winner colored, loser gray
+      if (desired === "H") {
+        // BTC colored visible; TON colored visible but grayscaled
+        setBTCColored(true);
+        setTONColored(true);
+        clearFilters();
+        setTONGray(true);
+      } else {
+        // TON colored visible; BTC colored visible but grayscaled
+        setBTCColored(true);
+        setTONColored(true);
+        clearFilters();
+        setBTCGray(true);
+      }
+
+      // tiny settle feel (optional): brief wink
+      await new Promise((r) => setTimeout(r, 250));
     },
+
     stop() {
-      clearTimeout(settleTimer.current);
-      if (!animRef.current) return;
-      try {
-        animRef.current.stop?.();
-        animRef.current.loop = false;
-      } catch {}
+      hideWait();
+      // reset to neutral stills (hidden)
+      goToFrames();
+      setBTCColored(false);
+      setTONColored(false);
+      clearFilters();
     },
   }), []);
 
   return (
-    <Lottie
-      lottieRef={animRef}
-      animationData={coinAnim}
-      loop
-      autoplay
-      style={{
-        position: "absolute",
-        inset: 0,
-        // Fit exactly inside the inner circle of the background:
-        // tweak scale 0.88–0.96 if your background ring stroke is thick/thin
-        transform: "scale(0.92)",
-        pointerEvents: "none",
-      }}
-      rendererSettings={{
-        viewBoxOnly: true,
-        preserveAspectRatio: "xMidYMid slice",
-      }}
-    />
+    <div style={{ position: "relative", width: 160, height: 160 }}>
+      {/* Waiting spinner (only after selection) */}
+      <Lottie
+        lottieRef={waitRef}
+        animationData={coinAnim}
+        loop={false}
+        autoplay={false}
+        style={{
+          position: "absolute",
+          inset: 0,
+          transform: "scale(0.92)", // fit coin inside ring
+          pointerEvents: "none",
+        }}
+        rendererSettings={{
+          viewBoxOnly: true,
+          preserveAspectRatio: "xMidYMid slice",
+        }}
+      />
+
+      {/* BTC still (colored frame), we toggle visibility & grayscale via style */}
+      <Lottie
+        lottieRef={btcRef}
+        animationData={coinAnim}
+        loop={false}
+        autoplay={false}
+        style={{
+          position: "absolute",
+          inset: 0,
+          transform: "scale(0.92)",
+          pointerEvents: "none",
+          opacity: 0, // hidden until resolve
+        }}
+        rendererSettings={{
+          viewBoxOnly: true,
+          preserveAspectRatio: "xMidYMid slice",
+        }}
+      />
+
+      {/* TON still (colored frame), we toggle visibility & grayscale via style */}
+      <Lottie
+        lottieRef={tonRef}
+        animationData={coinAnim}
+        loop={false}
+        autoplay={false}
+        style={{
+          position: "absolute",
+          inset: 0,
+          transform: "scale(0.92)",
+          pointerEvents: "none",
+          opacity: 0, // hidden until resolve
+        }}
+        rendererSettings={{
+          viewBoxOnly: true,
+          preserveAspectRatio: "xMidYMid slice",
+        }}
+      />
+    </div>
   );
 });
 
