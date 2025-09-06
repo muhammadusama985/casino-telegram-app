@@ -819,7 +819,7 @@ export default function Coinflip() {
   width: "100%",
   height: "100%",
   pointerEvents: "none",
-  transform: "scaleX(1.14) scaleY(1.08)",  // ⬅️ wider + slightly taller
+  transform: "scaleX(1.14) scaleY(1.10)",  // ⬅️ wider + slightly taller
   transformOrigin: "center",
 }}
 
