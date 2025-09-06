@@ -607,9 +607,9 @@ function formatCoins(v) {
 }
 
 const STREAK_BOOST_PER_WIN = 0.05;   // UI-only boost per consecutive win (must match backend cfg)
-const BASE_PAYOUT_PCT       = 0.90;  // 90% profit baseline (must match backend cfg)
-const PAYOUT_CAP            = 1.0;   // cap profit at 100% of stake (must match backend cfg)
-const TRAIL_LEN             = 10;
+const BASE_PAYOUT_PCT = 0.90;  // 90% profit baseline (must match backend cfg)
+const PAYOUT_CAP = 1.0;   // cap profit at 100% of stake (must match backend cfg)
+const TRAIL_LEN = 10;
 
 export default function Coinflip() {
   // balance
@@ -648,7 +648,7 @@ export default function Coinflip() {
 
   /* ---------- balance bootstrap ---------- */
   useEffect(() => {
-    let stopPolling = () => {};
+    let stopPolling = () => { };
     (async () => {
       try {
         const u = await telegramAuth();
@@ -656,7 +656,7 @@ export default function Coinflip() {
         try {
           const b = await getBalance();
           if (Number.isFinite(b)) setCoins((c) => (b !== c ? b : c));
-        } catch {}
+        } catch { }
         stopPolling = (() => {
           let alive = true;
           (function tick() {
@@ -665,7 +665,7 @@ export default function Coinflip() {
               try {
                 const b = await getBalance();
                 if (Number.isFinite(b)) setCoins((c) => (b !== c ? b : c));
-              } catch {} finally {
+              } catch { } finally {
                 if (alive) tick();
               }
             }, 4000);
@@ -684,7 +684,7 @@ export default function Coinflip() {
       try {
         const b = await getBalance();
         if (Number.isFinite(b)) setCoins((c) => (b !== c ? b : c));
-      } catch {}
+      } catch { }
     };
     const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
     window.addEventListener("balance:refresh", refresh);
@@ -706,8 +706,8 @@ export default function Coinflip() {
     setResultMsg("");
 
     // 1) Start spin only after user selects
-    try { new Audio(flipSound).play().catch(() => {}); } catch {}
-    try { coinApiRef.current?.startWaiting(); } catch {}
+    try { new Audio(flipSound).play().catch(() => { }); } catch { }
+    try { coinApiRef.current?.startWaiting(); } catch { }
 
     try {
       // 2) Ask backend
@@ -736,7 +736,7 @@ export default function Coinflip() {
         const profit = Number(res?.payout || 0);
         const msg = `🎉 You Win! +${fmt(profit)}`;
         setResultMsg(msg);
-        try { new Audio(winSound).play().catch(() => {}); } catch {}
+        try { new Audio(winSound).play().catch(() => { }); } catch { }
         alert(msg);
       } else {
         setStreak(0);
@@ -744,13 +744,13 @@ export default function Coinflip() {
 
         const msg = `❌ You Lose! -${fmt(stake)}`;
         setResultMsg(msg);
-        try { new Audio(loseSound).play().catch(() => {}); } catch {}
+        try { new Audio(loseSound).play().catch(() => { }); } catch { }
         alert(msg);
       }
 
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
-      try { coinApiRef.current?.stop(); } catch {}
+      try { coinApiRef.current?.stop(); } catch { }
       const msg = String(e?.message || "");
       if (msg.includes("insufficient-funds")) alert("Not enough coins.");
       else if (msg.includes("min-stake")) alert("Bet is below minimum.");
@@ -811,23 +811,20 @@ export default function Coinflip() {
               zIndex: 0,
             }}
           >
-            <Lottie
-              animationData={bgAnim}
-              loop
-              autoplay
-            style={{
-  width: "100%",
-  height: "100%",
-  pointerEvents: "none",
-  transform: "scaleX(1.14) scaleY(1.10)",  // ⬅️ wider + slightly taller
-  transformOrigin: "center",
-}}
+          <Lottie
+  animationData={bgAnim}
+  loop
+  autoplay
+  style={{
+    width: "100%",
+    height: "100%",
+    pointerEvents: "none",
+    transform: "translateY(-6px) scaleX(1.14) scaleY(1.08)", // ⬅️ add translateY(-6px)
+    transformOrigin: "center",
+  }}
+  rendererSettings={{ preserveAspectRatio: "xMidYMid meet" }}
+/>
 
-              rendererSettings={{
-                // keep it inside the box rather than slicing taller viewBoxes
-                preserveAspectRatio: "xMidYMid meet",
-              }}
-            />
           </div>
 
           {/* Coin above the ring, hard-centered */}
@@ -842,9 +839,10 @@ export default function Coinflip() {
             }}
           >
             {/* scale first, then translate so offset isn't scaled */}
-            <div style={{ transform: "scale(0.40) translateY(14px)", transformOrigin: "center" }}>
-              <Coin3D ref={coinApiRef} ariaFace={face} />
-            </div>
+            <div style={{ transform: "scale(0.40) translateY(8px)", transformOrigin: "center" }}>
+  <Coin3D ref={coinApiRef} ariaFace={face} />
+</div>
+
           </div>
         </div>
 
@@ -861,9 +859,8 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("H")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
-            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
-          }`}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
+            }`}
         >
           <div className="flex items-center gap-3">
             <MiniCoin symbol="$" />
@@ -873,9 +870,8 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("T")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
-            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
-          }`}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
+            }`}
         >
           <div className="flex items-center gap-3">
             <MiniCoin symbol="€" />
@@ -910,7 +906,7 @@ export default function Coinflip() {
               }}
             >
               <div className="text-lg">
-                {fmt(potentialProfit)} 
+                {fmt(potentialProfit)}
               </div>
               <div className="text-sm opacity-60 -mt-1">Take</div>
             </div>
@@ -922,11 +918,10 @@ export default function Coinflip() {
       {resultMsg && (
         <div className="px-4 mt-4">
           <div
-            className={`rounded-xl px-4 py-3 text-center font-semibold ${
-              resultMsg.includes("Win")
+            className={`rounded-xl px-4 py-3 text-center font-semibold ${resultMsg.includes("Win")
                 ? "bg-emerald-600/30 text-emerald-200"
                 : "bg-rose-600/30 text-rose-200"
-            }`}
+              }`}
           >
             {resultMsg}
           </div>
@@ -973,7 +968,7 @@ function BackButtonInline({ to = "/" }) {
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2"
-              strokeLinecap="round" strokeLinejoin="round"/>
+          strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </button>
   );
