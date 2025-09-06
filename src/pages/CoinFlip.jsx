@@ -580,13 +580,19 @@
 //   );
 // }
 
+
+
+
+
+
+
+
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
 import bgAnim from "../assets/lottie/Flipcoin_background.json"; // looping ring
-import coinAnim from "../assets/lottie/Flip_coin.json";         // coin art (BTC/TON)
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
@@ -718,7 +724,7 @@ export default function Coinflip() {
       const landed = (res?.details?.landed === "T") ? "T" : "H";
       setFace(landed); // semantics only
 
-      // 3) resolve visual (guarantee 3–4 flips, then land on backend side)
+      // 3) resolve visual (guarantee CSS settle to backend side)
       await (coinApiRef.current?.resolve(landed) ?? Promise.resolve());
 
       if (Number.isFinite(res?.newBalance)) {
@@ -793,7 +799,7 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin: background ring + Lottie coin (no CSS coin) */}
+        {/* center coin: background ring + CSS Coin3D (scaled to fit) */}
         <div
           className="relative mx-4 flex items-center justify-center"
           style={{ width: 160, height: 160 }}
@@ -814,9 +820,11 @@ export default function Coinflip() {
             }}
           />
 
-          {/* Coin: flips 3–4 times, then lands on backend side; winner yellow, loser grey */}
-          <div style={{ position: "relative", zIndex: 1, width: 160, height: 160 }}>
-            <LottieCoin ref={coinApiRef} />
+          {/* CSS coin centered and slightly scaled to sit inside the ring */}
+          <div style={{ position: "relative", zIndex: 1, width: 160, height: 160, display: "grid", placeItems: "center" }}>
+            <div style={{ transform: "scale(0.92)" }}>
+              <Coin3D ref={coinApiRef} ariaFace={face} />
+            </div>
           </div>
         </div>
 
@@ -910,224 +918,6 @@ export default function Coinflip() {
   );
 }
 
-/* -------------------- LottieCoin (BTC=heads, TON=tails) -------------------- */
-const LottieCoin = forwardRef(function LottieCoin(_, ref) {
-  // 3 layers:
-  // - waitRef : the flipping loop (plays only after selection)
-  // - btcRef  : still frame showing BTC colored
-  // - tonRef  : still frame showing TON colored
-  const waitRef = useRef(null);
-  const btcRef  = useRef(null);
-  const tonRef  = useRef(null);
-
-  // Choose 3 or 4 flips randomly per round
-  const minFlipsRef = useRef(3);
-  const flipCountRef = useRef(0);
-  const pendingDesiredRef = useRef(null);
-  const finalizeResolverRef = useRef(null);
-
-  // Frame anchors in your JSON timeline (tweak if needed)
-  // BTC colored-only frame:
-  const FRAME_BTC = 60;
-  // TON colored-only frame:
-  const FRAME_TON = 200;
-
-  function setStillFrames() {
-    try { btcRef.current?.goToAndStop?.(FRAME_BTC, true); } catch {}
-    try { tonRef.current?.goToAndStop?.(FRAME_TON, true); } catch {}
-  }
-
-  function setLayerVisible(refObj, vis) {
-    const el = refObj.current?.wrapper || refObj.current?.animationContainer;
-    if (el) el.style.opacity = vis ? "1" : "0";
-  }
-  function setGrey(refObj, on) {
-    const el = refObj.current?.wrapper || refObj.current?.animationContainer;
-    if (!el) return;
-    el.style.filter = on ? "grayscale(1) brightness(0.9)" : "none";
-    el.style.opacity = on ? "0.5" : "1";
-  }
-
-  function hideWait() {
-    if (!waitRef.current) return;
-    try {
-      waitRef.current.loop = false;
-      waitRef.current.stop?.();
-    } catch {}
-  }
-  function showWait() {
-    if (!waitRef.current) return;
-    try {
-      waitRef.current.setSpeed?.(1.2); // comfortable spin speed
-      waitRef.current.setDirection?.(1);
-      waitRef.current.loop = true;
-      waitRef.current.play?.();
-    } catch {}
-  }
-
-  function attachLoopHandler() {
-    const anim = waitRef.current;
-    if (!anim || anim.__loopHandlerBound) return;
-    const onLoop = () => {
-      flipCountRef.current += 1;
-      const shouldFinalize =
-        pendingDesiredRef.current && flipCountRef.current >= minFlipsRef.current;
-      if (shouldFinalize) {
-        const desired = pendingDesiredRef.current;
-        pendingDesiredRef.current = null;
-        finalizeOutcome(desired).then(() => {
-          finalizeResolverRef.current?.();
-          finalizeResolverRef.current = null;
-        });
-      }
-    };
-    anim.addEventListener?.("loopComplete", onLoop);
-    anim.addEventListener?.("complete", onLoop); // fallback if loopComplete not emitted
-    anim.__loopHandlerBound = true;
-    anim.__onLoop = onLoop;
-  }
-
-  function detachLoopHandler() {
-    const anim = waitRef.current;
-    if (!anim || !anim.__loopHandlerBound) return;
-    anim.removeEventListener?.("loopComplete", anim.__onLoop);
-    anim.removeEventListener?.("complete", anim.__onLoop);
-    anim.__loopHandlerBound = false;
-    anim.__onLoop = null;
-  }
-
-  async function finalizeOutcome(desired /* 'H' | 'T' */) {
-    // stop flipping
-    hideWait();
-    detachLoopHandler();
-
-    // prepare still frames
-    setStillFrames();
-
-    // show both, colorize winner, grey loser
-    setLayerVisible(btcRef, true);
-    setLayerVisible(tonRef, true);
-
-    // Winner = desired; BTC=heads(H), TON=tails(T)
-    if (desired === "H") {
-      // BTC yellow (no filter), TON grey
-      setGrey(btcRef, false);
-      setGrey(tonRef, true);
-    } else {
-      // TON yellow, BTC grey
-      setGrey(btcRef, true);
-      setGrey(tonRef, false);
-    }
-
-    // tiny settle pause for visual rhythm
-    await new Promise((r) => setTimeout(r, 180));
-  }
-
-  useImperativeHandle(ref, () => ({
-    startWaiting() {
-      // Reset counters
-      minFlipsRef.current = 3 + (Math.random() < 0.5 ? 0 : 1); // 3 or 4
-      flipCountRef.current = 0;
-      pendingDesiredRef.current = null;
-
-      // Hide stills, clear filters
-      setStillFrames();
-      setLayerVisible(btcRef, false);
-      setLayerVisible(tonRef, false);
-      setGrey(btcRef, false);
-      setGrey(tonRef, false);
-
-      // Start flipping loop only now
-      showWait();
-      attachLoopHandler();
-    },
-
-    resolve(desired /* 'H' | 'T' */) {
-      // If we've already spun enough, finalize immediately; else wait until min flips complete
-      if (flipCountRef.current >= minFlipsRef.current) {
-        return finalizeOutcome(desired);
-      }
-      pendingDesiredRef.current = desired;
-      return new Promise((res) => {
-        finalizeResolverRef.current = res;
-      });
-    },
-
-    stop() {
-      pendingDesiredRef.current = null;
-      finalizeResolverRef.current = null;
-      hideWait();
-      detachLoopHandler();
-      // Reset to neutral (no stills shown)
-      setStillFrames();
-      setLayerVisible(btcRef, false);
-      setLayerVisible(tonRef, false);
-      setGrey(btcRef, false);
-      setGrey(tonRef, false);
-    },
-  }), []);
-
-  return (
-    <div style={{ position: "relative", width: 160, height: 160 }}>
-      {/* Flipping loop (hidden until startWaiting is called) */}
-      <Lottie
-        lottieRef={waitRef}
-        animationData={coinAnim}
-        loop={false}
-        autoplay={false}
-        style={{
-          position: "absolute",
-          inset: 0,
-          transform: "scale(0.92)", // fits inside ring
-          pointerEvents: "none",
-        }}
-        rendererSettings={{
-          viewBoxOnly: true,
-          preserveAspectRatio: "xMidYMid slice",
-        }}
-      />
-
-      {/* BTC still (colored frame; visibility/filters controlled in code) */}
-      <Lottie
-        lottieRef={btcRef}
-        animationData={coinAnim}
-        loop={false}
-        autoplay={false}
-        style={{
-          position: "absolute",
-          inset: 0,
-          transform: "scale(0.92)",
-          pointerEvents: "none",
-          opacity: 0,
-        }}
-        rendererSettings={{
-          viewBoxOnly: true,
-          preserveAspectRatio: "xMidYMid slice",
-        }}
-      />
-
-      {/* TON still (colored frame; visibility/filters controlled in code) */}
-      <Lottie
-        lottieRef={tonRef}
-        animationData={coinAnim}
-        loop={false}
-        autoplay={false}
-        style={{
-          position: "absolute",
-          inset: 0,
-          transform: "scale(0.92)",
-          pointerEvents: "none",
-          opacity: 0,
-        }}
-        rendererSettings={{
-          viewBoxOnly: true,
-          preserveAspectRatio: "xMidYMid slice",
-        }}
-      />
-    </div>
-  );
-});
-
 function MiniCoin({ symbol = "$" }) {
   return (
     <span
@@ -1166,5 +956,238 @@ function BackButtonInline({ to = "/" }) {
               strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </button>
+  );
+}
+
+
+/* ===================== 3D CSS COIN with WAIT->RESOLVE flow (H/T faces) ===================== */
+const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
+  const coinRef = useRef(null);
+  const waitTimerRef = useRef(null);
+
+  function clearTimers() {
+    if (waitTimerRef.current) {
+      clearTimeout(waitTimerRef.current);
+      waitTimerRef.current = null;
+    }
+  }
+
+  useImperativeHandle(ref, () => ({
+    // Begin indefinite spin while waiting for backend
+    startWaiting() {
+      const el = coinRef.current;
+      if (!el) return;
+      clearTimers();
+      el.classList.remove("coinflip-anim");
+      // reflow
+      // eslint-disable-next-line no-unused-expressions
+      el.offsetWidth;
+      el.classList.add("coinflip-wait");
+    },
+    // Resolve to 'H' or 'T' and return a Promise that fulfills after the animation ends
+    resolve(desired) {
+      const el = coinRef.current;
+      if (!el) return Promise.resolve();
+
+      // remove waiting loop
+      el.classList.remove("coinflip-wait");
+
+      const spins = Math.floor(3 + Math.random() * 3); // ~3–5 flips
+      const yawStart = (Math.random() * 18 - 9).toFixed(2) + "deg";
+      const yawEnd = (Math.random() * 24 - 12).toFixed(2) + "deg";
+      const duration = Math.floor(950 + Math.random() * 450); // ~1.0–1.4s
+      const half = desired === "T" ? 0.5 : 0;
+
+      el.style.setProperty("--spins", String(spins));
+      el.style.setProperty("--half", String(half));
+      el.style.setProperty("--duration", duration + "ms");
+      el.style.setProperty("--yawStart", yawStart);
+      el.style.setProperty("--yawEnd", yawEnd);
+
+      // trigger final deterministic flip
+      el.classList.remove("coinflip-anim");
+      // eslint-disable-next-line no-unused-expressions
+      el.offsetWidth;
+      el.classList.add("coinflip-anim");
+
+      return new Promise((resolve) => {
+        waitTimerRef.current = setTimeout(() => {
+          resolve();
+        }, duration + 60);
+      });
+    },
+    // Stop any animation (used on error)
+    stop() {
+      const el = coinRef.current;
+      if (!el) return;
+      clearTimers();
+      el.classList.remove("coinflip-wait");
+      el.classList.remove("coinflip-anim");
+    },
+  }), []);
+
+  return (
+    <div className="coinflip-scene" style={{ perspective: "1200px" }}>
+      <div
+        ref={coinRef}
+        className="coinflip-coin"
+        role="img"
+        aria-label={ariaFace === "H" ? "Heads" : "Tails"}
+        style={{
+          ['--size']: '160px',        // base footprint (will be scaled by outer wrapper)
+          ['--thickness']: '12px',
+        }}
+      >
+        {/* FRONT → Heads = H */}
+        <div className="coinflip-face coinflip-front"><CoinFace symbol="H" front /></div>
+        {/* BACK → Tails = T */}
+        <div className="coinflip-face coinflip-back"><CoinFace symbol="T" /></div>
+        <div className="coinflip-shadow" aria-hidden />
+      </div>
+
+      {/* coin styles */}
+      <style>{`
+        :root {
+          --coin-gold-1: #f4e3b1;
+          --coin-gold-2: #d9ba73;
+          --coin-gold-3: #b7913a;
+          --coin-gold-4: #8e6b24;
+        }
+
+        .coinflip-coin {
+          width: var(--size);
+          height: var(--size);
+          position: relative;
+          transform-style: preserve-3d;
+          user-select: none;
+        }
+
+        /* Waiting loop: smooth, continuous flipping */
+        .coinflip-wait {
+          animation: coinflip-wait 0.9s linear infinite;
+        }
+        @keyframes coinflip-wait {
+          0% {
+            transform:
+              rotateX(0turn)
+              rotateY(-6deg)
+              rotateZ(0deg);
+          }
+          100% {
+            transform:
+              rotateX(1turn)
+              rotateY(6deg)
+              rotateZ(3deg);
+          }
+        }
+
+        /* Final settle animation (deterministic) */
+        .coinflip-coin.coinflip-anim {
+          animation: coinflip-spin var(--duration) cubic-bezier(.2,.7,.2,1) forwards;
+        }
+        @keyframes coinflip-spin {
+          0% {
+            transform:
+              rotateX(0turn)
+              rotateY(var(--yawStart))
+              rotateZ(0deg);
+          }
+          100% {
+            transform:
+              rotateX(calc((var(--spins) + var(--half)) * 1turn))
+              rotateY(var(--yawEnd))
+              rotateZ(3deg);
+          }
+        }
+
+        .coinflip-face {
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          backface-visibility: hidden;
+          display: grid;
+          place-items: center;
+          overflow: hidden;
+          box-shadow: 0 2px 1px rgba(0,0,0,.25) inset,
+                      0 10px 24px rgba(0,0,0,.35);
+        }
+        .coinflip-front {
+          background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.45), rgba(255,255,255,0) 40%),
+                      radial-gradient(circle at 65% 70%, rgba(0,0,0,.18), rgba(0,0,0,0) 60%),
+                      linear-gradient(135deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
+          transform: translateZ(calc(var(--thickness) / 2));
+        }
+        .coinflip-back {
+          background: radial-gradient(circle at 65% 30%, rgba(255,255,255,.35), rgba(255,255,255,0) 40%),
+                      radial-gradient(circle at 35% 70%, rgba(0,0,0,.22), rgba(0,0,0,0) 60%),
+                      linear-gradient(225deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
+          transform: rotateX(180deg) translateZ(calc(var(--thickness) / 2));
+        }
+
+        /* ridged edge illusion */
+        .coinflip-coin::before {
+          content: "";
+          position: absolute;
+          inset: 2.5%;
+          border-radius: 50%;
+          background: repeating-conic-gradient(
+            from 0deg,
+            rgba(0,0,0,.18) 0deg 6deg,
+            rgba(255,255,255,.18) 6deg 12deg
+          );
+          filter: blur(.3px);
+          transform: translateZ(calc(var(--thickness) * -0.5));
+          opacity: .45;
+          pointer-events: none;
+        }
+
+        .coinflip-shadow {
+          position: absolute;
+          left: 50%;
+          bottom: -22%;
+          width: 60%;
+          height: 16%;
+          transform: translateX(-50%);
+          background: radial-gradient(ellipse at center, rgba(0,0,0,.35), rgba(0,0,0,0));
+          filter: blur(4px);
+          opacity: .7;
+          pointer-events: none;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .coinflip-wait { animation-duration: 0.01ms; }
+          .coinflip-coin.coinflip-anim { animation-duration: 0.01ms; }
+        }
+      `}</style>
+    </div>
+  );
+});
+
+function CoinFace({ symbol = "H", front = false }) {
+  return (
+    <div
+      className="rounded-full grid place-items-center"
+      style={{
+        width: "78%",
+        height: "78%",
+        border: "2px solid rgba(255,255,255,.35)",
+        boxShadow: "0 0 0 6px rgba(0,0,0,.12) inset",
+        background: front
+          ? "radial-gradient(circle at 40% 35%, rgba(255,255,255,.8), rgba(255,255,255,0) 55%)"
+          : "radial-gradient(circle at 60% 65%, rgba(255,255,255,.8), rgba(255,255,255,0) 55%)",
+      }}
+    >
+      <span
+        style={{
+          fontSize: "clamp(36px, 8vw, 64px)",
+          fontWeight: 800,
+          letterSpacing: "2px",
+          textShadow: "0 2px 2px rgba(0,0,0,.35)",
+          color: "#FFDF86",
+        }}
+      >
+        {symbol}
+      </span>
+    </div>
   );
 }
