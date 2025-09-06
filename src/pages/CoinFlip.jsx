@@ -586,7 +586,6 @@
 
 
 
-
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
@@ -724,7 +723,7 @@ export default function Coinflip() {
       const landed = (res?.details?.landed === "T") ? "T" : "H";
       setFace(landed); // semantics only
 
-      // 3) resolve visual (guarantee CSS settle to backend side)
+      // 3) resolve visual (CSS coin settles to backend side)
       await (coinApiRef.current?.resolve(landed) ?? Promise.resolve());
 
       if (Number.isFinite(res?.newBalance)) {
@@ -799,12 +798,12 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin: background ring + CSS Coin3D (scaled to fit) */}
+        {/* center coin: background ring + CSS Coin3D (smaller & centered) */}
         <div
           className="relative mx-4 flex items-center justify-center"
           style={{ width: 160, height: 160 }}
         >
-          {/* Background ring animation (continuous) */}
+          {/* Background ring animation (unchanged) */}
           <Lottie
             animationData={bgAnim}
             loop
@@ -820,9 +819,20 @@ export default function Coinflip() {
             }}
           />
 
-          {/* CSS coin centered and slightly scaled to sit inside the ring */}
-          <div style={{ position: "relative", zIndex: 1, width: 160, height: 160, display: "grid", placeItems: "center" }}>
-            <div style={{ transform: "scale(0.92)" }}>
+          {/* Smaller coin, hard-centered */}
+          <div
+            style={{
+              position: "relative",
+              zIndex: 1,
+              width: 160,
+              height: 160,
+              display: "grid",
+              placeItems: "center",
+              pointerEvents: "none",
+            }}
+          >
+            {/* ↓ only change: scale from 0.92 → 0.78 */}
+            <div style={{ transform: "scale(0.78)", transformOrigin: "center" }}>
               <Coin3D ref={coinApiRef} ariaFace={face} />
             </div>
           </div>
@@ -1034,7 +1044,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         role="img"
         aria-label={ariaFace === "H" ? "Heads" : "Tails"}
         style={{
-          ['--size']: '160px',        // base footprint (will be scaled by outer wrapper)
+          ['--size']: '160px',        // base footprint (shrinked by wrapper scale)
           ['--thickness']: '12px',
         }}
       >
