@@ -583,9 +583,6 @@
 
 
 
-
-
-
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
@@ -798,44 +795,55 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin: background ring + CSS Coin3D (smaller & centered) */}
+        {/* center coin: BG ring masked to circle + CSS coin centered */}
         <div
           className="relative mx-4 flex items-center justify-center"
-          style={{ width: 160, height: 160 }}
+          style={{ width: 160, height: 160, isolation: "isolate" }}
         >
-          {/* Background ring animation (unchanged) */}
-          <Lottie
-            animationData={bgAnim}
-            loop
-            autoplay
+          {/* Masked circle wrapper so the Lottie never overflows or show a slab */}
+          <div
             style={{
               position: "absolute",
               inset: 0,
-              transform: "scale(0.9)", // ring snug inside 160×160
+              borderRadius: "50%",
+              overflow: "hidden",
+              background: "#0B1020", // match page bg
+              zIndex: 0,
             }}
-            rendererSettings={{
-              viewBoxOnly: true,
-              preserveAspectRatio: "xMidYMid slice",
-            }}
-          />
+          >
+            <Lottie
+              animationData={bgAnim}
+              loop
+              autoplay
+              style={{
+                width: "100%",
+                height: "100%",
+                pointerEvents: "none",
+                transform: "scale(0.9)", // ring snug inside 160×160
+                transformOrigin: "center",
+              }}
+              rendererSettings={{
+                // keep it inside the box rather than slicing taller viewBoxes
+                preserveAspectRatio: "xMidYMid meet",
+              }}
+            />
+          </div>
 
-          {/* Smaller coin, hard-centered */}
+          {/* Coin above the ring, hard-centered */}
           <div
             style={{
-              position: "relative",
-              zIndex: 1,
-              width: 160,
-              height: 160,
+              position: "absolute",
+              inset: 0,
               display: "grid",
               placeItems: "center",
+              zIndex: 1,
               pointerEvents: "none",
             }}
           >
-            {/* ↓ only change: scale from 0.92 → 0.78 */}
-           <div style={{ transform: "scale(0.48) translateY(20px)", transformOrigin: "center" }}>
-  <Coin3D ref={coinApiRef} ariaFace={face} />
-</div>
-
+            {/* scale first, then translate so offset isn't scaled */}
+            <div style={{ transform: "scale(0.48) translateY(14px)", transformOrigin: "center" }}>
+              <Coin3D ref={coinApiRef} ariaFace={face} />
+            </div>
           </div>
         </div>
 
@@ -847,8 +855,8 @@ export default function Coinflip() {
         </div>
       </div>
 
-      {/* choose H/T */}
-      <div className="px-4 mt-6 grid grid-cols-2 gap-3">
+      {/* choose H/T — force on top of any animation layers */}
+      <div className="px-4 mt-6 grid grid-cols-2 gap-3 relative z-20">
         <button
           disabled={flipping}
           onClick={() => placeBet("H")}
