@@ -1069,6 +1069,85 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           --coin-gold-4: #8e6b24;
         }
 
+        /* ---------- NEW: richer coin face design (colors & edges like screenshot) ---------- */
+.coinface {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+/* outer rim (darker golden edge) */
+.coinface-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ffe07a 0%, #ffc447 38%, #ee9f1b 62%, #bf7306 100%);
+  box-shadow:
+    inset 0 6px 10px rgba(255,255,255,0.35),
+    inset 0 -10px 16px rgba(0,0,0,0.35),
+    0 6px 14px rgba(0,0,0,0.25);
+}
+
+/* inner gold ring (thin bevel just inside the rim) */
+.coinface-ring {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ffeaa3 0%, #ffd268 45%, #eca425 80%, #c0790a 100%);
+  box-shadow:
+    inset 0 3px 6px rgba(255,255,255,0.55),
+    inset 0 -6px 10px rgba(0,0,0,0.28);
+}
+
+/* core disc (bright center like your image) */
+.coinface-core {
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background:
+    radial-gradient(60% 60% at 40% 35%, #fff1b5 0%, rgba(255,241,181,0.85) 20%, transparent 55%),
+    radial-gradient(55% 55% at 65% 70%, rgba(0,0,0,0.15), transparent 65%),
+    linear-gradient(145deg, #ffe38f 0%, #ffc24a 40%, #f0a22c 70%, #cb7e0f 100%);
+  box-shadow:
+    inset 0 3px 7px rgba(255,255,255,0.6),
+    inset 0 -10px 14px rgba(0,0,0,0.28);
+}
+
+/* symbol styling (keeps your H/T, just on-brand color) */
+.coinface-symbol {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-weight: 900;
+  letter-spacing: 1px;
+  font-size: clamp(34px, 7.2vw, 58px);
+  color: #d97800;                 /* orange symbol like the screenshot */
+  text-shadow:
+    0 2px 0 rgba(255,255,255,0.35),
+    0 2px 6px rgba(0,0,0,0.25);
+}
+
+/* soft gloss highlight – biased for front/back so it feels 3D */
+.coinface-gloss {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.coinface-gloss.front {
+  background:
+    radial-gradient(ellipse at 32% 28%, rgba(255,255,255,0.55) 0%,
+                    rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
+}
+.coinface-gloss.back {
+  background:
+    radial-gradient(ellipse at 68% 72%, rgba(255,255,255,0.55) 0%,
+                    rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
+}
+
+
         .coinflip-coin {
           width: var(--size);
           height: var(--size);
@@ -1180,29 +1259,15 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
 
 function CoinFace({ symbol = "H", front = false }) {
   return (
-    <div
-      className="rounded-full grid place-items-center"
-      style={{
-        width: "78%",
-        height: "78%",
-        border: "2px solid rgba(255,255,255,.35)",
-        boxShadow: "0 0 0 6px rgba(0,0,0,.12) inset",
-        background: front
-          ? "radial-gradient(circle at 40% 35%, rgba(255,255,255,.8), rgba(255,255,255,0) 55%)"
-          : "radial-gradient(circle at 60% 65%, rgba(255,255,255,.8), rgba(255,255,255,0) 55%)",
-      }}
-    >
-      <span
-        style={{
-          fontSize: "clamp(36px, 8vw, 64px)",
-          fontWeight: 800,
-          letterSpacing: "2px",
-          textShadow: "0 2px 2px rgba(0,0,0,.35)",
-          color: "#FFDF86",
-        }}
-      >
-        {symbol}
-      </span>
+    <div className="coinface">
+      <div className="coinface-rim" />
+      <div className="coinface-ring" />
+      <div className="coinface-core">
+        <span className="coinface-symbol">{symbol}</span>
+      </div>
+      {/* soft gloss; flips bias based on front/back */}
+      <div className={`coinface-gloss ${front ? "front" : "back"}`} />
     </div>
   );
 }
+
