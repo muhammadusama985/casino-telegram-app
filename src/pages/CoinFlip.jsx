@@ -586,8 +586,8 @@ import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle }
 import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
-import bgAnim from "../assets/Flipcoin_background.json"; // ring background
-import coinAnim from "../assets/Flip_coin.json";         // the coin itself
+import bgAnim from "../assets/lottie/Flipcoin_background.json"; // ring background
+import coinAnim from "../assets/lottie/Flip_coin.json";         // the coin itself
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
