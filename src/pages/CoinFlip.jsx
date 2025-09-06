@@ -841,7 +841,7 @@ export default function Coinflip() {
             }}
           >
             {/* scale first, then translate so offset isn't scaled */}
-            <div style={{ transform: "scale(0.48) translateY(14px)", transformOrigin: "center" }}>
+            <div style={{ transform: "scale(0.40) translateY(14px)", transformOrigin: "center" }}>
               <Coin3D ref={coinApiRef} ariaFace={face} />
             </div>
           </div>
