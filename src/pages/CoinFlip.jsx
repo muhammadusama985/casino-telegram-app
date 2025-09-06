@@ -580,14 +580,13 @@
 //   );
 // }
 
-
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
-import bgAnim from "../assets/lottie/Flipcoin_background.json"; // ring background (loops)
-import coinAnim from "../assets/lottie/Flip_coin.json";         // coin graphics
+import bgAnim from "../assets/lottie/Flipcoin_background.json"; // looping ring
+import coinAnim from "../assets/lottie/Flip_coin.json";         // coin art (BTC/TON)
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
@@ -622,7 +621,7 @@ export default function Coinflip() {
   const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?"));
   const [flipping, setFlipping] = useState(false);
   const [resultMsg, setResultMsg] = useState("");
-  const [face, setFace] = useState("H"); // semantic only (H=heads/BTC, T=tails/TON)
+  const [face, setFace] = useState("H"); // semantic only (H → BTC, T → TON)
 
   // coin animation API ref
   const coinApiRef = useRef(null);
@@ -719,7 +718,7 @@ export default function Coinflip() {
       const landed = (res?.details?.landed === "T") ? "T" : "H";
       setFace(landed); // semantics only
 
-      // 3) resolve visual
+      // 3) resolve visual (guarantee 3–4 flips, then land on backend side)
       await (coinApiRef.current?.resolve(landed) ?? Promise.resolve());
 
       if (Number.isFinite(res?.newBalance)) {
@@ -794,7 +793,7 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin: background ring + lottie coin (no CSS coin) */}
+        {/* center coin: background ring + Lottie coin (no CSS coin) */}
         <div
           className="relative mx-4 flex items-center justify-center"
           style={{ width: 160, height: 160 }}
@@ -815,7 +814,7 @@ export default function Coinflip() {
             }}
           />
 
-          {/* Coin (static until selection, flips only while waiting, settles on resolve) */}
+          {/* Coin: flips 3–4 times, then lands on backend side; winner yellow, loser grey */}
           <div style={{ position: "relative", zIndex: 1, width: 160, height: 160 }}>
             <LottieCoin ref={coinApiRef} />
           </div>
@@ -911,115 +910,166 @@ export default function Coinflip() {
   );
 }
 
-/* -------------------- LottieCoin (only Lottie; BTC=heads, TON=tails) -------------------- */
+/* -------------------- LottieCoin (BTC=heads, TON=tails) -------------------- */
 const LottieCoin = forwardRef(function LottieCoin(_, ref) {
-  // Three instances:
-  // - waitRef: spins only after selection (startWaiting), then hidden on resolve
-  // - btcRef : paused on a frame where BTC is colored
-  // - tonRef : paused on a frame where TON is colored
+  // 3 layers:
+  // - waitRef : the flipping loop (plays only after selection)
+  // - btcRef  : still frame showing BTC colored
+  // - tonRef  : still frame showing TON colored
   const waitRef = useRef(null);
   const btcRef  = useRef(null);
   const tonRef  = useRef(null);
 
-  // frame picks from your JSON timeline:
-  // - BTC colored only ~ frame 60
-  // - TON colored only ~ frame 200
+  // Choose 3 or 4 flips randomly per round
+  const minFlipsRef = useRef(3);
+  const flipCountRef = useRef(0);
+  const pendingDesiredRef = useRef(null);
+  const finalizeResolverRef = useRef(null);
+
+  // Frame anchors in your JSON timeline (tweak if needed)
+  // BTC colored-only frame:
   const FRAME_BTC = 60;
+  // TON colored-only frame:
   const FRAME_TON = 200;
 
-  function hideWait() {
-    if (waitRef.current) {
-      try { waitRef.current.stop?.(); } catch {}
-    }
+  function setStillFrames() {
+    try { btcRef.current?.goToAndStop?.(FRAME_BTC, true); } catch {}
+    try { tonRef.current?.goToAndStop?.(FRAME_TON, true); } catch {}
   }
-  function showWait(loopSpeed = 1.1) {
+
+  function setLayerVisible(refObj, vis) {
+    const el = refObj.current?.wrapper || refObj.current?.animationContainer;
+    if (el) el.style.opacity = vis ? "1" : "0";
+  }
+  function setGrey(refObj, on) {
+    const el = refObj.current?.wrapper || refObj.current?.animationContainer;
+    if (!el) return;
+    el.style.filter = on ? "grayscale(1) brightness(0.9)" : "none";
+    el.style.opacity = on ? "0.5" : "1";
+  }
+
+  function hideWait() {
     if (!waitRef.current) return;
     try {
-      waitRef.current.setSpeed?.(loopSpeed);
+      waitRef.current.loop = false;
+      waitRef.current.stop?.();
+    } catch {}
+  }
+  function showWait() {
+    if (!waitRef.current) return;
+    try {
+      waitRef.current.setSpeed?.(1.2); // comfortable spin speed
       waitRef.current.setDirection?.(1);
       waitRef.current.loop = true;
       waitRef.current.play?.();
     } catch {}
   }
-  function setBTCColored(show = true) {
-    // btcRef is always colored artwork; we just control visibility via style
-    const el = btcRef.current?.wrapper || btcRef.current?.animationContainer;
-    if (el) el.style.opacity = show ? "1" : "0";
+
+  function attachLoopHandler() {
+    const anim = waitRef.current;
+    if (!anim || anim.__loopHandlerBound) return;
+    const onLoop = () => {
+      flipCountRef.current += 1;
+      const shouldFinalize =
+        pendingDesiredRef.current && flipCountRef.current >= minFlipsRef.current;
+      if (shouldFinalize) {
+        const desired = pendingDesiredRef.current;
+        pendingDesiredRef.current = null;
+        finalizeOutcome(desired).then(() => {
+          finalizeResolverRef.current?.();
+          finalizeResolverRef.current = null;
+        });
+      }
+    };
+    anim.addEventListener?.("loopComplete", onLoop);
+    anim.addEventListener?.("complete", onLoop); // fallback if loopComplete not emitted
+    anim.__loopHandlerBound = true;
+    anim.__onLoop = onLoop;
   }
-  function setTONColored(show = true) {
-    const el = tonRef.current?.wrapper || tonRef.current?.animationContainer;
-    if (el) el.style.opacity = show ? "1" : "0";
+
+  function detachLoopHandler() {
+    const anim = waitRef.current;
+    if (!anim || !anim.__loopHandlerBound) return;
+    anim.removeEventListener?.("loopComplete", anim.__onLoop);
+    anim.removeEventListener?.("complete", anim.__onLoop);
+    anim.__loopHandlerBound = false;
+    anim.__onLoop = null;
   }
-  function setBTCGray(show = true) {
-    const el = btcRef.current?.wrapper || btcRef.current?.animationContainer;
-    if (el) el.style.filter = show ? "grayscale(1) brightness(0.9)" : "none";
-    if (el && show) el.style.opacity = "0.5";
-  }
-  function setTONGray(show = true) {
-    const el = tonRef.current?.wrapper || tonRef.current?.animationContainer;
-    if (el) el.style.filter = show ? "grayscale(1) brightness(0.9)" : "none";
-    if (el && show) el.style.opacity = "0.5";
-  }
-  function clearFilters() {
-    for (const r of [btcRef, tonRef]) {
-      const el = r.current?.wrapper || r.current?.animationContainer;
-      if (el) { el.style.filter = "none"; el.style.opacity = "1"; }
+
+  async function finalizeOutcome(desired /* 'H' | 'T' */) {
+    // stop flipping
+    hideWait();
+    detachLoopHandler();
+
+    // prepare still frames
+    setStillFrames();
+
+    // show both, colorize winner, grey loser
+    setLayerVisible(btcRef, true);
+    setLayerVisible(tonRef, true);
+
+    // Winner = desired; BTC=heads(H), TON=tails(T)
+    if (desired === "H") {
+      // BTC yellow (no filter), TON grey
+      setGrey(btcRef, false);
+      setGrey(tonRef, true);
+    } else {
+      // TON yellow, BTC grey
+      setGrey(btcRef, true);
+      setGrey(tonRef, false);
     }
-  }
-  function goToFrames() {
-    try { btcRef.current?.goToAndStop?.(FRAME_BTC, true); } catch {}
-    try { tonRef.current?.goToAndStop?.(FRAME_TON, true); } catch {}
+
+    // tiny settle pause for visual rhythm
+    await new Promise((r) => setTimeout(r, 180));
   }
 
   useImperativeHandle(ref, () => ({
-    // initially: nothing spins. We only spin AFTER user selects.
     startWaiting() {
-      // ensure both still instances are at their frames but hidden until resolve
-      goToFrames();
-      setBTCColored(false);
-      setTONColored(false);
-      clearFilters();
-      showWait(1.15); // subtle loop while waiting
+      // Reset counters
+      minFlipsRef.current = 3 + (Math.random() < 0.5 ? 0 : 1); // 3 or 4
+      flipCountRef.current = 0;
+      pendingDesiredRef.current = null;
+
+      // Hide stills, clear filters
+      setStillFrames();
+      setLayerVisible(btcRef, false);
+      setLayerVisible(tonRef, false);
+      setGrey(btcRef, false);
+      setGrey(tonRef, false);
+
+      // Start flipping loop only now
+      showWait();
+      attachLoopHandler();
     },
 
-    // desired: 'H' → BTC (heads), 'T' → TON (tails)
-    async resolve(desired) {
-      hideWait();
-
-      // Make sure still frames are set
-      goToFrames();
-      // Winner colored, loser gray
-      if (desired === "H") {
-        // BTC colored visible; TON colored visible but grayscaled
-        setBTCColored(true);
-        setTONColored(true);
-        clearFilters();
-        setTONGray(true);
-      } else {
-        // TON colored visible; BTC colored visible but grayscaled
-        setBTCColored(true);
-        setTONColored(true);
-        clearFilters();
-        setBTCGray(true);
+    resolve(desired /* 'H' | 'T' */) {
+      // If we've already spun enough, finalize immediately; else wait until min flips complete
+      if (flipCountRef.current >= minFlipsRef.current) {
+        return finalizeOutcome(desired);
       }
-
-      // tiny settle feel (optional): brief wink
-      await new Promise((r) => setTimeout(r, 250));
+      pendingDesiredRef.current = desired;
+      return new Promise((res) => {
+        finalizeResolverRef.current = res;
+      });
     },
 
     stop() {
+      pendingDesiredRef.current = null;
+      finalizeResolverRef.current = null;
       hideWait();
-      // reset to neutral stills (hidden)
-      goToFrames();
-      setBTCColored(false);
-      setTONColored(false);
-      clearFilters();
+      detachLoopHandler();
+      // Reset to neutral (no stills shown)
+      setStillFrames();
+      setLayerVisible(btcRef, false);
+      setLayerVisible(tonRef, false);
+      setGrey(btcRef, false);
+      setGrey(tonRef, false);
     },
   }), []);
 
   return (
     <div style={{ position: "relative", width: 160, height: 160 }}>
-      {/* Waiting spinner (only after selection) */}
+      {/* Flipping loop (hidden until startWaiting is called) */}
       <Lottie
         lottieRef={waitRef}
         animationData={coinAnim}
@@ -1028,7 +1078,7 @@ const LottieCoin = forwardRef(function LottieCoin(_, ref) {
         style={{
           position: "absolute",
           inset: 0,
-          transform: "scale(0.92)", // fit coin inside ring
+          transform: "scale(0.92)", // fits inside ring
           pointerEvents: "none",
         }}
         rendererSettings={{
@@ -1037,7 +1087,7 @@ const LottieCoin = forwardRef(function LottieCoin(_, ref) {
         }}
       />
 
-      {/* BTC still (colored frame), we toggle visibility & grayscale via style */}
+      {/* BTC still (colored frame; visibility/filters controlled in code) */}
       <Lottie
         lottieRef={btcRef}
         animationData={coinAnim}
@@ -1048,7 +1098,7 @@ const LottieCoin = forwardRef(function LottieCoin(_, ref) {
           inset: 0,
           transform: "scale(0.92)",
           pointerEvents: "none",
-          opacity: 0, // hidden until resolve
+          opacity: 0,
         }}
         rendererSettings={{
           viewBoxOnly: true,
@@ -1056,7 +1106,7 @@ const LottieCoin = forwardRef(function LottieCoin(_, ref) {
         }}
       />
 
-      {/* TON still (colored frame), we toggle visibility & grayscale via style */}
+      {/* TON still (colored frame; visibility/filters controlled in code) */}
       <Lottie
         lottieRef={tonRef}
         animationData={coinAnim}
@@ -1067,7 +1117,7 @@ const LottieCoin = forwardRef(function LottieCoin(_, ref) {
           inset: 0,
           transform: "scale(0.92)",
           pointerEvents: "none",
-          opacity: 0, // hidden until resolve
+          opacity: 0,
         }}
         rendererSettings={{
           viewBoxOnly: true,
