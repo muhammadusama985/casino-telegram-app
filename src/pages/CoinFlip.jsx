@@ -41,6 +41,8 @@ export default function Coinflip() {
   const [flipping, setFlipping] = useState(false);
   const [resultMsg, setResultMsg] = useState("");
   const [face, setFace] = useState("H"); // semantic only (H → BTC, T → TON)
+  const [toastOpen, setToastOpen] = useState(false);
+
 
   // coin animation API ref
   const coinApiRef = useRef(null);
@@ -95,6 +97,21 @@ export default function Coinflip() {
     })();
     return () => { stopPolling?.(); };
   }, []);
+
+  // Auto close after 6s whenever the toast is shown
+useEffect(() => {
+  if (!toastOpen) return;
+  const t = setTimeout(() => setToastOpen(false), 6000); // 5–10s -> tweak here
+  return () => clearTimeout(t);
+}, [toastOpen]);
+
+// After it slides out, clear the message so it unmounts
+useEffect(() => {
+  if (toastOpen || !resultMsg) return;
+  const t = setTimeout(() => setResultMsg(""), 300);
+  return () => clearTimeout(t);
+}, [toastOpen, resultMsg]);
+
 
   useEffect(() => {
     const refresh = async () => {
@@ -152,17 +169,20 @@ export default function Coinflip() {
 
         const profit = Number(res?.payout || 0);
         const msg = `🎉 You Win! +${fmt(profit)}`;
-        setResultMsg(msg);
-        try { new Audio(winSound).play().catch(() => { }); } catch { }
-        alert(msg);
+setResultMsg(msg);
+setToastOpen(true);
+try { new Audio(winSound).play().catch(() => {}); } catch {}
+
+        // alert(msg);
       } else {
         setStreak(0);
         setTrail(Array(TRAIL_LEN).fill("?"));
+const msg = `❌ You Lose! -${fmt(stake)}`;
+setResultMsg(msg);
+setToastOpen(true);
+try { new Audio(loseSound).play().catch(() => {}); } catch {}
 
-        const msg = `❌ You Lose! -${fmt(stake)}`;
-        setResultMsg(msg);
-        try { new Audio(loseSound).play().catch(() => { }); } catch { }
-        alert(msg);
+        // alert(msg);
       }
 
       window.dispatchEvent(new Event("balance:refresh"));
@@ -348,18 +368,43 @@ export default function Coinflip() {
       </div>
 
       {/* result toast */}
-      {resultMsg && (
-        <div className="px-4 mt-4">
-          <div
-            className={`rounded-xl px-4 py-3 text-center font-semibold ${resultMsg.includes("Win")
-              ? "bg-emerald-600/30 text-emerald-200"
-              : "bg-rose-600/30 text-rose-200"
-              }`}
-          >
-            {resultMsg}
-          </div>
-        </div>
-      )}
+     {resultMsg && (
+  <div
+    className="fixed left-1/2 -translate-x-1/2 z-50"
+    style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
+    role="status"
+    aria-live="polite"
+  >
+    <div
+      style={{
+        transform: toastOpen ? 'translateY(0)' : 'translateY(-160%)',
+        transition: 'transform 300ms cubic-bezier(.2,.7,.2,1)',
+      }}
+    >
+      <div
+        className={`flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border ${
+          resultMsg.includes("Win")
+            ? "bg-emerald-600/30 text-emerald-200 border-emerald-400/40"
+            : "bg-rose-600/30 text-rose-200 border-rose-400/40"
+        }`}
+      >
+        <span className="font-semibold">{resultMsg}</span>
+
+        <button
+          onClick={() => setToastOpen(false)}
+          aria-label="Close notification"
+          className="ml-2 p-1 rounded hover:bg-white/10 active:scale-95"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6l-12 12"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
       <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
     </div>
