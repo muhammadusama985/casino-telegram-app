@@ -39,8 +39,8 @@ export default function Coinflip() {
   const [flipping, setFlipping] = useState(false);
 
   // toast state
-  const [resultMsg, setResultMsg] = useState("");       // title line (e.g., "Hurrah! You won")
-  const [toastBody, setToastBody] = useState("");       // subtitle (e.g., "+10 credited...")
+  const [resultMsg, setResultMsg] = useState("");       // title line
+  const [toastBody, setToastBody] = useState("");       // subtitle
   const [resultKind, setResultKind] = useState(null);   // 'win' | 'lose' | null
   const [toastOpen, setToastOpen] = useState(false);    // slide in/out
 
@@ -100,7 +100,7 @@ export default function Coinflip() {
     return () => { stopPolling?.(); };
   }, []);
 
-  // Auto close after 6s whenever the toast is shown
+  // Auto close after ~4s whenever the toast is shown
   useEffect(() => {
     if (!toastOpen) return;
     const t = setTimeout(() => setToastOpen(false), 4000);
@@ -179,8 +179,10 @@ export default function Coinflip() {
         setToastBody(`+${fmt(profit)} has been credited to your balance.`);
         setResultKind("win");
         setToastOpen(true);
-        // NEW: shine/glow the coin on win
+
+        // <-- GLOW/SHINE ON WIN
         coinApiRef.current?.flashWin();
+
         try { new Audio(winSound).play().catch(() => {}); } catch {}
       } else {
         setStreak(0);
@@ -190,8 +192,10 @@ export default function Coinflip() {
         setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
         setResultKind("lose");
         setToastOpen(true);
-        // NEW: grey-out the coin on loss
+
+        // <-- TURN COIN GREY ON LOSS
         coinApiRef.current?.flashLose();
+
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
 
@@ -569,7 +573,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       el.classList.remove("coinflip-anim");
     },
 
-    // NEW: quick celebratory shine + glow
+    // ===== NEW: effects =====
     flashWin() {
       const el = coinRef.current;
       if (!el) return;
@@ -579,8 +583,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         el.classList.remove("coinflip-win");
       }, 1000);
     },
-
-    // NEW: briefly dim to light grey
     flashLose() {
       const el = coinRef.current;
       if (!el) return;
@@ -620,216 +622,112 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           --coin-gold-4: #8e6b24;
         }
 
-        /* ---------- NEW: richer coin face design (colors & edges like screenshot) ---------- */
-        .coinface {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-        }
-
-        /* outer rim (darker golden edge) */
+        /* face layers */
+        .coinface { position: absolute; inset: 0; border-radius: 50%; }
         .coinface-rim {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
+          position: absolute; inset: 0; border-radius: 50%;
           background: linear-gradient(145deg, #ffe07a 0%, #ffc447 38%, #ee9f1b 62%, #bf7306 100%);
-          box-shadow:
-            inset 0 6px 10px rgba(255,255,255,0.35),
-            inset 0 -10px 16px rgba(0,0,0,0.35),
-            0 6px 14px rgba(0,0,0,0.25);
+          box-shadow: inset 0 6px 10px rgba(255,255,255,0.35),
+                      inset 0 -10px 16px rgba(0,0,0,0.35),
+                      0 6px 14px rgba(0,0,0,0.25);
         }
-
-        /* inner gold ring (thin bevel just inside the rim) */
         .coinface-ring {
-          position: absolute;
-          inset: 8%;
-          border-radius: 50%;
+          position: absolute; inset: 8%; border-radius: 50%;
           background: linear-gradient(145deg, #ffeaa3 0%, #ffd268 45%, #eca425 80%, #c0790a 100%);
-          box-shadow:
-            inset 0 3px 6px rgba(255,255,255,0.55),
-            inset 0 -6px 10px rgba(0,0,0,0.28);
+          box-shadow: inset 0 3px 6px rgba(255,255,255,0.55),
+                      inset 0 -6px 10px rgba(0,0,0,0.28);
         }
-
-        /* core disc (bright center like your image) */
         .coinface-core {
-          position: absolute;
-          inset: 18%;
-          border-radius: 50%;
+          position: absolute; inset: 18%; border-radius: 50%;
           background:
             radial-gradient(60% 60% at 40% 35%, #fff1b5 0%, rgba(255,241,181,0.85) 20%, transparent 55%),
             radial-gradient(55% 55% at 65% 70%, rgba(0,0,0,0.15), transparent 65%),
             linear-gradient(145deg, #ffe38f 0%, #ffc24a 40%, #f0a22c 70%, #cb7e0f 100%);
-          box-shadow:
-            inset 0 3px 7px rgba(255,255,255,0.6),
-            inset 0 -10px 14px rgba(0,0,0,0.28);
+          box-shadow: inset 0 3px 7px rgba(255,255,255,0.6),
+                      inset 0 -10px 14px rgba(0,0,0,0.28);
         }
-
-        /* symbol styling (keeps your H/T, just on-brand color) */
         .coinface-symbol {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          font-weight: 900;
-          letter-spacing: 1px;
-          font-size: clamp(34px, 7.2vw, 58px);
-          color: #d97800;                 /* orange symbol like the screenshot */
-          text-shadow:
-            0 2px 0 rgba(255,255,255,0.35),
-            0 2px 6px rgba(0,0,0,0.25);
+          position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+          font-weight: 900; letter-spacing: 1px; font-size: clamp(34px, 7.2vw, 58px);
+          color: #d97800;
+          text-shadow: 0 2px 0 rgba(255,255,255,0.35), 0 2px 6px rgba(0,0,0,0.25);
         }
-
-        /* soft gloss highlight – biased for front/back so it feels 3D */
-        .coinface-gloss {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          pointer-events: none;
-          mix-blend-mode: screen;
-        }
+        .coinface-gloss { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; mix-blend-mode: screen; }
         .coinface-gloss.front {
-          background:
-            radial-gradient(ellipse at 32% 28%, rgba(255,255,255,0.55) 0%,
-                            rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
+          background: radial-gradient(ellipse at 32% 28%, rgba(255,255,255,0.55) 0%,
+                                      rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
         }
-        .coinface-gloss.back {
-          background:
-            radial-gradient(ellipse at 68% 72%, rgba(255,255,255,0.55) 0%,
-                            rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
+        .coinface-gloss.back  {
+          background: radial-gradient(ellipse at 68% 72%, rgba(255,255,255,0.55) 0%,
+                                      rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
         }
 
         .coinflip-coin {
-          width: var(--size);
-          height: var(--size);
-          position: relative;
-          transform-style: preserve-3d;
-          user-select: none;
-          transition: filter .25s ease;
+          width: var(--size); height: var(--size); position: relative;
+          transform-style: preserve-3d; user-select: none; transition: filter .25s ease;
         }
 
-        /* Waiting loop: smooth, continuous flipping */
-        .coinflip-wait {
-          animation: coinflip-wait 0.9s linear infinite;
-        }
+        /* Waiting loop */
+        .coinflip-wait { animation: coinflip-wait 0.9s linear infinite; }
         @keyframes coinflip-wait {
-          0% {
-            transform:
-              rotateX(0turn)
-              rotateY(-6deg)
-              rotateZ(0deg);
-          }
-          100% {
-            transform:
-              rotateX(1turn)
-              rotateY(6deg)
-              rotateZ(3deg);
-          }
+          0% { transform: rotateX(0turn) rotateY(-6deg) rotateZ(0deg); }
+          100% { transform: rotateX(1turn) rotateY(6deg) rotateZ(3deg); }
         }
 
-        /* Final settle animation (deterministic) */
-        .coinflip-coin.coinflip-anim {
-          animation: coinflip-spin var(--duration) cubic-bezier(.2,.7,.2,1) forwards;
-        }
+        /* Final settle */
+        .coinflip-coin.coinflip-anim { animation: coinflip-spin var(--duration) cubic-bezier(.2,.7,.2,1) forwards; }
         @keyframes coinflip-spin {
-          0% {
-            transform:
-              rotateX(0turn)
-              rotateY(var(--yawStart))
-              rotateZ(0deg);
-          }
-          100% {
-            transform:
-              rotateX(calc((var(--spins) + var(--half)) * 1turn))
-              rotateY(var(--yawEnd))
-              rotateZ(3deg);
-          }
+          0% { transform: rotateX(0turn) rotateY(var(--yawStart)) rotateZ(0deg); }
+          100% { transform: rotateX(calc((var(--spins) + var(--half)) * 1turn)) rotateY(var(--yawEnd)) rotateZ(3deg); }
         }
 
         .coinflip-face {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          backface-visibility: hidden;
-          display: grid;
-          place-items: center;
-          overflow: hidden;
-          box-shadow: 0 2px 1px rgba(0,0,0,.25) inset,
-                      0 10px 24px rgba(0,0,0,.35);
+          position: absolute; inset: 0; border-radius: 50%; backface-visibility: hidden;
+          display: grid; place-items: center; overflow: hidden;
+          box-shadow: 0 2px 1px rgba(0,0,0,.25) inset, 0 10px 24px rgba(0,0,0,.35);
         }
-        .coinflip-front {
+        .coinflip-front { transform: translateZ(calc(var(--thickness) / 2));
           background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.45), rgba(255,255,255,0) 40%),
                       radial-gradient(circle at 65% 70%, rgba(0,0,0,.18), rgba(0,0,0,0) 60%),
                       linear-gradient(135deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
-          transform: translateZ(calc(var(--thickness) / 2));
         }
-        .coinflip-back {
+        .coinflip-back { transform: rotateX(180deg) translateZ(calc(var(--thickness) / 2));
           background: radial-gradient(circle at 65% 30%, rgba(255,255,255,.35), rgba(255,255,255,0) 40%),
                       radial-gradient(circle at 35% 70%, rgba(0,0,0,.22), rgba(0,0,0,0) 60%),
                       linear-gradient(225deg, var(--coin-gold-1), var(--coin-gold-2) 38%, var(--coin-gold-3) 62%, var(--coin-gold-4));
-          transform: rotateX(180deg) translateZ(calc(var(--thickness) / 2));
         }
 
         /* ridged edge illusion */
         .coinflip-coin::before {
-          content: "";
-          position: absolute;
-          inset: 2.5%;
-          border-radius: 50%;
-          background: repeating-conic-gradient(
-            from 0deg,
-            rgba(0,0,0,.18) 0deg 6deg,
-            rgba(255,255,255,.18) 6deg 12deg
-          );
-          filter: blur(.3px);
-          transform: translateZ(calc(var(--thickness) * -0.5));
-          opacity: .45;
-          pointer-events: none;
+          content: ""; position: absolute; inset: 2.5%; border-radius: 50%;
+          background: repeating-conic-gradient(from 0deg, rgba(0,0,0,.18) 0deg 6deg, rgba(255,255,255,.18) 6deg 12deg);
+          filter: blur(.3px); transform: translateZ(calc(var(--thickness) * -0.5)); opacity: .45; pointer-events: none;
         }
 
         .coinflip-shadow {
-          position: absolute;
-          left: 50%;
-          bottom: -22%;
-          width: 60%;
-          height: 16%;
-          transform: translateX(-50%);
-          background: radial-gradient(ellipse at center, rgba(0,0,0,.35), rgba(0,0,0,0));
-          filter: blur(4px);
-          opacity: .7;
-          pointer-events: none;
+          position: absolute; left: 50%; bottom: -22%; width: 60%; height: 16%; transform: translateX(-50%);
+          background: radial-gradient(ellipse at center, rgba(0,0,0,.35), rgba(0,0,0,0)); filter: blur(4px); opacity: .7; pointer-events: none;
         }
 
-        /* ---------- NEW EFFECTS ---------- */
+        /* ===== NEW EFFECTS ===== */
 
-        /* Win: golden glow + sweeping shine */
-        .coinflip-coin.coinflip-win {
-          filter: drop-shadow(0 0 14px rgba(255, 212, 128, 0.6));
-        }
+        /* WIN: glow + sweeping white shine */
+        .coinflip-coin.coinflip-win { filter: drop-shadow(0 0 14px rgba(255,212,128,0.65)); }
         .coinflip-coin.coinflip-win::after {
-          content: "";
-          position: absolute;
-          inset: -30%;
-          border-radius: 50%;
-          pointer-events: none;
-          background: linear-gradient(
-            120deg,
-            rgba(255,255,255,0) 30%,
-            rgba(255,255,255,0.65) 48%,
-            rgba(255,255,255,0) 70%
-          );
+          content: ""; position: absolute; inset: -30%; border-radius: 50%; pointer-events: none;
+          background: linear-gradient(120deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.70) 48%, rgba(255,255,255,0) 70%);
           transform: translateX(-120%) rotate(25deg);
           animation: coinflip-shine 900ms ease-out forwards;
         }
-        @keyframes coinflip-shine {
-          to { transform: translateX(120%) rotate(25deg); }
-        }
+        @keyframes coinflip-shine { to { transform: translateX(120%) rotate(25deg); } }
 
-        /* Loss: desaturate to a light grey palette briefly */
+        /* LOSS: temporarily recolor coin to light grey and mildly desaturate */
         .coinflip-coin.coinflip-lose {
           --coin-gold-1: #f3f3f3;
-          --coin-gold-2: #e3e3e3;
-          --coin-gold-3: #d3d3d3;
-          --coin-gold-4: #bcbcbc;
+          --coin-gold-2: #e2e2e2;
+          --coin-gold-3: #cfcfcf;
+          --coin-gold-4: #b8b8b8;
+          filter: grayscale(0.3) brightness(1.02);
         }
         .coinflip-coin.coinflip-lose .coinface-symbol {
           color: #8a8a8a;
