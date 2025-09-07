@@ -280,7 +280,7 @@ export default function Coinflip() {
             }`}
         >
           <div className="flex items-center gap-3">
-            <MiniCoin symbol="$" />
+      <MiniCoin symbol="₿" />  
             <span className="text-lg font-semibold tracking-wide">HEADS</span>
           </div>
         </button>
@@ -291,7 +291,7 @@ export default function Coinflip() {
             }`}
         >
           <div className="flex items-center gap-3">
-            <MiniCoin symbol="€" />
+      <MiniCoin symbol="TON" />
             <span className="text-lg font-semibold tracking-wide">TAILS</span>
           </div>
         </button>
@@ -350,7 +350,8 @@ export default function Coinflip() {
   );
 }
 
-function MiniCoin({ symbol = "$" }) {
+function MiniCoin({ symbol = "₿" }) {
+  const isTON = symbol === "TON";
   return (
     <span
       className="inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold"
@@ -362,10 +363,31 @@ function MiniCoin({ symbol = "$" }) {
       }}
       aria-hidden="true"
     >
-      {symbol}
+      {isTON ? <TonGlyph /> : symbol}
     </span>
   );
 }
+
+// Minimal TON glyph (inline SVG); sized to fit inside MiniCoin
+function TonGlyph() {
+  return (
+    <svg
+      viewBox="0 0 256 256"
+      width="16"
+      height="16"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "block" }}
+    >
+      {/* Outer kite/triangle outline */}
+      <path d="M128 28c-14 0-26 5-36 15L42 93c-14 14-17 36-7 54l78 141c4 7 14 7 18 0l78-141c10-18 7-40-7-54l-50-50c-10-10-22-15-36-15zM76 100l52-52c0 0 0 0 0 0l52 52c8 8 9 21 3 31L128 214 73 131c-6-10-5-23 3-31z" />
+      {/* Inner V mark */}
+      <path d="M96 84h64c6 0 9 7 5 12l-37 51c-2 3-7 3-9 0l-37-51c-4-5-1-12 5-12z" />
+    </svg>
+  );
+}
+
 
 function BackButtonInline({ to = "/" }) {
   const onClick = () => {
