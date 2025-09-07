@@ -228,19 +228,19 @@ export default function Coinflip() {
               zIndex: 0,
             }}
           >
-          <Lottie
-  animationData={bgAnim}
-  loop
-  autoplay
-  style={{
-    width: "100%",
-    height: "100%",
-    pointerEvents: "none",
-    transform: "translateY(-6px) scaleX(1.14) scaleY(1.08)", // ⬅️ add translateY(-6px)
-    transformOrigin: "center",
-  }}
-  rendererSettings={{ preserveAspectRatio: "xMidYMid meet" }}
-/>
+            <Lottie
+              animationData={bgAnim}
+              loop
+              autoplay
+              style={{
+                width: "100%",
+                height: "100%",
+                pointerEvents: "none",
+                transform: "translateY(-6px) scaleX(1.14) scaleY(1.08)", // ⬅️ add translateY(-6px)
+                transformOrigin: "center",
+              }}
+              rendererSettings={{ preserveAspectRatio: "xMidYMid meet" }}
+            />
 
           </div>
 
@@ -256,9 +256,9 @@ export default function Coinflip() {
             }}
           >
             {/* scale first, then translate so offset isn't scaled */}
-            <div style={{ transform: "translateY(-7px) scale(0.40)", transformOrigin: "center" }}>
-  <Coin3D ref={coinApiRef} ariaFace={face} />
-</div>
+            <div style={{ transform: "translateY(-6px) scale(0.55)", transformOrigin: "center" }}>
+              <Coin3D ref={coinApiRef} ariaFace={face} />
+            </div>
 
           </div>
         </div>
@@ -336,8 +336,8 @@ export default function Coinflip() {
         <div className="px-4 mt-4">
           <div
             className={`rounded-xl px-4 py-3 text-center font-semibold ${resultMsg.includes("Win")
-                ? "bg-emerald-600/30 text-emerald-200"
-                : "bg-rose-600/30 text-rose-200"
+              ? "bg-emerald-600/30 text-emerald-200"
+              : "bg-rose-600/30 text-rose-200"
               }`}
           >
             {resultMsg}
@@ -466,8 +466,8 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         role="img"
         aria-label={ariaFace === "H" ? "Heads" : "Tails"}
         style={{
-          ['--size']: '160px',        // base footprint (shrinked by wrapper scale)
-          ['--thickness']: '12px',
+          ['--size']: '260px',        // base footprint (shrinked by wrapper scale)
+          ['--thickness']: '14px',
         }}
       >
         {/* FRONT → Heads = H */}
