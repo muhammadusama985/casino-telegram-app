@@ -1,5 +1,3 @@
-
-
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
@@ -39,10 +37,14 @@ export default function Coinflip() {
   const [round, setRound] = useState(1);
   const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?"));
   const [flipping, setFlipping] = useState(false);
-  const [resultMsg, setResultMsg] = useState("");
-  const [face, setFace] = useState("H"); // semantic only (H → BTC, T → TON)
-  const [toastOpen, setToastOpen] = useState(false);
 
+  // toast state
+  const [resultMsg, setResultMsg] = useState("");       // title line (e.g., "Hurrah! You won")
+  const [toastBody, setToastBody] = useState("");       // subtitle (e.g., "+10 credited...")
+  const [resultKind, setResultKind] = useState(null);   // 'win' | 'lose' | null
+  const [toastOpen, setToastOpen] = useState(false);    // slide in/out
+
+  const [face, setFace] = useState("H"); // semantic only (H → BTC, T → TON)
 
   // coin animation API ref
   const coinApiRef = useRef(null);
@@ -67,7 +69,7 @@ export default function Coinflip() {
 
   /* ---------- balance bootstrap ---------- */
   useEffect(() => {
-    let stopPolling = () => { };
+    let stopPolling = () => {};
     (async () => {
       try {
         const u = await telegramAuth();
@@ -75,7 +77,7 @@ export default function Coinflip() {
         try {
           const b = await getBalance();
           if (Number.isFinite(b)) setCoins((c) => (b !== c ? b : c));
-        } catch { }
+        } catch {}
         stopPolling = (() => {
           let alive = true;
           (function tick() {
@@ -84,7 +86,7 @@ export default function Coinflip() {
               try {
                 const b = await getBalance();
                 if (Number.isFinite(b)) setCoins((c) => (b !== c ? b : c));
-              } catch { } finally {
+              } catch {} finally {
                 if (alive) tick();
               }
             }, 4000);
@@ -99,26 +101,29 @@ export default function Coinflip() {
   }, []);
 
   // Auto close after 6s whenever the toast is shown
-useEffect(() => {
-  if (!toastOpen) return;
-  const t = setTimeout(() => setToastOpen(false), 6000); // 5–10s -> tweak here
-  return () => clearTimeout(t);
-}, [toastOpen]);
+  useEffect(() => {
+    if (!toastOpen) return;
+    const t = setTimeout(() => setToastOpen(false), 6000);
+    return () => clearTimeout(t);
+  }, [toastOpen]);
 
-// After it slides out, clear the message so it unmounts
-useEffect(() => {
-  if (toastOpen || !resultMsg) return;
-  const t = setTimeout(() => setResultMsg(""), 300);
-  return () => clearTimeout(t);
-}, [toastOpen, resultMsg]);
-
+  // After it slides out, clear the message so it unmounts
+  useEffect(() => {
+    if (toastOpen || !resultMsg) return;
+    const t = setTimeout(() => {
+      setResultMsg("");
+      setToastBody("");
+      setResultKind(null);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [toastOpen, resultMsg]);
 
   useEffect(() => {
     const refresh = async () => {
       try {
         const b = await getBalance();
         if (Number.isFinite(b)) setCoins((c) => (b !== c ? b : c));
-      } catch { }
+      } catch {}
     };
     const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
     window.addEventListener("balance:refresh", refresh);
@@ -138,10 +143,12 @@ useEffect(() => {
 
     setFlipping(true);
     setResultMsg("");
+    setToastBody("");
+    setResultKind(null);
 
     // 1) Start spin only after user selects
-    try { new Audio(flipSound).play().catch(() => { }); } catch { }
-    try { coinApiRef.current?.startWaiting(); } catch { }
+    try { new Audio(flipSound).play().catch(() => {}); } catch {}
+    try { coinApiRef.current?.startWaiting(); } catch {}
 
     try {
       // 2) Ask backend
@@ -168,26 +175,25 @@ useEffect(() => {
         setStreak((s) => s + 1);
 
         const profit = Number(res?.payout || 0);
-        const msg = `🎉 You Win! +${fmt(profit)}`;
-setResultMsg(msg);
-setToastOpen(true);
-try { new Audio(winSound).play().catch(() => {}); } catch {}
-
-        // alert(msg);
+        setResultMsg("Ура! Ты выиграл 🎉"); // "Hurrah! You won"
+        setToastBody(`+${fmt(profit)} зачислено на твой баланс.`);
+        setResultKind("win");
+        setToastOpen(true);
+        try { new Audio(winSound).play().catch(() => {}); } catch {}
       } else {
         setStreak(0);
         setTrail(Array(TRAIL_LEN).fill("?"));
-const msg = `❌ You Lose! -${fmt(stake)}`;
-setResultMsg(msg);
-setToastOpen(true);
-try { new Audio(loseSound).play().catch(() => {}); } catch {}
 
-        // alert(msg);
+        setResultMsg("Упс! Ты проиграл 😕"); // "Oops! You lost"
+        setToastBody(`-${fmt(stake)} списано с твоего баланса.`);
+        setResultKind("lose");
+        setToastOpen(true);
+        try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
 
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
-      try { coinApiRef.current?.stop(); } catch { }
+      try { coinApiRef.current?.stop(); } catch {}
       const msg = String(e?.message || "");
       if (msg.includes("insufficient-funds")) alert("Not enough coins.");
       else if (msg.includes("min-stake")) alert("Bet is below minimum.");
@@ -256,12 +262,11 @@ try { new Audio(loseSound).play().catch(() => {}); } catch {}
                 width: "100%",
                 height: "100%",
                 pointerEvents: "none",
-                transform: "translateY(-6px) scaleX(1.14) scaleY(1.08)", // ⬅️ add translateY(-6px)
+                transform: "translateY(-6px) scaleX(1.14) scaleY(1.08)",
                 transformOrigin: "center",
               }}
               rendererSettings={{ preserveAspectRatio: "xMidYMid meet" }}
             />
-
           </div>
 
           {/* Coin above the ring, hard-centered */}
@@ -279,7 +284,6 @@ try { new Audio(loseSound).play().catch(() => {}); } catch {}
             <div style={{ transform: "translateY(-6px) scale(0.70)", transformOrigin: "center" }}>
               <Coin3D ref={coinApiRef} ariaFace={face} />
             </div>
-
           </div>
         </div>
 
@@ -296,22 +300,22 @@ try { new Audio(loseSound).play().catch(() => {}); } catch {}
         <button
           disabled={flipping}
           onClick={() => placeBet("H")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
-            }`}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`
+          }
         >
           <div className="flex items-center gap-3">
-      <MiniCoin symbol="₿" />  
+            <MiniCoin symbol="₿" />
             <span className="text-lg font-semibold tracking-wide">HEADS</span>
           </div>
         </button>
         <button
           disabled={flipping}
           onClick={() => placeBet("T")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
-            }`}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`
+          }
         >
           <div className="flex items-center gap-3">
-      <MiniCoin symbol="TON" />
+            <MiniCoin symbol="TON" />
             <span className="text-lg font-semibold tracking-wide">TAILS</span>
           </div>
         </button>
@@ -320,35 +324,33 @@ try { new Audio(loseSound).play().catch(() => {}); } catch {}
       {/* bet + take */}
       <div className="px-4 mt-6">
         <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
-         <div className="flex items-center rounded-xl bg-black/30 border border-white/10 h-14 px-2">
-  {/* minus */}
-  <button
-    aria-label="Decrease bet"
-    onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
-    className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
-  >−</button>
+          <div className="flex items-center rounded-xl bg-black/30 border border-white/10 h-14 px-2">
+            {/* minus */}
+            <button
+              aria-label="Decrease bet"
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
+            >−</button>
 
-  {/* left divider */}
-  <span className="h-6 w-px bg-white/15 mx-2" />
+            {/* left divider */}
+            <span className="h-6 w-px bg-white/15 mx-2" />
 
-  {/* number (center) */}
-  <div className="flex-1 text-center">
-    <span className="text-3xl font-extrabold">{fmt(bet)}</span>
-    {/* If you want a faint unit like in the pic, uncomment next line */}
-    {/* <span className="ml-2 text-sm uppercase opacity-40">WT</span> */}
-  </div>
+            {/* number (center) */}
+            <div className="flex-1 text-center">
+              <span className="text-3xl font-extrabold">{fmt(bet)}</span>
+              {/* <span className="ml-2 text-sm uppercase opacity-40">WT</span> */}
+            </div>
 
-  {/* right divider */}
-  <span className="h-6 w-px bg-white/15 mx-2" />
+            {/* right divider */}
+            <span className="h-6 w-px bg-white/15 mx-2" />
 
-  {/* plus */}
-  <button
-    aria-label="Increase bet"
-    onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
-    className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
-  >+</button>
-</div>
-
+            {/* plus */}
+            <button
+              aria-label="Increase bet"
+              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
+              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
+            >+</button>
+          </div>
 
           <div className="mt-4">
             <div
@@ -367,44 +369,57 @@ try { new Audio(loseSound).play().catch(() => {}); } catch {}
         </div>
       </div>
 
-      {/* result toast */}
-     {resultMsg && (
-  <div
-    className="fixed left-1/2 -translate-x-1/2 z-50"
-    style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
-    role="status"
-    aria-live="polite"
-  >
-    <div
-      style={{
-        transform: toastOpen ? 'translateY(0)' : 'translateY(-160%)',
-        transition: 'transform 300ms cubic-bezier(.2,.7,.2,1)',
-      }}
-    >
-      <div
-        className={`flex items-center gap-3 rounded-xl px-4 py-3 shadow-lg border ${
-          resultMsg.includes("Win")
-            ? "bg-emerald-600/30 text-emerald-200 border-emerald-400/40"
-            : "bg-rose-600/30 text-rose-200 border-rose-400/40"
-        }`}
-      >
-        <span className="font-semibold">{resultMsg}</span>
-
-        <button
-          onClick={() => setToastOpen(false)}
-          aria-label="Close notification"
-          className="ml-2 p-1 rounded hover:bg-white/10 active:scale-95"
+      {/* Telegram-like top toast */}
+      {(resultMsg && resultKind) && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-50"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
+          role="status"
+          aria-live="polite"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M6 6l12 12M18 6l-12 12"
-              stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+          <div
+            style={{
+              transform: toastOpen ? 'translateY(0)' : 'translateY(-160%)',
+              transition: 'transform 300ms cubic-bezier(.2,.7,.2,1)',
+            }}
+          >
+            <div className="mx-3 max-w-[92vw] min-w-[280px] rounded-2xl bg-white text-[#0B1020] shadow-[0_12px_28px_rgba(0,0,0,0.30)] border border-black/5">
+              <div className="flex items-start gap-3 px-4 py-3">
+                {/* status dot */}
+                <span className={`mt-0.5 inline-flex w-5 h-5 rounded-full items-center justify-center ${resultKind === 'win' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
+                  {resultKind === 'win' ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M20 6L9 17l-5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M7 7l10 10M17 7L7 17" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </span>
 
+                {/* text */}
+                <div className="flex-1">
+                  <div className="font-semibold">{resultMsg}</div>
+                  {toastBody && <div className="text-sm text-black/70">{toastBody}</div>}
+                </div>
+
+                {/* close */}
+                <button
+                  onClick={() => setToastOpen(false)}
+                  aria-label="Close notification"
+                  className="p-1 rounded hover:bg-black/5 active:scale-95 text-black/60"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6l-12 12"
+                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
     </div>
@@ -449,7 +464,6 @@ function TonGlyph() {
   );
 }
 
-
 function BackButtonInline({ to = "/" }) {
   const onClick = () => {
     if (window.history.length > 1) {
@@ -473,7 +487,6 @@ function BackButtonInline({ to = "/" }) {
     </button>
   );
 }
-
 
 /* ===================== 3D CSS COIN with WAIT->RESOLVE flow (H/T faces) ===================== */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
@@ -570,83 +583,82 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         }
 
         /* ---------- NEW: richer coin face design (colors & edges like screenshot) ---------- */
-.coinface {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-}
+        .coinface {
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+        }
 
-/* outer rim (darker golden edge) */
-.coinface-rim {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #ffe07a 0%, #ffc447 38%, #ee9f1b 62%, #bf7306 100%);
-  box-shadow:
-    inset 0 6px 10px rgba(255,255,255,0.35),
-    inset 0 -10px 16px rgba(0,0,0,0.35),
-    0 6px 14px rgba(0,0,0,0.25);
-}
+        /* outer rim (darker golden edge) */
+        .coinface-rim {
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          background: linear-gradient(145deg, #ffe07a 0%, #ffc447 38%, #ee9f1b 62%, #bf7306 100%);
+          box-shadow:
+            inset 0 6px 10px rgba(255,255,255,0.35),
+            inset 0 -10px 16px rgba(0,0,0,0.35),
+            0 6px 14px rgba(0,0,0,0.25);
+        }
 
-/* inner gold ring (thin bevel just inside the rim) */
-.coinface-ring {
-  position: absolute;
-  inset: 8%;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #ffeaa3 0%, #ffd268 45%, #eca425 80%, #c0790a 100%);
-  box-shadow:
-    inset 0 3px 6px rgba(255,255,255,0.55),
-    inset 0 -6px 10px rgba(0,0,0,0.28);
-}
+        /* inner gold ring (thin bevel just inside the rim) */
+        .coinface-ring {
+          position: absolute;
+          inset: 8%;
+          border-radius: 50%;
+          background: linear-gradient(145deg, #ffeaa3 0%, #ffd268 45%, #eca425 80%, #c0790a 100%);
+          box-shadow:
+            inset 0 3px 6px rgba(255,255,255,0.55),
+            inset 0 -6px 10px rgba(0,0,0,0.28);
+        }
 
-/* core disc (bright center like your image) */
-.coinface-core {
-  position: absolute;
-  inset: 18%;
-  border-radius: 50%;
-  background:
-    radial-gradient(60% 60% at 40% 35%, #fff1b5 0%, rgba(255,241,181,0.85) 20%, transparent 55%),
-    radial-gradient(55% 55% at 65% 70%, rgba(0,0,0,0.15), transparent 65%),
-    linear-gradient(145deg, #ffe38f 0%, #ffc24a 40%, #f0a22c 70%, #cb7e0f 100%);
-  box-shadow:
-    inset 0 3px 7px rgba(255,255,255,0.6),
-    inset 0 -10px 14px rgba(0,0,0,0.28);
-}
+        /* core disc (bright center like your image) */
+        .coinface-core {
+          position: absolute;
+          inset: 18%;
+          border-radius: 50%;
+          background:
+            radial-gradient(60% 60% at 40% 35%, #fff1b5 0%, rgba(255,241,181,0.85) 20%, transparent 55%),
+            radial-gradient(55% 55% at 65% 70%, rgba(0,0,0,0.15), transparent 65%),
+            linear-gradient(145deg, #ffe38f 0%, #ffc24a 40%, #f0a22c 70%, #cb7e0f 100%);
+          box-shadow:
+            inset 0 3px 7px rgba(255,255,255,0.6),
+            inset 0 -10px 14px rgba(0,0,0,0.28);
+        }
 
-/* symbol styling (keeps your H/T, just on-brand color) */
-.coinface-symbol {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-weight: 900;
-  letter-spacing: 1px;
-  font-size: clamp(34px, 7.2vw, 58px);
-  color: #d97800;                 /* orange symbol like the screenshot */
-  text-shadow:
-    0 2px 0 rgba(255,255,255,0.35),
-    0 2px 6px rgba(0,0,0,0.25);
-}
+        /* symbol styling (keeps your H/T, just on-brand color) */
+        .coinface-symbol {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          font-weight: 900;
+          letter-spacing: 1px;
+          font-size: clamp(34px, 7.2vw, 58px);
+          color: #d97800;                 /* orange symbol like the screenshot */
+          text-shadow:
+            0 2px 0 rgba(255,255,255,0.35),
+            0 2px 6px rgba(0,0,0,0.25);
+        }
 
-/* soft gloss highlight – biased for front/back so it feels 3D */
-.coinface-gloss {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  pointer-events: none;
-  mix-blend-mode: screen;
-}
-.coinface-gloss.front {
-  background:
-    radial-gradient(ellipse at 32% 28%, rgba(255,255,255,0.55) 0%,
-                    rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
-}
-.coinface-gloss.back {
-  background:
-    radial-gradient(ellipse at 68% 72%, rgba(255,255,255,0.55) 0%,
-                    rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
-}
-
+        /* soft gloss highlight – biased for front/back so it feels 3D */
+        .coinface-gloss {
+          position: absolute;
+          inset: 0;
+          border-radius: 50%;
+          pointer-events: none;
+          mix-blend-mode: screen;
+        }
+        .coinface-gloss.front {
+          background:
+            radial-gradient(ellipse at 32% 28%, rgba(255,255,255,0.55) 0%,
+                            rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
+        }
+        .coinface-gloss.back {
+          background:
+            radial-gradient(ellipse at 68% 72%, rgba(255,255,255,0.55) 0%,
+                            rgba(255,255,255,0.18) 18%, rgba(255,255,255,0) 46%);
+        }
 
         .coinflip-coin {
           width: var(--size);
@@ -770,4 +782,3 @@ function CoinFace({ symbol = "H", front = false }) {
     </div>
   );
 }
-
