@@ -103,7 +103,7 @@ export default function Coinflip() {
   // Auto close after 6s whenever the toast is shown
   useEffect(() => {
     if (!toastOpen) return;
-    const t = setTimeout(() => setToastOpen(false), 6000);
+    const t = setTimeout(() => setToastOpen(false), 4000);
     return () => clearTimeout(t);
   }, [toastOpen]);
 
@@ -175,19 +175,23 @@ export default function Coinflip() {
         setStreak((s) => s + 1);
 
         const profit = Number(res?.payout || 0);
-       setResultMsg("Hurrah! You won 🎉");
-setToastBody(`+${fmt(profit)} has been credited to your balance.`);
+        setResultMsg("Hurrah! You won 🎉");
+        setToastBody(`+${fmt(profit)} has been credited to your balance.`);
         setResultKind("win");
         setToastOpen(true);
+        // NEW: shine/glow the coin on win
+        coinApiRef.current?.flashWin();
         try { new Audio(winSound).play().catch(() => {}); } catch {}
       } else {
         setStreak(0);
         setTrail(Array(TRAIL_LEN).fill("?"));
 
-      setResultMsg("Oops! You lost 😕");
-setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
+        setResultMsg("Oops! You lost 😕");
+        setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
         setResultKind("lose");
         setToastOpen(true);
+        // NEW: grey-out the coin on loss
+        coinApiRef.current?.flashLose();
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
 
@@ -383,7 +387,7 @@ setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
               transition: 'transform 300ms cubic-bezier(.2,.7,.2,1)',
             }}
           >
-<div className="mx-3 w-[min(680px,95vw)] rounded-2xl bg-white text-[#0B1020] shadow-[0_12px_28px_rgba(0,0,0,0.30)] border border-black/5">
+            <div className="mx-3 w-[min(680px,95vw)] rounded-2xl bg-white text-[#0B1020] shadow-[0_12px_28px_rgba(0,0,0,0.30)] border border-black/5">
               <div className="flex items-start gap-3 px-4 py-3">
                 {/* status dot */}
                 <span className={`mt-0.5 inline-flex w-5 h-5 rounded-full items-center justify-center ${resultKind === 'win' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
@@ -492,12 +496,22 @@ function BackButtonInline({ to = "/" }) {
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const coinRef = useRef(null);
   const waitTimerRef = useRef(null);
+  const effectTimerRef = useRef(null);
 
   function clearTimers() {
     if (waitTimerRef.current) {
       clearTimeout(waitTimerRef.current);
       waitTimerRef.current = null;
     }
+    if (effectTimerRef.current) {
+      clearTimeout(effectTimerRef.current);
+      effectTimerRef.current = null;
+    }
+  }
+  function clearEffects() {
+    const el = coinRef.current;
+    if (!el) return;
+    el.classList.remove("coinflip-win", "coinflip-lose");
   }
 
   useImperativeHandle(ref, () => ({
@@ -506,6 +520,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       const el = coinRef.current;
       if (!el) return;
       clearTimers();
+      clearEffects();
       el.classList.remove("coinflip-anim");
       // reflow
       // eslint-disable-next-line no-unused-expressions
@@ -549,8 +564,31 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       const el = coinRef.current;
       if (!el) return;
       clearTimers();
+      clearEffects();
       el.classList.remove("coinflip-wait");
       el.classList.remove("coinflip-anim");
+    },
+
+    // NEW: quick celebratory shine + glow
+    flashWin() {
+      const el = coinRef.current;
+      if (!el) return;
+      clearEffects();
+      el.classList.add("coinflip-win");
+      effectTimerRef.current = setTimeout(() => {
+        el.classList.remove("coinflip-win");
+      }, 1000);
+    },
+
+    // NEW: briefly dim to light grey
+    flashLose() {
+      const el = coinRef.current;
+      if (!el) return;
+      clearEffects();
+      el.classList.add("coinflip-lose");
+      effectTimerRef.current = setTimeout(() => {
+        el.classList.remove("coinflip-lose");
+      }, 1200);
     },
   }), []);
 
@@ -666,6 +704,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           position: relative;
           transform-style: preserve-3d;
           user-select: none;
+          transition: filter .25s ease;
         }
 
         /* Waiting loop: smooth, continuous flipping */
@@ -758,6 +797,43 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
           filter: blur(4px);
           opacity: .7;
           pointer-events: none;
+        }
+
+        /* ---------- NEW EFFECTS ---------- */
+
+        /* Win: golden glow + sweeping shine */
+        .coinflip-coin.coinflip-win {
+          filter: drop-shadow(0 0 14px rgba(255, 212, 128, 0.6));
+        }
+        .coinflip-coin.coinflip-win::after {
+          content: "";
+          position: absolute;
+          inset: -30%;
+          border-radius: 50%;
+          pointer-events: none;
+          background: linear-gradient(
+            120deg,
+            rgba(255,255,255,0) 30%,
+            rgba(255,255,255,0.65) 48%,
+            rgba(255,255,255,0) 70%
+          );
+          transform: translateX(-120%) rotate(25deg);
+          animation: coinflip-shine 900ms ease-out forwards;
+        }
+        @keyframes coinflip-shine {
+          to { transform: translateX(120%) rotate(25deg); }
+        }
+
+        /* Loss: desaturate to a light grey palette briefly */
+        .coinflip-coin.coinflip-lose {
+          --coin-gold-1: #f3f3f3;
+          --coin-gold-2: #e3e3e3;
+          --coin-gold-3: #d3d3d3;
+          --coin-gold-4: #bcbcbc;
+        }
+        .coinflip-coin.coinflip-lose .coinface-symbol {
+          color: #8a8a8a;
+          text-shadow: 0 1px 0 rgba(255,255,255,.25), 0 2px 4px rgba(0,0,0,.18);
         }
 
         @media (prefers-reduced-motion: reduce) {
