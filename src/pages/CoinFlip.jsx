@@ -256,7 +256,7 @@ export default function Coinflip() {
             }}
           >
             {/* scale first, then translate so offset isn't scaled */}
-            <div style={{ transform: "translateY(-6px) scale(0.55)", transformOrigin: "center" }}>
+            <div style={{ transform: "translateY(-7px) scale(0.40)", transformOrigin: "center" }}>
               <Coin3D ref={coinApiRef} ariaFace={face} />
             </div>
 
@@ -466,8 +466,8 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         role="img"
         aria-label={ariaFace === "H" ? "Heads" : "Tails"}
         style={{
-          ['--size']: '260px',        // base footprint (shrinked by wrapper scale)
-          ['--thickness']: '14px',
+          ['--size']: '160px',        // base footprint (shrinked by wrapper scale)
+          ['--thickness']: '12px',
         }}
       >
         {/* FRONT → Heads = H */}
