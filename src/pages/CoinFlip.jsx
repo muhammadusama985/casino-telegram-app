@@ -215,7 +215,7 @@ export default function Coinflip() {
         {/* center coin: BG ring masked to circle + CSS coin centered */}
         <div
           className="relative mx-4 flex items-center justify-center"
-          style={{ width: 220, height: 220, isolation: "isolate" }}
+          style={{ width: 300, height: 300, isolation: "isolate" }}
         >
           {/* Masked circle wrapper so the Lottie never overflows or show a slab */}
           <div
