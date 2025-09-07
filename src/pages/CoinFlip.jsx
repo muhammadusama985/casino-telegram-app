@@ -300,19 +300,35 @@ export default function Coinflip() {
       {/* bet + take */}
       <div className="px-4 mt-6">
         <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
-          <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3">
-            <button
-              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
-              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
-            >−</button>
-            <div className="text-center">
-              <span className="text-3xl font-extrabold">{fmt(bet)}</span>
-            </div>
-            <button
-              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
-              className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-md bg-black/30 border border-white/10 text-2xl leading-none"
-            >+</button>
-          </div>
+         <div className="flex items-center rounded-xl bg-black/30 border border-white/10 h-14 px-2">
+  {/* minus */}
+  <button
+    aria-label="Decrease bet"
+    onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
+    className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
+  >−</button>
+
+  {/* left divider */}
+  <span className="h-6 w-px bg-white/15 mx-2" />
+
+  {/* number (center) */}
+  <div className="flex-1 text-center">
+    <span className="text-3xl font-extrabold">{fmt(bet)}</span>
+    {/* If you want a faint unit like in the pic, uncomment next line */}
+    {/* <span className="ml-2 text-sm uppercase opacity-40">WT</span> */}
+  </div>
+
+  {/* right divider */}
+  <span className="h-6 w-px bg-white/15 mx-2" />
+
+  {/* plus */}
+  <button
+    aria-label="Increase bet"
+    onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
+    className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
+  >+</button>
+</div>
+
 
           <div className="mt-4">
             <div
