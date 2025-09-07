@@ -175,8 +175,8 @@ export default function Coinflip() {
         setStreak((s) => s + 1);
 
         const profit = Number(res?.payout || 0);
-        setResultMsg("Ура! Ты выиграл 🎉"); // "Hurrah! You won"
-        setToastBody(`+${fmt(profit)} зачислено на твой баланс.`);
+       setResultMsg("Hurrah! You won 🎉");
+setToastBody(`+${fmt(profit)} has been credited to your balance.`);
         setResultKind("win");
         setToastOpen(true);
         try { new Audio(winSound).play().catch(() => {}); } catch {}
@@ -184,8 +184,8 @@ export default function Coinflip() {
         setStreak(0);
         setTrail(Array(TRAIL_LEN).fill("?"));
 
-        setResultMsg("Упс! Ты проиграл 😕"); // "Oops! You lost"
-        setToastBody(`-${fmt(stake)} списано с твоего баланса.`);
+      setResultMsg("Oops! You lost 😕");
+setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
         setResultKind("lose");
         setToastOpen(true);
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
@@ -383,7 +383,7 @@ export default function Coinflip() {
               transition: 'transform 300ms cubic-bezier(.2,.7,.2,1)',
             }}
           >
-            <div className="mx-3 max-w-[92vw] min-w-[280px] rounded-2xl bg-white text-[#0B1020] shadow-[0_12px_28px_rgba(0,0,0,0.30)] border border-black/5">
+<div className="mx-3 w-[min(680px,95vw)] rounded-2xl bg-white text-[#0B1020] shadow-[0_12px_28px_rgba(0,0,0,0.30)] border border-black/5">
               <div className="flex items-start gap-3 px-4 py-3">
                 {/* status dot */}
                 <span className={`mt-0.5 inline-flex w-5 h-5 rounded-full items-center justify-center ${resultKind === 'win' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
