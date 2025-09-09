@@ -302,7 +302,7 @@ export default function Coinflip() {
         >
           <div className="flex items-center gap-3">
             <MiniCoin symbol="₿" />
-            <span className="text-lg font-semibold tracking-wide">Khaleeq</span>
+            <span className="text-lg font-semibold tracking-wide">HEADS</span>
           </div>
         </button>
         <button
