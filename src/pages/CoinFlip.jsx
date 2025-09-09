@@ -234,17 +234,14 @@ export default function Coinflip() {
       </div>
 
       {/* coin + coef */}
-      <div className="flex items-center justify-between px-6 mt-4">
+<div className="flex items-center justify-between px-6 mt-4 p-4" style={{ backgroundColor: "#000080", borderRadius: "8px" }}>
         <div className="text-left">
           <div className="text-2xl font-bold leading-none">{round}</div>
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
         {/* center coin: BG ring masked to circle + CSS coin centered */}
-        <div
-          className="relative mx-4 flex items-center justify-center"
-          style={{ width: "100%", height: 400, isolation: "isolate" }} // Full width and increased height
-        >
+        <div className="relative mx-4 flex items-center justify-center" style={{ width: "100%", height: 400, isolation: "isolate" }}>
           {/* Masked circle wrapper so the Lottie never overflows or show a slab */}
           <div
             style={{
@@ -252,7 +249,7 @@ export default function Coinflip() {
               inset: 0,
               borderRadius: "50%",
               overflow: "hidden",
-              background: "#0B1020", // match page bg
+              background: "	#000080", // match page bg
               zIndex: 0,
             }}
           >
@@ -282,7 +279,6 @@ export default function Coinflip() {
               pointerEvents: "none",
             }}
           >
-            {/* scale first, then translate so offset isn't scaled */}
             <div style={{ transform: "translateY(-6px) scale(0.70)", transformOrigin: "center" }}>
               <Coin3D ref={coinApiRef} ariaFace={face} />
             </div>
