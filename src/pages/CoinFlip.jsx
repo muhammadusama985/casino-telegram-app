@@ -38,7 +38,7 @@ export default function Coinflip() {
   const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?"));
   const [flipping, setFlipping] = useState(false);
 
-  // toast state
+  // Removed the toast state part (no win/loss notification)
   const [resultMsg, setResultMsg] = useState("");       // title line
   const [toastBody, setToastBody] = useState("");       // subtitle
   const [resultKind, setResultKind] = useState(null);   // 'win' | 'lose' | null
@@ -178,11 +178,8 @@ export default function Coinflip() {
         setResultMsg("Hurrah! You won 🎉");
         setToastBody(`+${fmt(profit)} has been credited to your balance.`);
         setResultKind("win");
-        setToastOpen(true);
-
         // WIN visual
         coinApiRef.current?.flashWin();
-
         try { new Audio(winSound).play().catch(() => {}); } catch {}
       } else {
         setStreak(0);
@@ -191,11 +188,8 @@ export default function Coinflip() {
         setResultMsg("Oops! You lost 😕");
         setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
         setResultKind("lose");
-        setToastOpen(true);
-
         // LOSS visual (full grey)
         coinApiRef.current?.flashLose();
-
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
 
@@ -249,7 +243,7 @@ export default function Coinflip() {
         {/* center coin: BG ring masked to circle + CSS coin centered */}
         <div
           className="relative mx-4 flex items-center justify-center"
-          style={{ width: 300, height: 300, isolation: "isolate" }}
+          style={{ width: "100%", height: 400, isolation: "isolate" }} // Full width and increased height
         >
           {/* Masked circle wrapper so the Lottie never overflows or show a slab */}
           <div
@@ -308,8 +302,7 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("H")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`
-          }
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`}
         >
           <div className="flex items-center gap-3">
             <MiniCoin symbol="₿" />
@@ -319,8 +312,7 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("T")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`
-          }
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`}
         >
           <div className="flex items-center gap-3">
             <MiniCoin symbol="TON" />
@@ -346,7 +338,6 @@ export default function Coinflip() {
             {/* number (center) */}
             <div className="flex-1 text-center">
               <span className="text-3xl font-extrabold">{fmt(bet)}</span>
-              {/* <span className="ml-2 text-sm uppercase opacity-40">WT</span> */}
             </div>
 
             {/* right divider */}
@@ -376,58 +367,6 @@ export default function Coinflip() {
           </div>
         </div>
       </div>
-
-      {/* Telegram-like top toast */}
-      {(resultMsg && resultKind) && (
-        <div
-          className="fixed left-1/2 -translate-x-1/2 z-50"
-          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}
-          role="status"
-          aria-live="polite"
-        >
-          <div
-            style={{
-              transform: toastOpen ? 'translateY(0)' : 'translateY(-160%)',
-              transition: 'transform 300ms cubic-bezier(.2,.7,.2,1)',
-            }}
-          >
-            <div className="mx-3 w-[min(680px,95vw)] rounded-2xl bg-white text-[#0B1020] shadow-[0_12px_28px_rgba(0,0,0,0.30)] border border-black/5">
-              <div className="flex items-start gap-3 px-4 py-3">
-                {/* status dot */}
-                <span className={`mt-0.5 inline-flex w-5 h-5 rounded-full items-center justify-center ${resultKind === 'win' ? 'bg-emerald-500' : 'bg-rose-500'}`}>
-                  {resultKind === 'win' ? (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M20 6L9 17l-5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  ) : (
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M7 7l10 10M17 7L7 17" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </span>
-
-                {/* text */}
-                <div className="flex-1">
-                  <div className="font-semibold">{resultMsg}</div>
-                  {toastBody && <div className="text-sm text-black/70">{toastBody}</div>}
-                </div>
-
-                {/* close */}
-                <button
-                  onClick={() => setToastOpen(false)}
-                  aria-label="Close notification"
-                  className="p-1 rounded hover:bg-black/5 active:scale-95 text-black/60"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6l-12 12"
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
     </div>
