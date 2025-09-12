@@ -1154,154 +1154,207 @@ function BackButtonInline({ to = "/" }) {
    LOTTIE-BASED COIN (BTC=heads, TON=tails)
    Keeps the SAME imperative API used by parent: startWaiting → resolve → flashWin/flashLose
    ========================================================================= */
+/* =========================================================================
+   LOTTIE-BASED COIN — waits by flipping, resolves to server side,
+   CSS glow on win, JSON grey overlay on loss.
+   ========================================================================= */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const lottieRef = useRef(null);
   const [glow, setGlow] = useState(false);
 
-  // Keep state of waiting + last landed face
+  // control flags
   const waitingRef = useRef(false);
   const lastUpRef = useRef(null); // 'H' | 'T'
   const onCompleteRef = useRef(null);
+  const onEnterFrameRef = useRef(null);
 
-  // Absolute frame windows (file has 1140 frames @ 60fps)
+  // timeline @ 60fps; 1140 frames total
+  // (Grey overlays from the JSON: BTC 450→495→510, TON 810→855→870)
+  const FR = 60;
   const FRAMES = {
-    LOOP_START: 0,
-    LOOP_END: 420,             // continuous flipping visually (shows both faces)
-    SETTLE_BTC_START: 420,     // lands BTC-up
-    SETTLE_BTC_END: 510,
-    SETTLE_TON_START: 780,     // lands TON-up
-    SETTLE_TON_END: 870,
-    BTC_GREY_ON: 450,          // grey visible 450–495 (off by 510)
-    BTC_GREY_HOLD: 495,
+    WAIT_FROM: 0,
+    WAIT_TO: 420,           // continuous flip loop
+    SETTLE_BTC_FROM: 420,   // lands BTC-up
+    SETTLE_BTC_TO: 510,
+    SETTLE_TON_FROM: 780,   // lands TON-up
+    SETTLE_TON_TO: 870,
+    BTC_GREY_ON: 450,
+    BTC_GREY_PEAK: 495,
     BTC_GREY_OFF: 510,
-    TON_GREY_ON: 810,          // grey visible 810–855 (off by 870)
-    TON_GREY_HOLD: 855,
+    TON_GREY_ON: 810,
+    TON_GREY_PEAK: 855,
     TON_GREY_OFF: 870,
   };
 
-  // helper: play a segment and resolve when Lottie fires "complete"
-  const playSegment = (from, to, speed = 1.0) =>
-    new Promise((resolve) => {
-      const item = lottieRef.current?.animationItem;
-      if (!item) return resolve();
+  const item = () => lottieRef.current?.animationItem;
 
-      // clean any previous listener
+  // Play a segment, resolve on 'complete' with a time-based fallback (robust).
+  const playSegment = (from, to, speed = 1) =>
+    new Promise((resolve) => {
+      const it = item();
+      if (!it) return resolve();
+
+      // clear old listeners
       if (onCompleteRef.current) {
-        item.removeEventListener("complete", onCompleteRef.current);
+        it.removeEventListener("complete", onCompleteRef.current);
         onCompleteRef.current = null;
       }
+      if (onEnterFrameRef.current) {
+        it.removeEventListener("enterFrame", onEnterFrameRef.current);
+        onEnterFrameRef.current = null;
+      }
 
-      item.loop = false;
-      item.setSpeed(speed);
-      item.setDirection(from <= to ? 1 : -1);
+      it.loop = false;
+      it.setSpeed(speed);
+      it.setDirection(from <= to ? 1 : -1);
 
+      // primary completion
       onCompleteRef.current = () => {
-        item.removeEventListener("complete", onCompleteRef.current);
+        it.removeEventListener("complete", onCompleteRef.current);
         onCompleteRef.current = null;
         resolve();
       };
+      it.addEventListener("complete", onCompleteRef.current);
 
-      item.addEventListener("complete", onCompleteRef.current);
-      item.playSegments([from, to], true);
+      // safety timeout (if 'complete' somehow doesn’t fire)
+      const ms = (Math.abs(to - from) / FR) * (1000 / speed) + 50;
+      const t = setTimeout(() => {
+        if (onCompleteRef.current) {
+          it.removeEventListener("complete", onCompleteRef.current);
+          onCompleteRef.current = null;
+        }
+        resolve();
+      }, ms);
+
+      // also bail out if we overshoot the end frame (super edge-case)
+      onEnterFrameRef.current = (e) => {
+        const f = e?.currentTime ?? it.currentFrame ?? 0;
+        if ((from <= to && f >= to - 1) || (from > to && f <= to + 1)) {
+          it.removeEventListener("enterFrame", onEnterFrameRef.current);
+          onEnterFrameRef.current = null;
+          clearTimeout(t);
+          if (onCompleteRef.current) {
+            it.removeEventListener("complete", onCompleteRef.current);
+            onCompleteRef.current = null;
+          }
+          resolve();
+        }
+      };
+      it.addEventListener("enterFrame", onEnterFrameRef.current);
+
+      it.playSegments([from, to], true);
     });
 
-  // manual loop for waiting state: replay the LOOP segment on every "complete"
+  // loop the "flip" slice manually while waiting for the backend
   const startWaitingLoop = () => {
-    const item = lottieRef.current?.animationItem;
-    if (!item) return;
+    const it = item();
+    if (!it) return;
 
     waitingRef.current = true;
 
-    // remove any previous listener
+    // clear old listener
     if (onCompleteRef.current) {
-      item.removeEventListener("complete", onCompleteRef.current);
+      it.removeEventListener("complete", onCompleteRef.current);
       onCompleteRef.current = null;
     }
 
     onCompleteRef.current = () => {
       if (!waitingRef.current) return;
-      item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
+      it.playSegments([FRAMES.WAIT_FROM, FRAMES.WAIT_TO], true);
     };
-
-    item.addEventListener("complete", onCompleteRef.current);
-    item.setSpeed(1.0);
-    item.setDirection(1);
-    item.loop = false; // loop manually over the segment
-    item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
+    it.addEventListener("complete", onCompleteRef.current);
+    it.setSpeed(1.0);
+    it.setDirection(1);
+    it.loop = false;
+    it.playSegments([FRAMES.WAIT_FROM, FRAMES.WAIT_TO], true);
   };
 
   const stopWaitingLoop = () => {
-    const item = lottieRef.current?.animationItem;
+    const it = item();
     waitingRef.current = false;
-    if (item && onCompleteRef.current) {
-      item.removeEventListener("complete", onCompleteRef.current);
+    if (it && onCompleteRef.current) {
+      it.removeEventListener("complete", onCompleteRef.current);
       onCompleteRef.current = null;
     }
   };
 
+  // If startWaiting is called before Lottie is ready, retry shortly.
+  const ensureReady = (fn) => {
+    if (item()) return fn();
+    const id = setInterval(() => {
+      if (item()) {
+        clearInterval(id);
+        fn();
+      }
+    }, 16);
+  };
+
   useImperativeHandle(ref, () => ({
-    // Begin indefinite flip while waiting for backend
     startWaiting() {
       setGlow(false);
       lastUpRef.current = null;
-      startWaitingLoop();
+      ensureReady(startWaitingLoop);
     },
 
-    // Resolve to H (BTC) or T (TON) and fulfill when it settles
     async resolve(desired) {
       setGlow(false);
       stopWaitingLoop();
 
-      const item = lottieRef.current?.animationItem;
-      if (!item) return;
+      const it = item();
+      if (!it) return;
 
       if (desired === "H") {
-        await playSegment(FRAMES.SETTLE_BTC_START, FRAMES.SETTLE_BTC_END, 1.1);
+        // settle with BTC up
+        await playSegment(FRAMES.SETTLE_BTC_FROM, FRAMES.SETTLE_BTC_TO, 1.1);
         lastUpRef.current = "H";
-        item.goToAndStop(FRAMES.SETTLE_BTC_END, true);
+        it.goToAndStop(FRAMES.SETTLE_BTC_TO, true);
       } else {
-        await playSegment(FRAMES.SETTLE_TON_START, FRAMES.SETTLE_TON_END, 1.1);
+        // settle with TON up
+        await playSegment(FRAMES.SETTLE_TON_FROM, FRAMES.SETTLE_TON_TO, 1.1);
         lastUpRef.current = "T";
-        item.goToAndStop(FRAMES.SETTLE_TON_END, true);
+        it.goToAndStop(FRAMES.SETTLE_TON_TO, true);
       }
     },
 
-    // Stop any animation (used on error)
     stop() {
       stopWaitingLoop();
-      const item = lottieRef.current?.animationItem;
-      item?.stop();
+      item()?.stop();
       setGlow(false);
       lastUpRef.current = null;
     },
 
-    // Win → keep colorful final frame and add a CSS glow
     flashWin() {
+      // Use a subtle CSS glow so we don’t disturb the final frame
       setGlow(true);
       setTimeout(() => setGlow(false), 1000);
     },
 
-    // Loss → play the grey overlay window from the JSON and HOLD on grey
     async flashLose() {
       setGlow(false);
-      const item = lottieRef.current?.animationItem;
-      if (!item) return;
+      const it = item();
+      if (!it) return;
 
       if (lastUpRef.current === "H") {
+        // BTC grey slice: 450→510, hold on 495
         await playSegment(FRAMES.BTC_GREY_ON, FRAMES.BTC_GREY_OFF, 1.0);
-        item.goToAndStop(FRAMES.BTC_GREY_HOLD, true);
+        it.goToAndStop(FRAMES.BTC_GREY_PEAK, true);
       } else {
+        // TON grey slice: 810→870, hold on 855
         await playSegment(FRAMES.TON_GREY_ON, FRAMES.TON_GREY_OFF, 1.0);
-        item.goToAndStop(FRAMES.TON_GREY_HOLD, true);
+        it.goToAndStop(FRAMES.TON_GREY_PEAK, true);
       }
     },
   }), []);
 
-  // Cleanup on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
       stopWaitingLoop();
-      lottieRef.current?.animationItem?.stop();
+      item()?.stop();
+      if (onEnterFrameRef.current) {
+        item()?.removeEventListener("enterFrame", onEnterFrameRef.current);
+        onEnterFrameRef.current = null;
+      }
     };
   }, []);
 
@@ -1323,8 +1376,9 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       <style>
         {`
           .coin-win-glow {
-            filter: drop-shadow(0 0 18px rgba(255, 220, 140, 0.7))
-                    drop-shadow(0 0 42px rgba(255, 190, 90, 0.35));
+            filter:
+              drop-shadow(0 0 18px rgba(255, 220, 140, 0.7))
+              drop-shadow(0 0 42px rgba(255, 190, 90, 0.35));
             transition: filter 180ms ease;
           }
         `}
@@ -1332,6 +1386,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     </div>
   );
 });
+
 
 // no-op to keep parity (unused in Lottie mode)
 function CoinFace() { return null; }
