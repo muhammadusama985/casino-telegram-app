@@ -1154,42 +1154,35 @@ function BackButtonInline({ to = "/" }) {
    LOTTIE-BASED COIN (BTC=heads, TON=tails)
    Keeps the SAME imperative API used by parent: startWaiting → resolve → flashWin/flashLose
    ========================================================================= */
-/* =========================================================================
-   LOTTIE-BASED COIN (BTC=heads, TON=tails)
-   Keeps the SAME imperative API used by parent: startWaiting → resolve → flashWin/flashLose
-   ========================================================================= */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const lottieRef = useRef(null);
   const [glow, setGlow] = useState(false);
 
-  // State for loop + last landed face
+  // Keep state of waiting + last landed face
   const waitingRef = useRef(false);
   const lastUpRef = useRef(null); // 'H' | 'T'
   const onCompleteRef = useRef(null);
 
-  // Absolute frame windows from Flipcoin.json (op=1140 @ 60fps)
+  // Absolute frame windows (file has 1140 frames @ 60fps)
   const FRAMES = {
     LOOP_START: 0,
-    LOOP_END: 420,              // continuous flipping (shows both faces)
-    SETTLE_BTC_START: 420,      // lands BTC-up
+    LOOP_END: 420,             // continuous flipping visually (shows both faces)
+    SETTLE_BTC_START: 420,     // lands BTC-up
     SETTLE_BTC_END: 510,
-    SETTLE_TON_START: 780,      // lands TON-up
+    SETTLE_TON_START: 780,     // lands TON-up
     SETTLE_TON_END: 870,
-    BTC_GREY_ON: 450,           // BTC grey overlay 450–510 (hold at ~495)
+    BTC_GREY_ON: 450,          // grey visible 450–495 (off by 510)
     BTC_GREY_HOLD: 495,
     BTC_GREY_OFF: 510,
-    TON_GREY_ON: 810,           // TON grey overlay 810–870 (hold at ~855)
+    TON_GREY_ON: 810,          // grey visible 810–855 (off by 870)
     TON_GREY_HOLD: 855,
     TON_GREY_OFF: 870,
   };
 
-  // Get the real lottie-web AnimationItem from lottie-react
-  const getItem = () => lottieRef.current?.getLottie?.();
-
-  // Play a segment and resolve at its end (robust for segments)
+  // helper: play a segment and resolve when Lottie fires "complete"
   const playSegment = (from, to, speed = 1.0) =>
     new Promise((resolve) => {
-      const item = getItem();
+      const item = lottieRef.current?.animationItem;
       if (!item) return resolve();
 
       // clean any previous listener
@@ -1212,13 +1205,14 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       item.playSegments([from, to], true);
     });
 
-  // Start manual loop over the flip segment while waiting for backend
+  // manual loop for waiting state: replay the LOOP segment on every "complete"
   const startWaitingLoop = () => {
-    const item = getItem();
+    const item = lottieRef.current?.animationItem;
     if (!item) return;
 
     waitingRef.current = true;
 
+    // remove any previous listener
     if (onCompleteRef.current) {
       item.removeEventListener("complete", onCompleteRef.current);
       onCompleteRef.current = null;
@@ -1230,15 +1224,15 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     };
 
     item.addEventListener("complete", onCompleteRef.current);
-    item.setSpeed(1.1);
+    item.setSpeed(1.0);
     item.setDirection(1);
-    item.loop = false; // manual loop
+    item.loop = false; // loop manually over the segment
     item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
   };
 
   const stopWaitingLoop = () => {
+    const item = lottieRef.current?.animationItem;
     waitingRef.current = false;
-    const item = getItem();
     if (item && onCompleteRef.current) {
       item.removeEventListener("complete", onCompleteRef.current);
       onCompleteRef.current = null;
@@ -1258,7 +1252,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       setGlow(false);
       stopWaitingLoop();
 
-      const item = getItem();
+      const item = lottieRef.current?.animationItem;
       if (!item) return;
 
       if (desired === "H") {
@@ -1275,7 +1269,8 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     // Stop any animation (used on error)
     stop() {
       stopWaitingLoop();
-      getItem()?.stop();
+      const item = lottieRef.current?.animationItem;
+      item?.stop();
       setGlow(false);
       lastUpRef.current = null;
     },
@@ -1289,7 +1284,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     // Loss → play the grey overlay window from the JSON and HOLD on grey
     async flashLose() {
       setGlow(false);
-      const item = getItem();
+      const item = lottieRef.current?.animationItem;
       if (!item) return;
 
       if (lastUpRef.current === "H") {
@@ -1306,7 +1301,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   useEffect(() => {
     return () => {
       stopWaitingLoop();
-      getItem()?.stop();
+      lottieRef.current?.animationItem?.stop();
     };
   }, []);
 
@@ -1337,7 +1332,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     </div>
   );
 });
-
 
 // no-op to keep parity (unused in Lottie mode)
 function CoinFace() { return null; }
