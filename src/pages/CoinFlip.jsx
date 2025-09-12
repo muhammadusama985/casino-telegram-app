@@ -716,14 +716,13 @@
 
 
 
-
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
 import bgAnim from "../assets/lottie/Flipcoin_background.json"; // looping ring
-import coinAnim from "../assets/lottie/Flipcoin.json";          // <<< NEW: your coin lottie
+import coinAnim from "../assets/lottie/Flipcoin.json";          // coin lottie
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
@@ -908,7 +907,7 @@ export default function Coinflip() {
         setResultMsg("Oops! You lost 😕");
         setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
         setResultKind("lose");
-        // LOSS visual (full grey)
+        // LOSS visual (grey)
         coinApiRef.current?.flashLose();
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
@@ -1000,7 +999,6 @@ export default function Coinflip() {
             }}
           >
             <div style={{ transform: "translateY(-6px) scale(0.70)", transformOrigin: "center" }}>
-              {/* SAME tag/props as before; implementation changed below */}
               <Coin3D ref={coinApiRef} ariaFace={face} />
             </div>
           </div>
@@ -1042,25 +1040,20 @@ export default function Coinflip() {
       <div className="px-4 mt-6">
         <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
           <div className="flex items-center rounded-xl bg-black/30 border border-white/10 h-14 px-2">
-            {/* minus */}
             <button
               aria-label="Decrease bet"
               onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
               className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
             >−</button>
 
-            {/* left divider */}
             <span className="h-6 w-px bg-white/15 mx-2" />
 
-            {/* number (center) */}
             <div className="flex-1 text-center">
               <span className="text-3xl font-extrabold">{fmt(bet)}</span>
             </div>
 
-            {/* right divider */}
             <span className="h-6 w-px bg-white/15 mx-2" />
 
-            {/* plus */}
             <button
               aria-label="Increase bet"
               onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
@@ -1120,9 +1113,7 @@ function TonGlyph() {
       focusable="false"
       style={{ display: "block" }}
     >
-      {/* Outer kite/triangle outline */}
       <path d="M128 28c-14 0-26 5-36 15L42 93c-14 14-17 36-7 54l78 141c4 7 14 7 18 0l78-141c10-18 7-40-7-54l-50-50c-10-10-22-15-36-15zM76 100l52-52c0 0 0 0 0 0l52 52c8 8 9 21 3 31L128 214 73 131c-6-10-5-23 3-31z" />
-      {/* Inner V mark */}
       <path d="M96 84h64c6 0 9 7 5 12l-37 51c-2 3-7 3-9 0l-37-51c-4-5-1-12 5-12z" />
     </svg>
   );
@@ -1153,76 +1144,78 @@ function BackButtonInline({ to = "/" }) {
 }
 
 /* =========================================================================
-   LOTTIE-BASED COIN: keeps the SAME imperative API as your original Coin3D
-   Heads = BTC, Tails = TON
+   LOTTIE-BASED COIN (BTC=heads, TON=tails)
+   Keeps the SAME imperative API used by parent: startWaiting → resolve → flashWin/flashLose
    ========================================================================= */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const lottieRef = useRef(null);
   const [glow, setGlow] = useState(false);
+  const lastUpRef = useRef(null); // 'H' | 'T' after settle
 
-  // Frame windows chosen to:
-  // - LOOP look while waiting
-  // - SETTLE to BTC-up or TON-up
-  // - Show GREY loss overlay windows provided in the JSON
-  const FRAMES = {
-    LOOP_START: 0,
-    LOOP_END: 420,              // smooth continuous spinning
-    SETTLE_BTC_START: 420,      // lands BTC-up around 450+
-    SETTLE_BTC_END: 510,
-    SETTLE_TON_START: 780,      // lands TON-up around 810+
-    SETTLE_TON_END: 870,
-    BTC_GREY_START: 450,        // BTC face grey burst (~450–495, off by 510)
-    BTC_GREY_END: 510,
-    TON_GREY_START: 810,        // TON face grey burst (~810–855, off by 870)
-    TON_GREY_END: 870,
+  // Helper: map percentages → absolute frames (file has 1140 frames, no markers)
+  const seg = (startPct, endPct) => {
+    const item = lottieRef.current?.animationItem;
+    const total = Math.max(1, Math.round(item?.totalFrames ?? 1140)); // fallback 1140
+    const from = Math.max(0, Math.round(total * startPct));
+    const to = Math.min(total, Math.round(total * endPct));
+    return [from, to];
   };
 
-  // Helper to play an inclusive segment and resolve near its end
+  // A loopable flip slice + two settle windows + grey overlay windows
+  // (These percentages were chosen to match the structure of your JSON’s timeline.)
+  const getFrames = () => ({
+    LOOP: seg(0.00, 0.36),        // continuous flipping look
+    SETTLE_BTC: seg(0.37, 0.47),  // lands BTC-up
+    SETTLE_TON: seg(0.72, 0.82),  // lands TON-up
+    BTC_GREY: seg(0.45, 0.47),    // brief grey flash with BTC up
+    TON_GREY: seg(0.80, 0.82),    // brief grey flash with TON up
+  });
+
   const playSegment = (from, to, speed = 1.0) =>
     new Promise((resolve) => {
-      const inst = lottieRef.current;
-      if (!inst) return resolve();
-      // lottie-react exposes the animation item at .animationItem
-      const item = inst.animationItem;
+      const item = lottieRef.current?.animationItem;
       if (!item) return resolve();
-
       item.setSpeed(speed);
       item.setDirection(from <= to ? 1 : -1);
       item.playSegments([from, to], true);
-
-      const check = () => {
+      const watch = () => {
         const cur = item.currentFrame ?? 0;
         if ((from <= to && cur >= to - 1) || (from > to && cur <= to + 1)) return resolve();
-        requestAnimationFrame(check);
+        requestAnimationFrame(watch);
       };
-      requestAnimationFrame(check);
+      requestAnimationFrame(watch);
     });
 
   useImperativeHandle(ref, () => ({
-    // Begin indefinite spin while waiting for backend
+    // Begin indefinite flip while waiting for backend
     startWaiting() {
       setGlow(false);
+      lastUpRef.current = null;
       const item = lottieRef.current?.animationItem;
       if (!item) return;
-      item.setSpeed(1.0);
-      // Loop the waiting segment
+      const { LOOP } = getFrames();
       item.loop = true;
-      item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
+      item.setSpeed(1.0);
+      item.playSegments(LOOP, true);
     },
 
-    // Resolve to 'H' (BTC) or 'T' (TON) and fulfill when it settles
+    // Resolve to H (BTC) or T (TON) and fulfill when it settles
     async resolve(desired) {
       setGlow(false);
       const item = lottieRef.current?.animationItem;
       if (!item) return;
 
-      item.loop = false; // stop looping
+      const { SETTLE_BTC, SETTLE_TON } = getFrames();
+      item.loop = false;
 
       if (desired === "H") {
-        await playSegment(FRAMES.SETTLE_BTC_START, FRAMES.SETTLE_BTC_END, 1.1);
+        await playSegment(SETTLE_BTC[0], SETTLE_BTC[1], 1.1);
+        lastUpRef.current = "H";
       } else {
-        await playSegment(FRAMES.SETTLE_TON_START, FRAMES.SETTLE_TON_END, 1.1);
+        await playSegment(SETTLE_TON[0], SETTLE_TON[1], 1.1);
+        lastUpRef.current = "T";
       }
+      item.pause(); // hold on landed face
     },
 
     // Stop any animation (used on error)
@@ -1231,31 +1224,30 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       if (!item) return;
       item.stop();
       setGlow(false);
+      lastUpRef.current = null;
     },
 
-    // Effects
-    // Win → keep colorful final frame and add subtle CSS glow
+    // Win → keep colorful final frame and add a CSS glow
     flashWin() {
       setGlow(true);
       setTimeout(() => setGlow(false), 1000);
     },
 
-    // Loss → briefly play the grey overlay window that exists in the JSON
+    // Loss → briefly show the grey overlay slice matching the current face
     async flashLose() {
       setGlow(false);
       const item = lottieRef.current?.animationItem;
       if (!item) return;
+      const { BTC_GREY, TON_GREY, SETTLE_BTC, SETTLE_TON } = getFrames();
 
-      const frame = item.currentFrame ?? FRAMES.SETTLE_BTC_END;
-      // crude split to decide which face is up now
-      const onBTC = frame < (FRAMES.SETTLE_TON_START + FRAMES.SETTLE_BTC_END) / 2;
-
-      if (onBTC) {
-        await playSegment(FRAMES.BTC_GREY_START, FRAMES.BTC_GREY_END, 1.0);
+      if (lastUpRef.current === "H") {
+        await playSegment(BTC_GREY[0], BTC_GREY[1], 1.0);
+        await playSegment(SETTLE_BTC[1], SETTLE_BTC[1]); // snap back to last frame
       } else {
-        await playSegment(FRAMES.TON_GREY_START, FRAMES.TON_GREY_END, 1.0);
+        await playSegment(TON_GREY[0], TON_GREY[1], 1.0);
+        await playSegment(SETTLE_TON[1], SETTLE_TON[1]);
       }
-      item.pause(); // hold on greyed state a beat
+      item.pause();
     },
   }), []);
 
@@ -1290,4 +1282,5 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   );
 });
 
-function CoinFace() { return null; } // no-op to keep file parity; unused in Lottie mode
+// no-op to keep parity (unused in Lottie mode)
+function CoinFace() { return null; }
