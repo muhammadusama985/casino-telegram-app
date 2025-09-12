@@ -1184,7 +1184,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   };
 
   // About ~1.2s at fast speed ≈ 3–4 visible flips
-  const MIN_WAIT_MS = 4200;
+  const MIN_WAIT_MS = 1200;
 
   // helper: play a segment and resolve when Lottie fires "complete"
   const playSegment = (from, to, speed = 1.0) =>
