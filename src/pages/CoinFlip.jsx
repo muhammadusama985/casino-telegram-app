@@ -722,51 +722,12 @@ import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle }
 import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
-import bgAnim from "../assets/lottie/Flipcoin_background.json"; // looping ring (JSON)
-import coinAnim from "../assets/lottie/Flipcoin.json";          // coin with BTC/TON faces (JSON)
+import bgAnim from "../assets/lottie/Flipcoin_background.json"; // looping ring
+import coinAnim from "../assets/lottie/Flipcoin.json";          // <<< NEW: your coin lottie
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
 import loseSound from "../assets/lose.mp3";
-
-/* ----------------------------------------------------------------------------
-   Helper: extract a solid/dominant background color from the Lottie JSON.
-   1) Prefer top-level "bg": "#RRGGBB"
-   2) Otherwise scan fills (c.k arrays) and pick the most common non-black/non-white
----------------------------------------------------------------------------- */
-function extractLottieBgColor(json) {
-  // 1) top-level "bg"
-  if (typeof json?.bg === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(json.bg)) {
-    return json.bg;
-  }
-
-  const seen = new Map();
-  const push = (arr) => {
-    if (!Array.isArray(arr) || arr.length < 3) return;
-    const clamp255 = (v) => (v <= 1 ? Math.round(v * 255) : Math.round(v));
-    const hex = "#" + [arr[0], arr[1], arr[2]].map(clamp255).map(v => v.toString(16).padStart(2, "0")).join("");
-    const low = hex.toLowerCase();
-    if (low === "#000000" || low === "#ffffff") return; // ignore extremes
-    seen.set(hex, (seen.get(hex) || 0) + 1);
-  };
-
-  // walk layers/shapes/items for fills (ty === 'fl' or any c.k color arrays)
-  const stack = [json];
-  while (stack.length) {
-    const node = stack.pop();
-    if (!node || typeof node !== "object") continue;
-    if (node.ty === "fl" && node.c && node.c.k) push(node.c.k);
-    if (node.c && node.c.k) push(node.c.k);
-    for (const k of ["layers", "shapes", "it", "assets"]) {
-      const arr = node[k];
-      if (Array.isArray(arr)) for (const ch of arr) stack.push(ch);
-    }
-  }
-
-  let best = null, cnt = 0;
-  for (const [hex, n] of seen) if (n > cnt) { best = hex; cnt = n; }
-  return best;
-}
 
 // format helpers
 const fmt = (n) =>
@@ -781,8 +742,8 @@ function formatCoins(v) {
 }
 
 const STREAK_BOOST_PER_WIN = 0.05;   // UI-only boost per consecutive win (must match backend cfg)
-const BASE_PAYOUT_PCT = 0.90;        // 90% profit baseline (must match backend cfg)
-const PAYOUT_CAP = 1.0;              // cap profit at 100% of stake (must match backend cfg)
+const BASE_PAYOUT_PCT = 0.90;  // 90% profit baseline (must match backend cfg)
+const PAYOUT_CAP = 1.0;   // cap profit at 100% of stake (must match backend cfg)
 const TRAIL_LEN = 10;
 
 export default function Coinflip() {
@@ -797,7 +758,7 @@ export default function Coinflip() {
   const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?"));
   const [flipping, setFlipping] = useState(false);
 
-  // toast-ish states (you kept them; not rendering the toast itself here)
+  // Removed the toast state part (no win/loss notification)
   const [resultMsg, setResultMsg] = useState("");       // title line
   const [toastBody, setToastBody] = useState("");       // subtitle
   const [resultKind, setResultKind] = useState(null);   // 'win' | 'lose' | null
@@ -807,9 +768,6 @@ export default function Coinflip() {
 
   // coin animation API ref
   const coinApiRef = useRef(null);
-
-  // derive page background from bgAnim JSON
-  const pageBg = useMemo(() => extractLottieBgColor(bgAnim) || "#0B1020", [bgAnim]);
 
   // coefficient shown: base when no streak; boosted when streak > 0
   const effectiveCoef = useMemo(
@@ -969,10 +927,7 @@ export default function Coinflip() {
   };
 
   return (
-    <div
-      className="min-h-screen text-white flex flex-col items-stretch"
-      style={{ backgroundColor: pageBg }}  // ← use color from Lottie
-    >
+    <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
       {/* Coins header (match Dice) */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
@@ -1014,7 +969,7 @@ export default function Coinflip() {
               inset: 0,
               borderRadius: "50%",
               overflow: "hidden",
-              background: pageBg, // ← match page bg (was "#000080")
+              background: "	#000080", // match page bg
               zIndex: 0,
             }}
           >
@@ -1199,23 +1154,22 @@ function BackButtonInline({ to = "/" }) {
 
 /* =========================================================================
    LOTTIE-BASED COIN: keeps the SAME imperative API as your original Coin3D
-   Heads = BTC, Tails = TON. Spins while waiting, settles to backend result,
-   and uses the JSON's grey segments for loss; CSS glow for win.
+   Heads = BTC, Tails = TON
    ========================================================================= */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const lottieRef = useRef(null);
   const [glow, setGlow] = useState(false);
 
   // Frame windows chosen to:
-  // - LOOP while waiting
+  // - LOOP look while waiting
   // - SETTLE to BTC-up or TON-up
   // - Show GREY loss overlay windows provided in the JSON
   const FRAMES = {
     LOOP_START: 0,
-    LOOP_END: 420,              // smooth continuous flipping
-    SETTLE_BTC_START: 420,      // lands BTC-up ~450+
+    LOOP_END: 420,              // smooth continuous spinning
+    SETTLE_BTC_START: 420,      // lands BTC-up around 450+
     SETTLE_BTC_END: 510,
-    SETTLE_TON_START: 780,      // lands TON-up ~810+
+    SETTLE_TON_START: 780,      // lands TON-up around 810+
     SETTLE_TON_END: 870,
     BTC_GREY_START: 450,        // BTC face grey burst (~450–495, off by 510)
     BTC_GREY_END: 510,
@@ -1223,11 +1177,12 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     TON_GREY_END: 870,
   };
 
-  // Play an inclusive segment and resolve near its end
+  // Helper to play an inclusive segment and resolve near its end
   const playSegment = (from, to, speed = 1.0) =>
     new Promise((resolve) => {
       const inst = lottieRef.current;
       if (!inst) return resolve();
+      // lottie-react exposes the animation item at .animationItem
       const item = inst.animationItem;
       if (!item) return resolve();
 
@@ -1250,6 +1205,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       const item = lottieRef.current?.animationItem;
       if (!item) return;
       item.setSpeed(1.0);
+      // Loop the waiting segment
       item.loop = true;
       item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
     },
@@ -1291,14 +1247,15 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       if (!item) return;
 
       const frame = item.currentFrame ?? FRAMES.SETTLE_BTC_END;
-      const onBTC = frame < (FRAMES.SETTLE_TON_START + FRAMES.SETTLE_BTC_END) / 2; // crude split
+      // crude split to decide which face is up now
+      const onBTC = frame < (FRAMES.SETTLE_TON_START + FRAMES.SETTLE_BTC_END) / 2;
 
       if (onBTC) {
         await playSegment(FRAMES.BTC_GREY_START, FRAMES.BTC_GREY_END, 1.0);
       } else {
         await playSegment(FRAMES.TON_GREY_START, FRAMES.TON_GREY_END, 1.0);
       }
-      item.pause(); // hold grey a beat
+      item.pause(); // hold on greyed state a beat
     },
   }), []);
 
@@ -1333,5 +1290,4 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   );
 });
 
-// No-op (kept for parity with original file; unused in Lottie mode)
-function CoinFace() { return null; }
+function CoinFace() { return null; } // no-op to keep file parity; unused in Lottie mode
