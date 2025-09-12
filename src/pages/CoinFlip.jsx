@@ -1164,6 +1164,9 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const lastUpRef = useRef(null); // 'H' | 'T'
   const onCompleteRef = useRef(null);
 
+  // NEW: track when waiting started to enforce a minimum fast-spin time
+  const waitStartRef = useRef(0);
+
   // Absolute frame windows (file has 1140 frames @ 60fps)
   const FRAMES = {
     LOOP_START: 0,
@@ -1179,6 +1182,9 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     TON_GREY_HOLD: 855,
     TON_GREY_OFF: 870,
   };
+
+  // About ~1.2s at fast speed ≈ 3–4 visible flips
+  const MIN_WAIT_MS = 1200;
 
   // helper: play a segment and resolve when Lottie fires "complete"
   const playSegment = (from, to, speed = 1.0) =>
@@ -1225,7 +1231,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     };
 
     item.addEventListener("complete", onCompleteRef.current);
-    item.setSpeed(2.5);       // <<< faster spin while waiting (3–4 flips quickly)
+    item.setSpeed(2.5);       // fast spin while waiting
     item.setDirection(1);
     item.loop = false;        // loop manually over the segment
     item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
@@ -1240,17 +1246,38 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     }
   };
 
+  // Ensure final colorful face is visible (prevents any “disappear” weirdness)
+  const showFinalFace = () => {
+    const item = lottieRef.current?.animationItem;
+    if (!item) return;
+    if (lastUpRef.current === "H") {
+      item.goToAndStop(FRAMES.SETTLE_BTC_END, true);
+    } else if (lastUpRef.current === "T") {
+      item.goToAndStop(FRAMES.SETTLE_TON_END, true);
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     // Begin indefinite flip while waiting for backend
     startWaiting() {
       setGlow(false);
       lastUpRef.current = null;
+      waitStartRef.current = Date.now();     // start timer for min spin
       startWaitingLoop();
     },
 
     // Resolve to H (BTC) or T (TON) and fulfill when it settles
     async resolve(desired) {
       setGlow(false);
+
+      // enforce a minimum “fast-spin” duration (~3–4 flips)
+      const elapsed = Date.now() - (waitStartRef.current || 0);
+      const remaining = Math.max(0, MIN_WAIT_MS - elapsed);
+      if (remaining > 0) {
+        await new Promise((r) => setTimeout(r, remaining));
+      }
+
+      // now stop the loop and settle to the backend side
       stopWaitingLoop();
 
       const item = lottieRef.current?.animationItem;
@@ -1276,10 +1303,13 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       lastUpRef.current = null;
     },
 
-    // Win → keep colorful final frame and add a CSS glow
+    // Win → add a CSS glow for 2s, then ensure colorful face is visible
     flashWin() {
       setGlow(true);
-      setTimeout(() => setGlow(false), 2000); // <<< hold glow for 2s
+      setTimeout(() => {
+        setGlow(false);
+        showFinalFace(); // keep coin visible & colorful after glow
+      }, 2000);
     },
 
     // Loss → play the grey overlay window from the JSON, hold 2s, then return to colorful face
@@ -1293,13 +1323,13 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
         item.goToAndStop(FRAMES.BTC_GREY_HOLD, true);
         setTimeout(() => {
           item.goToAndStop(FRAMES.SETTLE_BTC_END, true); // back to colorful BTC face
-        }, 2000); // <<< hold grey for 2s
+        }, 2000);
       } else {
         await playSegment(FRAMES.TON_GREY_ON, FRAMES.TON_GREY_OFF, 1.0);
         item.goToAndStop(FRAMES.TON_GREY_HOLD, true);
         setTimeout(() => {
           item.goToAndStop(FRAMES.SETTLE_TON_END, true); // back to colorful TON face
-        }, 2000); // <<< hold grey for 2s
+        }, 2000);
       }
     },
   }), []);
