@@ -715,6 +715,7 @@
 // }
 
 
+
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
@@ -1224,9 +1225,9 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     };
 
     item.addEventListener("complete", onCompleteRef.current);
-    item.setSpeed(1.0);
+    item.setSpeed(2.5);       // <<< faster spin while waiting (3–4 flips quickly)
     item.setDirection(1);
-    item.loop = false; // loop manually over the segment
+    item.loop = false;        // loop manually over the segment
     item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
   };
 
@@ -1278,10 +1279,10 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     // Win → keep colorful final frame and add a CSS glow
     flashWin() {
       setGlow(true);
-      setTimeout(() => setGlow(false), 1000);
+      setTimeout(() => setGlow(false), 2000); // <<< hold glow for 2s
     },
 
-    // Loss → play the grey overlay window from the JSON and HOLD on grey
+    // Loss → play the grey overlay window from the JSON, hold 2s, then return to colorful face
     async flashLose() {
       setGlow(false);
       const item = lottieRef.current?.animationItem;
@@ -1290,9 +1291,15 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       if (lastUpRef.current === "H") {
         await playSegment(FRAMES.BTC_GREY_ON, FRAMES.BTC_GREY_OFF, 1.0);
         item.goToAndStop(FRAMES.BTC_GREY_HOLD, true);
+        setTimeout(() => {
+          item.goToAndStop(FRAMES.SETTLE_BTC_END, true); // back to colorful BTC face
+        }, 2000); // <<< hold grey for 2s
       } else {
         await playSegment(FRAMES.TON_GREY_ON, FRAMES.TON_GREY_OFF, 1.0);
         item.goToAndStop(FRAMES.TON_GREY_HOLD, true);
+        setTimeout(() => {
+          item.goToAndStop(FRAMES.SETTLE_TON_END, true); // back to colorful TON face
+        }, 2000); // <<< hold grey for 2s
       }
     },
   }), []);
