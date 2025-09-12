@@ -717,7 +717,9 @@
 
 
 
-import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
+
+
+import { useEffect, useMemo, useRef, useState, forwardRef } from "react";
 import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
@@ -740,9 +742,9 @@ function formatCoins(v) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-const STREAK_BOOST_PER_WIN = 0.05;   // UI-only boost per consecutive win (must match backend cfg)
-const BASE_PAYOUT_PCT = 0.90;  // 90% profit baseline (must match backend cfg)
-const PAYOUT_CAP = 1.0;   // cap profit at 100% of stake (must match backend cfg)
+const STREAK_BOOST_PER_WIN = 0.05; // UI-only boost per consecutive win (must match backend cfg)
+const BASE_PAYOUT_PCT = 0.90; // 90% profit baseline (must match backend cfg)
+const PAYOUT_CAP = 1.0; // cap profit at 100% of stake (must match backend cfg)
 const TRAIL_LEN = 10;
 
 export default function Coinflip() {
@@ -758,10 +760,10 @@ export default function Coinflip() {
   const [flipping, setFlipping] = useState(false);
 
   // Removed the toast state part (no win/loss notification)
-  const [resultMsg, setResultMsg] = useState("");       // title line
-  const [toastBody, setToastBody] = useState("");       // subtitle
-  const [resultKind, setResultKind] = useState(null);   // 'win' | 'lose' | null
-  const [toastOpen, setToastOpen] = useState(false);    // slide in/out
+  const [resultMsg, setResultMsg] = useState(""); // title line
+  const [toastBody, setToastBody] = useState(""); // subtitle
+  const [resultKind, setResultKind] = useState(null); // 'win' | 'lose' | null
+  const [toastOpen, setToastOpen] = useState(false); // slide in/out
 
   const [face, setFace] = useState("H"); // semantic only (H → BTC, T → TON)
 
@@ -849,7 +851,7 @@ export default function Coinflip() {
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.removeEventListener("balance:refresh", refresh);
-      document.removeEventListener("visibilitychange", onVisible);
+      document.addEventListener("visibilitychange", onVisible);
     };
   }, []);
 
@@ -867,7 +869,15 @@ export default function Coinflip() {
 
     // 1) Start spin only after user selects
     try { new Audio(flipSound).play().catch(() => {}); } catch {}
-    try { coinApiRef.current?.startWaiting(); } catch {}
+    try {
+      if (coinApiRef.current) {
+        coinApiRef.current.startWaiting();
+      } else {
+        console.warn("[Coinflip] Lottie ref not available");
+      }
+    } catch (e) {
+      console.error("[Coinflip] Failed to start Lottie animation:", e);
+    }
 
     try {
       // 2) Ask backend
@@ -877,11 +887,15 @@ export default function Coinflip() {
       const m = Number(res?.details?.m);
       if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
-      const landed = (res?.details?.landed === "T") ? "T" : "H";
+      const landed = res?.details?.landed === "T" ? "T" : "H";
       setFace(landed); // semantics only
 
-      // 3) resolve visual (CSS coin settles to backend side)
-      await (coinApiRef.current?.resolve(landed) ?? Promise.resolve());
+      // 3) resolve visual (Lottie coin settles to backend side)
+      if (coinApiRef.current) {
+        await coinApiRef.current.resolve(landed);
+      } else {
+        console.warn("[Coinflip] Lottie ref not available for resolve");
+      }
 
       if (Number.isFinite(res?.newBalance)) {
         setCoins((prev) => (res.newBalance !== prev ? res.newBalance : prev));
@@ -897,8 +911,10 @@ export default function Coinflip() {
         setResultMsg("Hurrah! You won 🎉");
         setToastBody(`+${fmt(profit)} has been credited to your balance.`);
         setResultKind("win");
-        // WIN visual
-        coinApiRef.current?.flashWin();
+        // WIN visual (glow)
+        if (coinApiRef.current) {
+          coinApiRef.current.flashWin();
+        }
         try { new Audio(winSound).play().catch(() => {}); } catch {}
       } else {
         setStreak(0);
@@ -907,14 +923,16 @@ export default function Coinflip() {
         setResultMsg("Oops! You lost 😕");
         setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
         setResultKind("lose");
-        // LOSS visual (full grey)
-        coinApiRef.current?.flashLose();
+        // LOSS visual (grey)
+        if (coinApiRef.current) {
+          coinApiRef.current.flashLose();
+        }
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
 
       window.dispatchEvent(new Event("balance:refresh"));
     } catch (e) {
-      try { coinApiRef.current?.stop(); } catch {}
+      try { if (coinApiRef.current) coinApiRef.current.stop(); } catch {}
       const msg = String(e?.message || "");
       if (msg.includes("insufficient-funds")) alert("Not enough coins.");
       else if (msg.includes("min-stake")) alert("Bet is below minimum.");
@@ -959,7 +977,7 @@ export default function Coinflip() {
           <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
-        {/* center coin: BG ring masked to circle + CSS coin centered */}
+        {/* center coin: BG ring masked to circle + Lottie coin centered */}
         <div className="relative mx-4 flex items-center justify-center" style={{ width: "100%", height: 400, isolation: "isolate" }}>
           {/* Masked circle wrapper so the Lottie never overflows or show a slab */}
           <div
@@ -999,7 +1017,11 @@ export default function Coinflip() {
             }}
           >
             <div style={{ transform: "translateY(-6px) scale(0.70)", transformOrigin: "center" }}>
-              <LottieCoin ref={coinApiRef} />
+              {flipCoinAnim ? (
+                <LottieCoin ref={coinApiRef} />
+              ) : (
+                <div className="text-white text-center">Loading coin animation...</div>
+              )}
             </div>
           </div>
         </div>
@@ -1161,14 +1183,24 @@ const LottieCoin = forwardRef(function LottieCoin(props, ref) {
   useEffect(() => {
     const anim = lottieRef.current;
     if (anim) {
-      const onLoopComplete = () => setFlipCount((c) => c + 1);
-      anim.addEventListener('loopComplete', onLoopComplete);
-      return () => anim.removeEventListener('loopComplete', onLoopComplete);
+      const onLoopComplete = () => {
+        setFlipCount((c) => c + 1);
+        console.log("[LottieCoin] Loop completed, flipCount:", flipCount + 1);
+      };
+      anim.addEventListener("loopComplete", onLoopComplete);
+      return () => anim.removeEventListener("loopComplete", onLoopComplete);
+    } else {
+      console.warn("[LottieCoin] Lottie ref not initialized");
     }
-  }, []);
+  }, [flipCount]);
 
   useImperativeHandle(ref, () => ({
     startWaiting() {
+      if (!lottieRef.current) {
+        console.warn("[LottieCoin] Cannot start waiting: Lottie ref not available");
+        return;
+      }
+      console.log("[LottieCoin] Starting flip animation");
       setEffect(null);
       setFlipCount(0);
       lottieRef.current.goToAndStop(120, true);
@@ -1176,47 +1208,70 @@ const LottieCoin = forwardRef(function LottieCoin(props, ref) {
       lottieRef.current.playSegments([120, 180], true);
     },
     async resolve(desired) {
+      if (!lottieRef.current) {
+        console.warn("[LottieCoin] Cannot resolve: Lottie ref not available");
+        return;
+      }
       const anim = lottieRef.current;
-      if (!anim) return;
-
-      const desiredIsH = desired === 'H';
+      const desiredIsH = desired === "H";
       const currentFlip = flipCount;
-      const currentIsH = (currentFlip % 2 === 0); // assuming even flips land on H, odd on T
+      const currentIsH = currentFlip % 2 === 0; // even flips land on H, odd on T
+
+      console.log("[LottieCoin] Resolving to:", desired, "Current flip:", currentFlip, "Current side:", currentIsH ? "H" : "T");
 
       if (currentIsH === desiredIsH) {
         setLoop(false);
       } else {
         const listener = () => {
           setLoop(false);
-          anim.removeEventListener('loopComplete', listener);
+          anim.removeEventListener("loopComplete", listener);
+          console.log("[LottieCoin] Extra flip completed to land on:", desired);
         };
-        anim.addEventListener('loopComplete', listener);
+        anim.addEventListener("loopComplete", listener);
       }
 
       return new Promise((resolve) => {
         const onComplete = () => {
-          anim.removeEventListener('complete', onComplete);
+          anim.removeEventListener("complete", onComplete);
+          console.log("[LottieCoin] Animation completed for side:", desired);
           resolve();
         };
-        anim.addEventListener('complete', onComplete);
+        anim.addEventListener("complete", onComplete);
       });
     },
     flashWin() {
-      setEffect('win');
+      if (!lottieRef.current) {
+        console.warn("[LottieCoin] Cannot flash win: Lottie ref not available");
+        return;
+      }
+      console.log("[LottieCoin] Playing win glow animation");
+      setEffect("win");
       lottieRef.current.goToAndPlay(1095, true);
       effectTimerRef.current = setTimeout(() => {
         setEffect(null);
+        console.log("[LottieCoin] Win glow cleared");
       }, 1000);
     },
     flashLose() {
-      setEffect('lose');
+      if (!lottieRef.current) {
+        console.warn("[LottieCoin] Cannot flash lose: Lottie ref not available");
+        return;
+      }
+      console.log("[LottieCoin] Applying lose grey effect");
+      setEffect("lose");
       effectTimerRef.current = setTimeout(() => {
         setEffect(null);
+        console.log("[LottieCoin] Lose grey cleared");
       }, 1200);
     },
     stop() {
+      if (!lottieRef.current) {
+        console.warn("[LottieCoin] Cannot stop: Lottie ref not available");
+        return;
+      }
+      console.log("[LottieCoin] Stopping animation");
       setLoop(false);
-      lottieRef.current?.pause();
+      lottieRef.current.pause();
       setEffect(null);
       if (effectTimerRef.current) {
         clearTimeout(effectTimerRef.current);
@@ -1224,6 +1279,15 @@ const LottieCoin = forwardRef(function LottieCoin(props, ref) {
       }
     },
   }));
+
+  useEffect(() => {
+    return () => {
+      if (effectTimerRef.current) {
+        clearTimeout(effectTimerRef.current);
+        effectTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const style = {
     width: "100%",
@@ -1240,6 +1304,8 @@ const LottieCoin = forwardRef(function LottieCoin(props, ref) {
       loop={loop}
       autoplay={false}
       style={style}
+      onDOMLoaded={() => console.log("[LottieCoin] Animation DOM loaded")}
+      onDataFailed={() => console.error("[LottieCoin] Failed to load animation data")}
     />
   );
 });
