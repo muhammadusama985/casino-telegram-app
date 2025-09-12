@@ -741,8 +741,8 @@ function formatCoins(v) {
 }
 
 const STREAK_BOOST_PER_WIN = 0.05;   // UI-only boost per consecutive win (must match backend cfg)
-const BASE_PAYOUT_PCT = 0.90;  // 90% profit baseline (must match backend cfg)
-const PAYOUT_CAP = 1.0;   // cap profit at 100% of stake (must match backend cfg)
+const BASE_PAYOUT_PCT = 0.90;        // 90% profit baseline (must match backend cfg)
+const PAYOUT_CAP = 1.0;              // cap profit at 100% of stake (must match backend cfg)
 const TRAIL_LEN = 10;
 
 export default function Coinflip() {
@@ -897,7 +897,7 @@ export default function Coinflip() {
         setResultMsg("Hurrah! You won 🎉");
         setToastBody(`+${fmt(profit)} has been credited to your balance.`);
         setResultKind("win");
-        // WIN visual
+        // WIN visual (glow 5s, then default frame)
         coinApiRef.current?.flashWin();
         try { new Audio(winSound).play().catch(() => {}); } catch {}
       } else {
@@ -907,7 +907,7 @@ export default function Coinflip() {
         setResultMsg("Oops! You lost 😕");
         setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
         setResultKind("lose");
-        // LOSS visual (grey)
+        // LOSS visual (grey 5s, then default frame)
         coinApiRef.current?.flashLose();
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
@@ -1164,7 +1164,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const lastUpRef = useRef(null); // 'H' | 'T'
   const onCompleteRef = useRef(null);
 
-  // NEW: track when waiting started to enforce a minimum fast-spin time
+  // Track when waiting started to enforce a minimum fast-spin time
   const waitStartRef = useRef(0);
 
   // Absolute frame windows (file has 1140 frames @ 60fps)
@@ -1246,15 +1246,11 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     }
   };
 
-  // Ensure final colorful face is visible (prevents any “disappear” weirdness)
-  const showFinalFace = () => {
+  // Default/start stage (idle pose)
+  const goToDefault = () => {
     const item = lottieRef.current?.animationItem;
     if (!item) return;
-    if (lastUpRef.current === "H") {
-      item.goToAndStop(FRAMES.SETTLE_BTC_END, true);
-    } else if (lastUpRef.current === "T") {
-      item.goToAndStop(FRAMES.SETTLE_TON_END, true);
-    }
+    item.goToAndStop(FRAMES.LOOP_START, true);
   };
 
   useImperativeHandle(ref, () => ({
@@ -1286,11 +1282,11 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       if (desired === "H") {
         await playSegment(FRAMES.SETTLE_BTC_START, FRAMES.SETTLE_BTC_END, 1.1);
         lastUpRef.current = "H";
-        item.goToAndStop(FRAMES.SETTLE_BTC_END, true);
+        item.goToAndStop(FRAMES.SETTLE_BTC_END, true); // BTC (heads) up
       } else {
         await playSegment(FRAMES.SETTLE_TON_START, FRAMES.SETTLE_TON_END, 1.1);
         lastUpRef.current = "T";
-        item.goToAndStop(FRAMES.SETTLE_TON_END, true);
+        item.goToAndStop(FRAMES.SETTLE_TON_END, true); // TON (tails) up
       }
     },
 
@@ -1303,16 +1299,16 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       lastUpRef.current = null;
     },
 
-    // Win → add a CSS glow for 2s, then ensure colorful face is visible
+    // Win → glow for 5s, then return to default/start stage
     flashWin() {
       setGlow(true);
       setTimeout(() => {
         setGlow(false);
-        showFinalFace(); // keep coin visible & colorful after glow
-      }, 2000);
+        goToDefault();
+      }, 5000);
     },
 
-    // Loss → play the grey overlay window from the JSON, hold 2s, then return to colorful face
+    // Loss → play grey overlay for the landed face, hold 5s, then return to default/start stage
     async flashLose() {
       setGlow(false);
       const item = lottieRef.current?.animationItem;
@@ -1321,16 +1317,14 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       if (lastUpRef.current === "H") {
         await playSegment(FRAMES.BTC_GREY_ON, FRAMES.BTC_GREY_OFF, 1.0);
         item.goToAndStop(FRAMES.BTC_GREY_HOLD, true);
-        setTimeout(() => {
-          item.goToAndStop(FRAMES.SETTLE_BTC_END, true); // back to colorful BTC face
-        }, 2000);
       } else {
         await playSegment(FRAMES.TON_GREY_ON, FRAMES.TON_GREY_OFF, 1.0);
         item.goToAndStop(FRAMES.TON_GREY_HOLD, true);
-        setTimeout(() => {
-          item.goToAndStop(FRAMES.SETTLE_TON_END, true); // back to colorful TON face
-        }, 2000);
       }
+
+      setTimeout(() => {
+        goToDefault();
+      }, 5000);
     },
   }), []);
 
@@ -1372,3 +1366,4 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
 
 // no-op to keep parity (unused in Lottie mode)
 function CoinFace() { return null; }
+
