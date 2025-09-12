@@ -878,7 +878,7 @@ export default function Coinflip() {
       if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
       const landed = (res?.details?.landed === "T") ? "T" : "H";
-      setFace(landed); // semantics only
+      setFace(landed); // Set landed side immediately (either H or T)
 
       // 3) resolve visual (coin settles to backend side)
       await (coinApiRef.current?.resolve(landed) ?? Promise.resolve());
