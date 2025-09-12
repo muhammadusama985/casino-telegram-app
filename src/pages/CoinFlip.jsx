@@ -897,7 +897,7 @@ export default function Coinflip() {
         setResultMsg("Hurrah! You won 🎉");
         setToastBody(`+${fmt(profit)} has been credited to your balance.`);
         setResultKind("win");
-        // WIN visual (glow 5s, then default frame)
+        // WIN visual (glow 2s, then default frame)
         coinApiRef.current?.flashWin();
         try { new Audio(winSound).play().catch(() => {}); } catch {}
       } else {
@@ -907,7 +907,7 @@ export default function Coinflip() {
         setResultMsg("Oops! You lost 😕");
         setToastBody(`-${fmt(stake)} has been deducted from your balance.`);
         setResultKind("lose");
-        // LOSS visual (grey 5s, then default frame)
+        // LOSS visual (grey 2s, then default frame)
         coinApiRef.current?.flashLose();
         try { new Audio(loseSound).play().catch(() => {}); } catch {}
       }
@@ -1299,16 +1299,16 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       lastUpRef.current = null;
     },
 
-    // Win → glow for 5s, then return to default/start stage
+    // Win → glow for 2s, then return to default/start stage
     flashWin() {
       setGlow(true);
       setTimeout(() => {
         setGlow(false);
         goToDefault();
-      }, 2000);
+      }, 2000); // Change 5000 to 2000 (2 seconds)
     },
 
-    // Loss → play grey overlay for the landed face, hold 5s, then return to default/start stage
+    // Loss → play grey overlay for the landed face, hold 2s, then return to default/start stage
     async flashLose() {
       setGlow(false);
       const item = lottieRef.current?.animationItem;
@@ -1324,7 +1324,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
 
       setTimeout(() => {
         goToDefault();
-      }, 2000);
+      }, 2000); // Change 5000 to 2000 (2 seconds)
     },
   }), []);
 
@@ -1366,4 +1366,3 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
 
 // no-op to keep parity (unused in Lottie mode)
 function CoinFace() { return null; }
-
