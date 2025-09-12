@@ -717,12 +717,19 @@
 
 
 // src/pages/Coinflip.jsx
-import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
 import bgAnim from "../assets/lottie/Flipcoin_background.json"; // looping ring
-import coinAnim from "../assets/lottie/Flipcoin.json";          // <<< coin lottie
+import coinAnim from "../assets/lottie/Flipcoin.json";          // coin lottie
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
@@ -737,7 +744,10 @@ const fmt = (n) =>
 function formatCoins(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return "0";
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return n.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
 }
 
 const STREAK_BOOST_PER_WIN = 0.05;   // UI-only boost per consecutive win (must match backend cfg)
@@ -757,11 +767,11 @@ export default function Coinflip() {
   const [trail, setTrail] = useState(Array(TRAIL_LEN).fill("?"));
   const [flipping, setFlipping] = useState(false);
 
-  // Removed the toast state part (no win/loss notification)
-  const [resultMsg, setResultMsg] = useState("");       // title line
-  const [toastBody, setToastBody] = useState("");       // subtitle
+  // toast bits (kept for parity even if you don't show them)
+  const [resultMsg, setResultMsg] = useState("");
+  const [toastBody, setToastBody] = useState("");
   const [resultKind, setResultKind] = useState(null);   // 'win' | 'lose' | null
-  const [toastOpen, setToastOpen] = useState(false);    // slide in/out
+  const [toastOpen, setToastOpen] = useState(false);
 
   const [face, setFace] = useState("H"); // semantic only (H → BTC, T → TON)
 
@@ -770,7 +780,12 @@ export default function Coinflip() {
 
   // coefficient shown: base when no streak; boosted when streak > 0
   const effectiveCoef = useMemo(
-    () => Number((baseCoef * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak))).toFixed(2)),
+    () =>
+      Number(
+        (baseCoef * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak))).toFixed(
+          2
+        )
+      ),
     [baseCoef, streak]
   );
 
@@ -927,7 +942,15 @@ export default function Coinflip() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B1020] text-white flex flex-col items-stretch">
+    <div
+      className="min-h-screen text-white flex flex-col items-stretch"
+      style={{
+        // full-screen gradient matched to the outer ring
+        background:
+          "#000080",
+        backgroundColor: "#000080",
+      }}
+    >
       {/* Coins header (match Dice) */}
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
@@ -944,7 +967,11 @@ export default function Coinflip() {
         {trail.map((ch, i) => (
           <div
             key={i}
-            className={`w-8 h-8 rounded-full border-2 ${ch === "?" ? "border-dashed border-white/30" : "border-emerald-400/70"} flex items-center justify-center text-sm`}
+            className={`w-8 h-8 rounded-full border-2 ${
+              ch === "?"
+                ? "border-dashed border-white/30"
+                : "border-emerald-400/70"
+            } flex items-center justify-center text-sm`}
           >
             <span className={`${ch === "?" ? "opacity-80" : "font-bold"}`}>
               {ch === "?" ? "?" : ch === "T" ? "€" : "$"}
@@ -954,22 +981,30 @@ export default function Coinflip() {
       </div>
 
       {/* coin + coef */}
-      <div className="flex items-center justify-between px-6 mt-4 p-4" style={{ backgroundColor: "#000080", borderRadius: "8px" }}>
+      <div
+        className="flex items-center justify-between px-6 mt-4 p-4"
+        style={{ backgroundColor: "#000080", borderRadius: "8px" }}
+      >
         <div className="text-left">
           <div className="text-2xl font-bold leading-none">{round}</div>
-          <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
+          <div className="uppercase tracking-wider text-white/60 text-sm">
+            Round
+          </div>
         </div>
 
         {/* center coin: BG ring masked to circle + coin centered */}
-        <div className="relative mx-4 flex items-center justify-center" style={{ width: "100%", height: 400, isolation: "isolate" }}>
-          {/* Masked circle wrapper so the Lottie never overflows or show a slab */}
+        <div
+          className="relative mx-4 flex items-center justify-center"
+          style={{ width: "100%", height: 400, isolation: "isolate" }}
+        >
+          {/* Masked circle wrapper so the Lottie never overflows or shows a slab */}
           <div
             style={{
               position: "absolute",
               inset: 0,
               borderRadius: "50%",
               overflow: "hidden",
-              background: "	#000080", // match page bg
+              background: "#000080", // matches panel bg
               zIndex: 0,
             }}
           >
@@ -999,7 +1034,9 @@ export default function Coinflip() {
               pointerEvents: "none",
             }}
           >
-            <div style={{ transform: "translateY(-6px) scale(0.70)", transformOrigin: "center" }}>
+            <div
+              style={{ transform: "translateY(-6px) scale(0.70)", transformOrigin: "center" }}
+            >
               <Coin3D ref={coinApiRef} ariaFace={face} />
             </div>
           </div>
@@ -1009,7 +1046,9 @@ export default function Coinflip() {
           <div className="text-2xl font-extrabold leading-none">
             x{effectiveCoef.toFixed(2)}
           </div>
-          <div className="uppercase tracking-wider text-white/60 text-sm">Coef</div>
+          <div className="uppercase tracking-wider text-white/60 text-sm">
+            Coef
+          </div>
         </div>
       </div>
 
@@ -1018,7 +1057,9 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("H")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
+            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
+          }`}
         >
           <div className="flex items-center gap-3">
             <MiniCoin symbol="₿" />
@@ -1028,7 +1069,9 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("T")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"}`}
+          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
+            flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
+          }`}
         >
           <div className="flex items-center gap-3">
             <MiniCoin symbol="TON" />
@@ -1044,9 +1087,13 @@ export default function Coinflip() {
             {/* minus */}
             <button
               aria-label="Decrease bet"
-              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
+              onClick={() =>
+                setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))
+              }
               className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
-            >−</button>
+            >
+              −
+            </button>
 
             {/* left divider */}
             <span className="h-6 w-px bg-white/15 mx-2" />
@@ -1062,9 +1109,13 @@ export default function Coinflip() {
             {/* plus */}
             <button
               aria-label="Increase bet"
-              onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
+              onClick={() =>
+                setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))
+              }
               className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
-            >+</button>
+            >
+              +
+            </button>
           </div>
 
           <div className="mt-4">
@@ -1075,20 +1126,21 @@ export default function Coinflip() {
                   "linear-gradient(90deg, rgba(255,165,0,0.25) 0%, rgba(255,120,0,0.35) 100%)",
               }}
             >
-              <div className="text-lg">
-                {fmt(potentialProfit)}
-              </div>
+              <div className="text-lg">{fmt(potentialProfit)}</div>
               <div className="text-sm opacity-60 -mt-1">Take</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
+      <div
+        style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
+      />
     </div>
   );
 }
 
+/* ===== UI bits ===== */
 function MiniCoin({ symbol = "₿" }) {
   const isTON = symbol === "TON";
   return (
@@ -1120,7 +1172,7 @@ function TonGlyph() {
       style={{ display: "block" }}
     >
       {/* Outer kite/triangle outline */}
-      <path d="M128 28c-14 0-26 5-36 15L42 93c-14 14-17 36-7 54l78 141c4 7 14 7 18 0l78-141c10-18 7-40-7-54l-50-50c-10-10-22-15-36-15zM76 100l52-52c0 0 0 0 0 0l52 52c8 8 9 21 3 31L128 214 73 131c-6-10-5-23 3-31z" />
+      <path d="M128 28c-14 0-26 5-36 15L42 93c-14 14-17 36-7 54l78 141c4 7 14 7 18 0l78-141c10-18 7-40-7-54l-50-50c-10-10-22-15-36-15zM76 100l52-52 52 52c8 8 9 21 3 31L128 214 73 131c-6-10-5-23 3-31z" />
       {/* Inner V mark */}
       <path d="M96 84h64c6 0 9 7 5 12l-37 51c-2 3-7 3-9 0l-37-51c-4-5-1-12 5-12z" />
     </svg>
@@ -1144,8 +1196,13 @@ function BackButtonInline({ to = "/" }) {
       style={{ background: "rgba(255,255,255,0.04)" }}
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2"
-          strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M15 18l-6-6 6-6"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     </button>
   );
@@ -1253,80 +1310,84 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     item.goToAndStop(FRAMES.LOOP_START, true);
   };
 
-  useImperativeHandle(ref, () => ({
-    // Begin indefinite flip while waiting for backend
-    startWaiting() {
-      setGlow(false);
-      lastUpRef.current = null;
-      waitStartRef.current = Date.now();     // start timer for min spin
-      startWaitingLoop();
-    },
-
-    // Resolve to H (BTC) or T (TON) and fulfill when it settles
-    async resolve(desired) {
-      setGlow(false);
-
-      // enforce a minimum “fast-spin” duration (~3–4 flips)
-      const elapsed = Date.now() - (waitStartRef.current || 0);
-      const remaining = Math.max(0, MIN_WAIT_MS - elapsed);
-      if (remaining > 0) {
-        await new Promise((r) => setTimeout(r, remaining));
-      }
-
-      // now stop the loop and settle to the backend side
-      stopWaitingLoop();
-
-      const item = lottieRef.current?.animationItem;
-      if (!item) return;
-
-      if (desired === "H") {
-        await playSegment(FRAMES.SETTLE_BTC_START, FRAMES.SETTLE_BTC_END, 1.1);
-        lastUpRef.current = "H";
-        item.goToAndStop(FRAMES.SETTLE_BTC_END, true); // BTC (heads) up
-      } else {
-        await playSegment(FRAMES.SETTLE_TON_START, FRAMES.SETTLE_TON_END, 1.1);
-        lastUpRef.current = "T";
-        item.goToAndStop(FRAMES.SETTLE_TON_END, true); // TON (tails) up
-      }
-    },
-
-    // Stop any animation (used on error)
-    stop() {
-      stopWaitingLoop();
-      const item = lottieRef.current?.animationItem;
-      item?.stop();
-      setGlow(false);
-      lastUpRef.current = null;
-    },
-
-    // Win → glow for 2s, then return to default/start stage
-    flashWin() {
-      setGlow(true);
-      setTimeout(() => {
+  useImperativeHandle(
+    ref,
+    () => ({
+      // Begin indefinite flip while waiting for backend
+      startWaiting() {
         setGlow(false);
-        goToDefault();
-      }, 2000); // Change 5000 to 2000 (2 seconds)
-    },
+        lastUpRef.current = null;
+        waitStartRef.current = Date.now(); // start timer for min spin
+        startWaitingLoop();
+      },
 
-    // Loss → play grey overlay for the landed face, hold 2s, then return to default/start stage
-    async flashLose() {
-      setGlow(false);
-      const item = lottieRef.current?.animationItem;
-      if (!item) return;
+      // Resolve to H (BTC) or T (TON) and fulfill when it settles
+      async resolve(desired) {
+        setGlow(false);
 
-      if (lastUpRef.current === "H") {
-        await playSegment(FRAMES.BTC_GREY_ON, FRAMES.BTC_GREY_OFF, 1.0);
-        item.goToAndStop(FRAMES.BTC_GREY_HOLD, true);
-      } else {
-        await playSegment(FRAMES.TON_GREY_ON, FRAMES.TON_GREY_OFF, 1.0);
-        item.goToAndStop(FRAMES.TON_GREY_HOLD, true);
-      }
+        // enforce a minimum “fast-spin” duration (~3–4 flips)
+        const elapsed = Date.now() - (waitStartRef.current || 0);
+        const remaining = Math.max(0, MIN_WAIT_MS - elapsed);
+        if (remaining > 0) {
+          await new Promise((r) => setTimeout(r, remaining));
+        }
 
-      setTimeout(() => {
-        goToDefault();
-      }, 2000); // Change 5000 to 2000 (2 seconds)
-    },
-  }), []);
+        // now stop the loop and settle to the backend side
+        stopWaitingLoop();
+
+        const item = lottieRef.current?.animationItem;
+        if (!item) return;
+
+        if (desired === "H") {
+          await playSegment(FRAMES.SETTLE_BTC_START, FRAMES.SETTLE_BTC_END, 1.1);
+          lastUpRef.current = "H";
+          item.goToAndStop(FRAMES.SETTLE_BTC_END, true); // BTC (heads) up
+        } else {
+          await playSegment(FRAMES.SETTLE_TON_START, FRAMES.SETTLE_TON_END, 1.1);
+          lastUpRef.current = "T";
+          item.goToAndStop(FRAMES.SETTLE_TON_END, true); // TON (tails) up
+        }
+      },
+
+      // Stop any animation (used on error)
+      stop() {
+        stopWaitingLoop();
+        const item = lottieRef.current?.animationItem;
+        item?.stop();
+        setGlow(false);
+        lastUpRef.current = null;
+      },
+
+      // Win → glow for 2s, then return to default/start stage
+      flashWin() {
+        setGlow(true);
+        setTimeout(() => {
+          setGlow(false);
+          goToDefault();
+        }, 2000);
+      },
+
+      // Loss → play grey overlay for the landed face, hold 2s, then return
+      async flashLose() {
+        setGlow(false);
+        const item = lottieRef.current?.animationItem;
+        if (!item) return;
+
+        if (lastUpRef.current === "H") {
+          await playSegment(FRAMES.BTC_GREY_ON, FRAMES.BTC_GREY_OFF, 1.0);
+          item.goToAndStop(FRAMES.BTC_GREY_HOLD, true);
+        } else {
+          await playSegment(FRAMES.TON_GREY_ON, FRAMES.TON_GREY_OFF, 1.0);
+          item.goToAndStop(FRAMES.TON_GREY_HOLD, true);
+        }
+
+        setTimeout(() => {
+          goToDefault();
+        }, 2000);
+      },
+    }),
+    []
+  );
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1365,4 +1426,6 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
 });
 
 // no-op to keep parity (unused in Lottie mode)
-function CoinFace() { return null; }
+function CoinFace() {
+  return null;
+}
