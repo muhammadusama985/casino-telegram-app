@@ -715,7 +715,6 @@
 // }
 
 
-
 // src/pages/Coinflip.jsx
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { telegramAuth, getBalance, games } from "../api";
@@ -865,7 +864,7 @@ export default function Coinflip() {
     setToastBody("");
     setResultKind(null);
 
-    // 1) Start spin only after user selects
+    // 1) Start flip only after user selects
     try { new Audio(flipSound).play().catch(() => {}); } catch {}
     try { coinApiRef.current?.startWaiting(); } catch {}
 
@@ -921,6 +920,7 @@ export default function Coinflip() {
       else if (msg.includes("max-stake")) alert("Bet exceeds maximum.");
       else alert("Bet failed. Try again.");
     } finally {
+      // IMPORTANT: this runs after resolve() finishes => buttons re-enable
       setFlipping(false);
     }
   };
@@ -1161,68 +1161,81 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   // Keep state of waiting + last landed face
   const waitingRef = useRef(false);
   const lastUpRef = useRef(null); // 'H' | 'T'
-  const completeHandlerRef = useRef(null);
+  const onCompleteRef = useRef(null);
 
   // Absolute frame windows (file has 1140 frames @ 60fps)
   const FRAMES = {
     LOOP_START: 0,
-    LOOP_END: 420,             // continuous flipping visually
+    LOOP_END: 420,             // continuous flipping visually (shows both faces)
     SETTLE_BTC_START: 420,     // lands BTC-up
     SETTLE_BTC_END: 510,
     SETTLE_TON_START: 780,     // lands TON-up
     SETTLE_TON_END: 870,
     BTC_GREY_ON: 450,          // grey visible 450–495 (off by 510)
-    BTC_GREY_HOLD: 495,        // pause here to keep grey visible
+    BTC_GREY_HOLD: 495,
     BTC_GREY_OFF: 510,
     TON_GREY_ON: 810,          // grey visible 810–855 (off by 870)
-    TON_GREY_HOLD: 855,        // pause here to keep grey visible
+    TON_GREY_HOLD: 855,
     TON_GREY_OFF: 870,
   };
 
-  const api = () => lottieRef.current;                 // lottie-react control surface
-  const raw = () => api()?.getLottie?.();              // underlying lottie-web item
-
-  // play a segment and resolve near its end
+  // helper: play a segment and resolve when Lottie fires "complete"
   const playSegment = (from, to, speed = 1.0) =>
     new Promise((resolve) => {
-      const a = api();
-      if (!a) return resolve();
-      a.setSpeed?.(speed);
-      a.setDirection?.(from <= to ? 1 : -1);
-      a.playSegments?.([from, to], true);
-      const r = raw();
-      const tick = () => {
-        const cur = r?.currentFrame ?? 0;
-        if ((from <= to && cur >= to - 1) || (from > to && cur <= to + 1)) return resolve();
-        requestAnimationFrame(tick);
+      const item = lottieRef.current?.animationItem;
+      if (!item) return resolve();
+
+      // clean any previous listener
+      if (onCompleteRef.current) {
+        item.removeEventListener("complete", onCompleteRef.current);
+        onCompleteRef.current = null;
+      }
+
+      item.loop = false;
+      item.setSpeed(speed);
+      item.setDirection(from <= to ? 1 : -1);
+
+      onCompleteRef.current = () => {
+        item.removeEventListener("complete", onCompleteRef.current);
+        onCompleteRef.current = null;
+        resolve();
       };
-      requestAnimationFrame(tick);
+
+      item.addEventListener("complete", onCompleteRef.current);
+      item.playSegments([from, to], true);
     });
 
-  // add/remove a robust loop for the waiting segment (works even if loop flag is ignored)
-  const startLooping = (from, to) => {
+  // manual loop for waiting state: replay the LOOP segment on every "complete"
+  const startWaitingLoop = () => {
+    const item = lottieRef.current?.animationItem;
+    if (!item) return;
+
     waitingRef.current = true;
-    const a = api(); const r = raw();
-    if (!a || !r) return;
-    a.playSegments?.([from, to], true);
-    a.setSpeed?.(1.0);
-    a.setDirection?.(1);
-    a.setLoop?.(false); // we'll manage loop manually
-    if (completeHandlerRef.current) {
-      r.removeEventListener?.('complete', completeHandlerRef.current);
+
+    // remove any previous listener
+    if (onCompleteRef.current) {
+      item.removeEventListener("complete", onCompleteRef.current);
+      onCompleteRef.current = null;
     }
-    completeHandlerRef.current = () => {
-      if (waitingRef.current) a.playSegments?.([from, to], true);
+
+    onCompleteRef.current = () => {
+      if (!waitingRef.current) return;
+      item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
     };
-    r.addEventListener?.('complete', completeHandlerRef.current);
+
+    item.addEventListener("complete", onCompleteRef.current);
+    item.setSpeed(1.0);
+    item.setDirection(1);
+    item.loop = false; // loop manually over the segment
+    item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
   };
 
-  const stopLooping = () => {
+  const stopWaitingLoop = () => {
+    const item = lottieRef.current?.animationItem;
     waitingRef.current = false;
-    const r = raw();
-    if (completeHandlerRef.current && r) {
-      r.removeEventListener?.('complete', completeHandlerRef.current);
-      completeHandlerRef.current = null;
+    if (item && onCompleteRef.current) {
+      item.removeEventListener("complete", onCompleteRef.current);
+      onCompleteRef.current = null;
     }
   };
 
@@ -1231,39 +1244,38 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     startWaiting() {
       setGlow(false);
       lastUpRef.current = null;
-      const a = api();
-      if (!a) return;
-      stopLooping();
-      startLooping(FRAMES.LOOP_START, FRAMES.LOOP_END);
+      startWaitingLoop();
     },
 
     // Resolve to H (BTC) or T (TON) and fulfill when it settles
     async resolve(desired) {
       setGlow(false);
-      const a = api();
-      if (!a) return;
+      stopWaitingLoop();
 
-      stopLooping(); // stop the waiting loop
+      const item = lottieRef.current?.animationItem;
+      if (!item) return;
+
       if (desired === "H") {
         await playSegment(FRAMES.SETTLE_BTC_START, FRAMES.SETTLE_BTC_END, 1.1);
         lastUpRef.current = "H";
-        a.goToAndStop?.(FRAMES.SETTLE_BTC_END, true);
+        item.goToAndStop(FRAMES.SETTLE_BTC_END, true);
       } else {
         await playSegment(FRAMES.SETTLE_TON_START, FRAMES.SETTLE_TON_END, 1.1);
         lastUpRef.current = "T";
-        a.goToAndStop?.(FRAMES.SETTLE_TON_END, true);
+        item.goToAndStop(FRAMES.SETTLE_TON_END, true);
       }
     },
 
     // Stop any animation (used on error)
     stop() {
-      stopLooping();
-      api()?.stop?.();
+      stopWaitingLoop();
+      const item = lottieRef.current?.animationItem;
+      item?.stop();
       setGlow(false);
       lastUpRef.current = null;
     },
 
-    // Win → keep colorful final frame and add a CSS glow (visible + simple)
+    // Win → keep colorful final frame and add a CSS glow
     flashWin() {
       setGlow(true);
       setTimeout(() => setGlow(false), 1000);
@@ -1272,17 +1284,15 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
     // Loss → play the grey overlay window from the JSON and HOLD on grey
     async flashLose() {
       setGlow(false);
-      const a = api();
-      if (!a) return;
+      const item = lottieRef.current?.animationItem;
+      if (!item) return;
 
       if (lastUpRef.current === "H") {
-        // Play BTC grey ON → then hold at peak grey (495)
         await playSegment(FRAMES.BTC_GREY_ON, FRAMES.BTC_GREY_OFF, 1.0);
-        a.goToAndStop?.(FRAMES.BTC_GREY_HOLD, true);
+        item.goToAndStop(FRAMES.BTC_GREY_HOLD, true);
       } else {
-        // Play TON grey ON → then hold at peak grey (855)
         await playSegment(FRAMES.TON_GREY_ON, FRAMES.TON_GREY_OFF, 1.0);
-        a.goToAndStop?.(FRAMES.TON_GREY_HOLD, true);
+        item.goToAndStop(FRAMES.TON_GREY_HOLD, true);
       }
     },
   }), []);
@@ -1290,8 +1300,8 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopLooping();
-      api()?.stop?.();
+      stopWaitingLoop();
+      lottieRef.current?.animationItem?.stop();
     };
   }, []);
 
