@@ -722,7 +722,7 @@ import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
 import bgAnim from "../assets/lottie/Flipcoin_background.json"; // looping ring
-import coinAnim from "../assets/lottie/Flipcoin.json";          // coin lottie
+import coinAnim from "../assets/lottie/Flipcoin.json";          // <<< coin lottie
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
@@ -1040,20 +1040,25 @@ export default function Coinflip() {
       <div className="px-4 mt-6">
         <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
           <div className="flex items-center rounded-xl bg-black/30 border border-white/10 h-14 px-2">
+            {/* minus */}
             <button
               aria-label="Decrease bet"
               onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) - 1))}
               className="w-12 h-12 min-w-[44px] min-h-[44px] rounded-lg text-2xl leading-none hover:bg-white/5 active:scale-95"
             >−</button>
 
+            {/* left divider */}
             <span className="h-6 w-px bg-white/15 mx-2" />
 
+            {/* number (center) */}
             <div className="flex-1 text-center">
               <span className="text-3xl font-extrabold">{fmt(bet)}</span>
             </div>
 
+            {/* right divider */}
             <span className="h-6 w-px bg-white/15 mx-2" />
 
+            {/* plus */}
             <button
               aria-label="Increase bet"
               onClick={() => setBet((b) => Math.max(1, Math.floor(Number(b || 0)) + 1))}
@@ -1113,7 +1118,9 @@ function TonGlyph() {
       focusable="false"
       style={{ display: "block" }}
     >
+      {/* Outer kite/triangle outline */}
       <path d="M128 28c-14 0-26 5-36 15L42 93c-14 14-17 36-7 54l78 141c4 7 14 7 18 0l78-141c10-18 7-40-7-54l-50-50c-10-10-22-15-36-15zM76 100l52-52c0 0 0 0 0 0l52 52c8 8 9 21 3 31L128 214 73 131c-6-10-5-23 3-31z" />
+      {/* Inner V mark */}
       <path d="M96 84h64c6 0 9 7 5 12l-37 51c-2 3-7 3-9 0l-37-51c-4-5-1-12 5-12z" />
     </svg>
   );
@@ -1150,109 +1157,143 @@ function BackButtonInline({ to = "/" }) {
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   const lottieRef = useRef(null);
   const [glow, setGlow] = useState(false);
-  const lastUpRef = useRef(null); // 'H' | 'T' after settle
 
-  // Helper: map percentages → absolute frames (file has 1140 frames, no markers)
-  const seg = (startPct, endPct) => {
-    const item = lottieRef.current?.animationItem;
-    const total = Math.max(1, Math.round(item?.totalFrames ?? 1140)); // fallback 1140
-    const from = Math.max(0, Math.round(total * startPct));
-    const to = Math.min(total, Math.round(total * endPct));
-    return [from, to];
+  // Keep state of waiting + last landed face
+  const waitingRef = useRef(false);
+  const lastUpRef = useRef(null); // 'H' | 'T'
+  const completeHandlerRef = useRef(null);
+
+  // Absolute frame windows (file has 1140 frames @ 60fps)
+  const FRAMES = {
+    LOOP_START: 0,
+    LOOP_END: 420,             // continuous flipping visually
+    SETTLE_BTC_START: 420,     // lands BTC-up
+    SETTLE_BTC_END: 510,
+    SETTLE_TON_START: 780,     // lands TON-up
+    SETTLE_TON_END: 870,
+    BTC_GREY_ON: 450,          // grey visible 450–495 (off by 510)
+    BTC_GREY_HOLD: 495,        // pause here to keep grey visible
+    BTC_GREY_OFF: 510,
+    TON_GREY_ON: 810,          // grey visible 810–855 (off by 870)
+    TON_GREY_HOLD: 855,        // pause here to keep grey visible
+    TON_GREY_OFF: 870,
   };
 
-  // A loopable flip slice + two settle windows + grey overlay windows
-  // (These percentages were chosen to match the structure of your JSON’s timeline.)
-  const getFrames = () => ({
-    LOOP: seg(0.00, 0.36),        // continuous flipping look
-    SETTLE_BTC: seg(0.37, 0.47),  // lands BTC-up
-    SETTLE_TON: seg(0.72, 0.82),  // lands TON-up
-    BTC_GREY: seg(0.45, 0.47),    // brief grey flash with BTC up
-    TON_GREY: seg(0.80, 0.82),    // brief grey flash with TON up
-  });
+  const api = () => lottieRef.current;                 // lottie-react control surface
+  const raw = () => api()?.getLottie?.();              // underlying lottie-web item
 
+  // play a segment and resolve near its end
   const playSegment = (from, to, speed = 1.0) =>
     new Promise((resolve) => {
-      const item = lottieRef.current?.animationItem;
-      if (!item) return resolve();
-      item.setSpeed(speed);
-      item.setDirection(from <= to ? 1 : -1);
-      item.playSegments([from, to], true);
-      const watch = () => {
-        const cur = item.currentFrame ?? 0;
+      const a = api();
+      if (!a) return resolve();
+      a.setSpeed?.(speed);
+      a.setDirection?.(from <= to ? 1 : -1);
+      a.playSegments?.([from, to], true);
+      const r = raw();
+      const tick = () => {
+        const cur = r?.currentFrame ?? 0;
         if ((from <= to && cur >= to - 1) || (from > to && cur <= to + 1)) return resolve();
-        requestAnimationFrame(watch);
+        requestAnimationFrame(tick);
       };
-      requestAnimationFrame(watch);
+      requestAnimationFrame(tick);
     });
+
+  // add/remove a robust loop for the waiting segment (works even if loop flag is ignored)
+  const startLooping = (from, to) => {
+    waitingRef.current = true;
+    const a = api(); const r = raw();
+    if (!a || !r) return;
+    a.playSegments?.([from, to], true);
+    a.setSpeed?.(1.0);
+    a.setDirection?.(1);
+    a.setLoop?.(false); // we'll manage loop manually
+    if (completeHandlerRef.current) {
+      r.removeEventListener?.('complete', completeHandlerRef.current);
+    }
+    completeHandlerRef.current = () => {
+      if (waitingRef.current) a.playSegments?.([from, to], true);
+    };
+    r.addEventListener?.('complete', completeHandlerRef.current);
+  };
+
+  const stopLooping = () => {
+    waitingRef.current = false;
+    const r = raw();
+    if (completeHandlerRef.current && r) {
+      r.removeEventListener?.('complete', completeHandlerRef.current);
+      completeHandlerRef.current = null;
+    }
+  };
 
   useImperativeHandle(ref, () => ({
     // Begin indefinite flip while waiting for backend
     startWaiting() {
       setGlow(false);
       lastUpRef.current = null;
-      const item = lottieRef.current?.animationItem;
-      if (!item) return;
-      const { LOOP } = getFrames();
-      item.loop = true;
-      item.setSpeed(1.0);
-      item.playSegments(LOOP, true);
+      const a = api();
+      if (!a) return;
+      stopLooping();
+      startLooping(FRAMES.LOOP_START, FRAMES.LOOP_END);
     },
 
     // Resolve to H (BTC) or T (TON) and fulfill when it settles
     async resolve(desired) {
       setGlow(false);
-      const item = lottieRef.current?.animationItem;
-      if (!item) return;
+      const a = api();
+      if (!a) return;
 
-      const { SETTLE_BTC, SETTLE_TON } = getFrames();
-      item.loop = false;
-
+      stopLooping(); // stop the waiting loop
       if (desired === "H") {
-        await playSegment(SETTLE_BTC[0], SETTLE_BTC[1], 1.1);
+        await playSegment(FRAMES.SETTLE_BTC_START, FRAMES.SETTLE_BTC_END, 1.1);
         lastUpRef.current = "H";
+        a.goToAndStop?.(FRAMES.SETTLE_BTC_END, true);
       } else {
-        await playSegment(SETTLE_TON[0], SETTLE_TON[1], 1.1);
+        await playSegment(FRAMES.SETTLE_TON_START, FRAMES.SETTLE_TON_END, 1.1);
         lastUpRef.current = "T";
+        a.goToAndStop?.(FRAMES.SETTLE_TON_END, true);
       }
-      item.pause(); // hold on landed face
     },
 
     // Stop any animation (used on error)
     stop() {
-      const item = lottieRef.current?.animationItem;
-      if (!item) return;
-      item.stop();
+      stopLooping();
+      api()?.stop?.();
       setGlow(false);
       lastUpRef.current = null;
     },
 
-    // Win → keep colorful final frame and add a CSS glow
+    // Win → keep colorful final frame and add a CSS glow (visible + simple)
     flashWin() {
       setGlow(true);
       setTimeout(() => setGlow(false), 1000);
     },
 
-    // Loss → briefly show the grey overlay slice matching the current face
+    // Loss → play the grey overlay window from the JSON and HOLD on grey
     async flashLose() {
       setGlow(false);
-      const item = lottieRef.current?.animationItem;
-      if (!item) return;
-      const { BTC_GREY, TON_GREY, SETTLE_BTC, SETTLE_TON } = getFrames();
+      const a = api();
+      if (!a) return;
 
       if (lastUpRef.current === "H") {
-        await playSegment(BTC_GREY[0], BTC_GREY[1], 1.0);
-        await playSegment(SETTLE_BTC[1], SETTLE_BTC[1]); // snap back to last frame
+        // Play BTC grey ON → then hold at peak grey (495)
+        await playSegment(FRAMES.BTC_GREY_ON, FRAMES.BTC_GREY_OFF, 1.0);
+        a.goToAndStop?.(FRAMES.BTC_GREY_HOLD, true);
       } else {
-        await playSegment(TON_GREY[0], TON_GREY[1], 1.0);
-        await playSegment(SETTLE_TON[1], SETTLE_TON[1]);
+        // Play TON grey ON → then hold at peak grey (855)
+        await playSegment(FRAMES.TON_GREY_ON, FRAMES.TON_GREY_OFF, 1.0);
+        a.goToAndStop?.(FRAMES.TON_GREY_HOLD, true);
       }
-      item.pause();
     },
   }), []);
 
   // Cleanup on unmount
-  useEffect(() => () => lottieRef.current?.animationItem?.stop(), []);
+  useEffect(() => {
+    return () => {
+      stopLooping();
+      api()?.stop?.();
+    };
+  }, []);
 
   return (
     <div
