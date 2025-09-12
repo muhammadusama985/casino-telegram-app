@@ -1305,7 +1305,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
       setTimeout(() => {
         setGlow(false);
         goToDefault();
-      }, 5000);
+      }, 2000);
     },
 
     // Loss → play grey overlay for the landed face, hold 5s, then return to default/start stage
@@ -1324,7 +1324,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
 
       setTimeout(() => {
         goToDefault();
-      }, 5000);
+      }, 2000);
     },
   }), []);
 
