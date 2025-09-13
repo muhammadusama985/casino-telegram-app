@@ -393,8 +393,32 @@ export default function Coinflip() {
 
       {/* bet + take */}
       <div className="px-4 mt-6">
-        <div className="rounded-2xl bg-[#12182B] border border-white/10 p-4">
-          <div className="flex items-center rounded-xl bg-black/30 border border-white/10 h-14 px-2">
+        {/* Outer wrapper — your gradient */}
+        <div
+          className="rounded-2xl border border-white/10 p-4"
+          style={{
+            background:
+              "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
+            backgroundColor: "rgb(28,0,113)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.18), 0 10px 28px rgba(0,0,0,0.40), 0 1px 0 rgba(255,255,255,0.06)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+          }}
+        >
+          {/* Control row — your gradient */}
+          <div
+            className="flex items-center rounded-xl border border-white/10 h-14 px-2"
+            style={{
+              background:
+                "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
+              backgroundColor: "rgb(28,0,113)",
+              boxShadow:
+                "inset 0 1px 0 rgba(255,255,255,0.22), 0 6px 18px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.06)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+            }}
+          >
             {/* minus */}
             <button
               aria-label="Decrease bet"
@@ -430,11 +454,13 @@ export default function Coinflip() {
           </div>
 
           <div className="mt-4">
+            {/* TAKE bar — changed to your gradient color */}
             <div
               className="w-full rounded-xl py-3 text-center font-semibold"
               style={{
                 background:
-                  "linear-gradient(90deg, rgba(255,165,0,0.25) 0%, rgba(255,120,0,0.35) 100%)",
+                  "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
+                backgroundColor: "rgb(28,0,113)",
               }}
             >
               <div className="text-lg">{fmt(potentialProfit)}</div>
