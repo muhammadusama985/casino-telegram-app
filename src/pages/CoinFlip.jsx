@@ -11,7 +11,13 @@ import { telegramAuth, getBalance, games } from "../api";
 
 import Lottie from "lottie-react";
 import bgAnim from "../assets/lottie/Flipcoin_background.json"; // looping ring
-import coinAnim from "../assets/lottie/Flipcoin.json";          // coin lottie
+
+// >>> NEW: your coin faces (adjust paths as needed)
+import coinFaceTONColor from "../assets/coin/coin_face_colored_A.png"; // TON (tails) colored
+import coinFaceBTCColor from "../assets/coin/coin_face_colored_B.png"; // BTC (heads) colored
+import coinFaceTONGrey  from "../assets/coin/coin_face_grey_A.png";    // TON (tails) grey
+import coinFaceBTCGrey  from "../assets/coin/coin_face_grey_B.png";    // BTC (heads) grey
+// <<<
 
 import flipSound from "../assets/diceRoll.mp3"; // reuse SFX
 import winSound from "../assets/win.mp3";
@@ -64,9 +70,7 @@ export default function Coinflip() {
   const effectiveCoef = useMemo(
     () =>
       Number(
-        (baseCoef * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak))).toFixed(
-          2
-        )
+        (baseCoef * (1 + STREAK_BOOST_PER_WIN * Math.max(0, streak))).toFixed(2)
       ),
     [baseCoef, streak]
   );
@@ -175,7 +179,7 @@ export default function Coinflip() {
       if (Number.isFinite(m) && m > 0) setBaseCoef(m);
 
       const landed = (res?.details?.landed === "T") ? "T" : "H";
-      setFace(landed); // Set landed side immediately (either H or T)
+      setFace(landed); // semantic only
 
       // 3) resolve visual (coin settles to backend side)
       await (coinApiRef.current?.resolve(landed) ?? Promise.resolve());
@@ -250,9 +254,7 @@ export default function Coinflip() {
           <div
             key={i}
             className={`w-8 h-8 rounded-full border-2 ${
-              ch === "?"
-                ? "border-dashed border-white/30"
-                : "border-emerald-400/70"
+              ch === "?" ? "border-dashed border-white/30" : "border-emerald-400/70"
             } flex items-center justify-center text-sm`}
           >
             <span className={`${ch === "?" ? "opacity-80" : "font-bold"}`}>
@@ -265,24 +267,22 @@ export default function Coinflip() {
       {/* coin + coef */}
       <div
         className="flex items-center justify-between px-6 mt-4 p-4"
-        style={{ 
+        style={{
           background:
             "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
-          backgroundColor: "rgb(28,0,113)", // solid fallback to the outer rim color
+          backgroundColor: "rgb(28,0,113)",
           borderRadius: "8px"
         }}
       >
         <div className="text-left">
           <div className="text-2xl font-bold leading-none">{round}</div>
-          <div className="uppercase tracking-wider text-white/60 text-sm">
-            Round
-          </div>
+          <div className="uppercase tracking-wider text-white/60 text-sm">Round</div>
         </div>
 
         {/* center coin: BG ring masked to circle + coin centered */}
         <div
           className="relative mx-4 flex items-center justify-center"
-          style={{ width: "100%", height: 400, isolation: "isolate" }}
+          style={{ width: "100%", height: 500, isolation: "isolate" }}
         >
           {/* Masked circle wrapper so the Lottie never overflows or shows a slab */}
           <div
@@ -293,7 +293,7 @@ export default function Coinflip() {
               overflow: "hidden",
               background:
                 "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
-              backgroundColor: "rgb(28,0,113)", // solid fallback to the outer rim color
+              backgroundColor: "rgb(28,0,113)",
               zIndex: 0,
             }}
           >
@@ -321,7 +321,7 @@ export default function Coinflip() {
               pointerEvents: "none",
             }}
           >
-            {/* ABSOLUTE CENTER: ensures perfect center inside the ring */}
+            {/* ABSOLUTE CENTER */}
             <div
               style={{
                 position: "absolute",
@@ -340,9 +340,7 @@ export default function Coinflip() {
           <div className="text-2xl font-extrabold leading-none">
             x{effectiveCoef.toFixed(2)}
           </div>
-          <div className="uppercase tracking-wider text-white/60 text-sm">
-            Coef
-          </div>
+          <div className="uppercase tracking-wider text-white/60 text-sm">Coef</div>
         </div>
       </div>
 
@@ -355,7 +353,6 @@ export default function Coinflip() {
             flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
           }`}
           style={{
-            // Glassmorphism
             background:
               "linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))",
             border: "1px solid rgba(255,255,255,0.18)",
@@ -378,7 +375,6 @@ export default function Coinflip() {
             flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
           }`}
           style={{
-            // Glassmorphism
             background:
               "linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))",
             border: "1px solid rgba(255,255,255,0.18)",
@@ -449,9 +445,7 @@ export default function Coinflip() {
         </div>
       </div>
 
-      <div
-        style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}
-      />
+      <div style={{ height: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }} />
     </div>
   );
 }
@@ -525,210 +519,165 @@ function BackButtonInline({ to = "/" }) {
 }
 
 /* =========================================================================
-   LOTTIE-BASED COIN (BTC=heads, TON=tails)
-   Keeps the SAME imperative API used by parent: startWaiting → resolve → flashWin/flashLose
+   IMAGE-BASED COIN (BTC=heads/front, TON=tails/back)
+   Preserves the same imperative API: startWaiting → resolve → flashWin/flashLose
    ========================================================================= */
 const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
-  const lottieRef = useRef(null);
+  const coinRef = useRef(null);
   const [glow, setGlow] = useState(false);
+
+  // Which side is greyed right now (null | 'H' | 'T')
+  const [greySide, setGreySide] = useState(null);
 
   // Keep state of waiting + last landed face
   const waitingRef = useRef(false);
   const lastUpRef = useRef(null); // 'H' | 'T'
-  const onCompleteRef = useRef(null);
-
-  // Track when waiting started to enforce a minimum fast-spin time
   const waitStartRef = useRef(0);
 
-  // Absolute frame windows (file has 1140 frames @ 60fps)
-  const FRAMES = {
-    LOOP_START: 0,
-    LOOP_END: 420,             // continuous flipping visually (shows both faces)
-    SETTLE_BTC_START: 420,     // lands BTC-up
-    SETTLE_BTC_END: 510,
-    SETTLE_TON_START: 780,     // lands TON-up
-    SETTLE_TON_END: 870,
-    BTC_GREY_ON: 450,          // grey visible 450–495 (off by 510)
-    BTC_GREY_HOLD: 495,
-    BTC_GREY_OFF: 510,
-    TON_GREY_ON: 810,          // grey visible 810–855 (off by 870)
-    TON_GREY_HOLD: 855,
-    TON_GREY_OFF: 870,
-  };
+  // visual: current rotation (0 = BTC up; 180 = TON up)
+  const [rotation, setRotation] = useState(0);
 
   // About ~1.2s at fast speed ≈ 3–4 visible flips
   const MIN_WAIT_MS = 1200;
 
-  // helper: play a segment and resolve when Lottie fires "complete"
-  const playSegment = (from, to, speed = 1.0) =>
+  // Helpers
+  const startSpin = () => {
+    waitingRef.current = true;
+    waitStartRef.current = Date.now();
+    const el = coinRef.current;
+    if (!el) return;
+    el.style.animation = "coinFlipSpin 300ms linear infinite"; // fast
+  };
+
+  const stopSpin = () => {
+    waitingRef.current = false;
+    const el = coinRef.current;
+    if (!el) return;
+    el.style.animation = "none";
+  };
+
+  const settleTo = (desired /* 'H' | 'T' */) =>
     new Promise((resolve) => {
-      const item = lottieRef.current?.animationItem;
-      if (!item) return resolve();
+      const el = coinRef.current;
+      if (!el) return resolve();
 
-      // clean any previous listener
-      if (onCompleteRef.current) {
-        item.removeEventListener("complete", onCompleteRef.current);
-        onCompleteRef.current = null;
-      }
+      // rotate to final face with a short ease
+      el.style.transition = "transform 420ms cubic-bezier(.2,.8,.2,1)";
+      const finalDeg = desired === "H" ? 0 : 180;
+      setRotation(finalDeg);
 
-      item.loop = false;
-      item.setSpeed(speed);
-      item.setDirection(from <= to ? 1 : -1);
-
-      onCompleteRef.current = () => {
-        item.removeEventListener("complete", onCompleteRef.current);
-        onCompleteRef.current = null;
+      const onEnd = () => {
+        el.removeEventListener("transitionend", onEnd);
+        // clean transition so future spins snap immediately
+        el.style.transition = "none";
         resolve();
       };
+      el.addEventListener("transitionend", onEnd);
 
-      item.addEventListener("complete", onCompleteRef.current);
-      item.playSegments([from, to], true);
+      // force flush & apply transform
+      requestAnimationFrame(() => {
+        el.style.transform = `rotateY(${finalDeg}deg)`;
+      });
     });
 
-  // manual loop for waiting state: replay the LOOP segment on every "complete"
-  const startWaitingLoop = () => {
-    const item = lottieRef.current?.animationItem;
-    if (!item) return;
-
-    waitingRef.current = true;
-
-    // remove any previous listener
-    if (onCompleteRef.current) {
-      item.removeEventListener("complete", onCompleteRef.current);
-      onCompleteRef.current = null;
-    }
-
-    onCompleteRef.current = () => {
-      if (!waitingRef.current) return;
-      item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
-    };
-
-    item.addEventListener("complete", onCompleteRef.current);
-    item.setSpeed(2.5);       // fast spin while waiting
-    item.setDirection(1);
-    item.loop = false;        // loop manually over the segment
-    item.playSegments([FRAMES.LOOP_START, FRAMES.LOOP_END], true);
-  };
-
-  const stopWaitingLoop = () => {
-    const item = lottieRef.current?.animationItem;
-    waitingRef.current = false;
-    if (item && onCompleteRef.current) {
-      item.removeEventListener("complete", onCompleteRef.current);
-      onCompleteRef.current = null;
-    }
-  };
-
-  // Default/start stage (idle pose)
   const goToDefault = () => {
-    const item = lottieRef.current?.animationItem;
-    if (!item) return;
-    item.goToAndStop(FRAMES.LOOP_START, true);
+    // default pose: BTC up (0deg) and no grey
+    setGreySide(null);
+    const el = coinRef.current;
+    if (!el) return;
+    el.style.transition = "none";
+    setRotation(0);
+    el.style.transform = "rotateY(0deg)";
   };
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      // Begin indefinite flip while waiting for backend
-      startWaiting() {
+  useImperativeHandle(ref, () => ({
+    // Begin indefinite flip while waiting for backend
+    startWaiting() {
+      setGlow(false);
+      setGreySide(null);
+      lastUpRef.current = null;
+      startSpin();
+    },
+
+    // Resolve to H (BTC) or T (TON) and fulfill when it settles
+    async resolve(desired) {
+      setGlow(false);
+      // enforce a minimum fast-spin duration (~3–4 flips)
+      const elapsed = Date.now() - (waitStartRef.current || 0);
+      const remaining = Math.max(0, MIN_WAIT_MS - elapsed);
+      if (remaining > 0) {
+        await new Promise((r) => setTimeout(r, remaining));
+      }
+      stopSpin();
+      lastUpRef.current = desired === "T" ? "T" : "H";
+      await settleTo(lastUpRef.current);
+    },
+
+    // Stop any animation (used on error)
+    stop() {
+      stopSpin();
+      setGlow(false);
+      setGreySide(null);
+      lastUpRef.current = null;
+      goToDefault();
+    },
+
+    // Win → glow for 2s, then return to default/start stage
+    flashWin() {
+      setGreySide(null);
+      setGlow(true);
+      setTimeout(() => {
         setGlow(false);
-        lastUpRef.current = null;
-        waitStartRef.current = Date.now(); // start timer for min spin
-        startWaitingLoop();
-      },
+        goToDefault();
+      }, 2000);
+    },
 
-      // Resolve to H (BTC) or T (TON) and fulfill when it settles
-      async resolve(desired) {
-        setGlow(false);
+    // Loss → show GREY on the landed face for 2s, then default
+    async flashLose() {
+      setGlow(false);
+      const landed = lastUpRef.current; // 'H' | 'T'
+      if (!landed) return;
+      setGreySide(landed);
+      setTimeout(() => {
+        setGreySide(null);
+        goToDefault();
+      }, 2000);
+    },
+  }), []);
 
-        // enforce a minimum “fast-spin” duration (~3–4 flips)
-        const elapsed = Date.now() - (waitStartRef.current || 0);
-        const remaining = Math.max(0, MIN_WAIT_MS - elapsed);
-        if (remaining > 0) {
-          await new Promise((r) => setTimeout(r, remaining));
-        }
-
-        // now stop the loop and settle to the backend side
-        stopWaitingLoop();
-
-        const item = lottieRef.current?.animationItem;
-        if (!item) return;
-
-        if (desired === "H") {
-          await playSegment(FRAMES.SETTLE_BTC_START, FRAMES.SETTLE_BTC_END, 1.1);
-          lastUpRef.current = "H";
-          item.goToAndStop(FRAMES.SETTLE_BTC_END, true); // BTC (heads) up
-        } else {
-          await playSegment(FRAMES.SETTLE_TON_START, FRAMES.SETTLE_TON_END, 1.1);
-          lastUpRef.current = "T";
-          item.goToAndStop(FRAMES.SETTLE_TON_END, true); // TON (tails) up
-        }
-      },
-
-      // Stop any animation (used on error)
-      stop() {
-        stopWaitingLoop();
-        const item = lottieRef.current?.animationItem;
-        item?.stop();
-        setGlow(false);
-        lastUpRef.current = null;
-      },
-
-      // Win → glow for 2s, then return to default/start stage
-      flashWin() {
-        setGlow(true);
-        setTimeout(() => {
-          setGlow(false);
-          goToDefault();
-        }, 2000);
-      },
-
-      // Loss → play grey overlay for the landed face, hold 2s, then return
-      async flashLose() {
-        setGlow(false);
-        const item = lottieRef.current?.animationItem;
-        if (!item) return;
-
-        if (lastUpRef.current === "H") {
-          await playSegment(FRAMES.BTC_GREY_ON, FRAMES.BTC_GREY_OFF, 1.0);
-          item.goToAndStop(FRAMES.BTC_GREY_HOLD, true);
-        } else {
-          await playSegment(FRAMES.TON_GREY_ON, FRAMES.TON_GREY_OFF, 1.0);
-          item.goToAndStop(FRAMES.TON_GREY_HOLD, true);
-        }
-
-        setTimeout(() => {
-          goToDefault();
-        }, 2000);
-      },
-    }),
-    []
-  );
-
-  // Cleanup on unmount
+  // Keep the transform in sync with state (useful on first mount / resets)
   useEffect(() => {
-    return () => {
-      stopWaitingLoop();
-      lottieRef.current?.animationItem?.stop();
-    };
-  }, []);
+    const el = coinRef.current;
+    if (el) el.style.transform = `rotateY(${rotation}deg)`;
+  }, [rotation]);
 
   return (
     <div
       className={`relative select-none ${glow ? "coin-win-glow" : ""}`}
-      // coin size (kept large)
-      style={{ width: 380, height: 380 }}
+style={{ width: 200, height: 200, pointerEvents: "none" }}
       role="img"
       aria-label={ariaFace === "H" ? "Heads (BTC)" : "Tails (TON)"}
     >
-      <Lottie
-        lottieRef={lottieRef}
-        animationData={coinAnim}
-        autoplay={false}
-        loop={false}
-        style={{ width: "100%", height: "100%" }}
-        rendererSettings={{ preserveAspectRatio: "xMidYMid meet" }}
-      />
+      {/* 3D scene */}
+      <div className="coin-scene">
+        <div className="coin" ref={coinRef}>
+          {/* FRONT = BTC / HEADS */}
+          <img
+            className="coin-face coin-front"
+            src={greySide === "H" ? coinFaceBTCGrey : coinFaceBTCColor}
+            alt="Bitcoin"
+            draggable="false"
+          />
+          {/* BACK = TON / TAILS */}
+          <img
+            className="coin-face coin-back"
+            src={greySide === "T" ? coinFaceTONGrey : coinFaceTONColor}
+            alt="TON"
+            draggable="false"
+          />
+        </div>
+      </div>
+
       <style>
         {`
           .coin-win-glow {
@@ -736,13 +685,40 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
                     drop-shadow(0 0 42px rgba(255, 190, 90, 0.35));
             transition: filter 180ms ease;
           }
+          .coin-scene {
+            width: 100%;
+            height: 100%;
+            perspective: 1200px;
+          }
+          .coin {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            will-change: transform;
+          }
+          .coin-face {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            backface-visibility: hidden;
+            image-rendering: auto;
+            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.35));
+          }
+          .coin-front { transform: rotateY(0deg) translateZ(0); }
+          .coin-back  { transform: rotateY(180deg) translateZ(0); }
+
+          @keyframes coinFlipSpin {
+            0%   { transform: rotateY(0deg); }
+            100% { transform: rotateY(360deg); }
+          }
         `}
       </style>
     </div>
   );
 });
 
-// no-op to keep parity (unused in Lottie mode)
-function CoinFace() {
-  return null;
-}
+// no-op to keep parity (unused by image coin)
+function CoinFace() { return null; }
