@@ -348,7 +348,7 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("H")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
+          className={`rounded-2xl px-4 py-4 bg-transparent text-left shadow-inner border border-white/10 ${
             flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
           }`}
           style={{
@@ -370,7 +370,7 @@ export default function Coinflip() {
         <button
           disabled={flipping}
           onClick={() => placeBet("T")}
-          className={`rounded-2xl px-4 py-4 bg-[#23293B] text-left shadow-inner border border-white/10 ${
+          className={`rounded-2xl px-4 py-4 bg-transparent text-left shadow-inner border border-white/10 ${
             flipping ? "opacity-60 cursor-not-allowed" : "active:scale-[0.98]"
           }`}
           style={{
@@ -659,7 +659,7 @@ const Coin3D = forwardRef(function Coin3D({ ariaFace = "H" }, ref) {
   return (
     <div
       className={`relative select-none ${glow ? "coin-win-glow" : ""}`}
-      style={{ width: 200, height: 200, pointerEvents: "none" }}
+      style={{ width: 250, height: 250, pointerEvents: "none" }}
       role="img"
       aria-label={ariaFace === "H" ? "Heads (BTC)" : "Tails (TON)"}
     >
