@@ -232,8 +232,8 @@ export default function Coinflip() {
       className="min-h-screen text-white flex flex-col items-stretch"
       style={{
         background:
-          "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
-        backgroundColor: "rgb(28,0,113)"
+          "#3441EB",
+        backgroundColor: "#3441EB"
       }}
     >
       {/* Coins header (match Dice) */}
@@ -268,8 +268,8 @@ export default function Coinflip() {
         className="flex items-center justify-between px-6 mt-4 p-4"
         style={{
           background:
-            "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
-          backgroundColor: "rgb(28,0,113)",
+            "#3441EB",
+          backgroundColor: "#3441EB",
           borderRadius: "8px"
         }}
       >
@@ -291,8 +291,8 @@ export default function Coinflip() {
               borderRadius: "50%",
               overflow: "hidden",
               background:
-                "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
-              backgroundColor: "rgb(28,0,113)",
+                "#3441EB",
+              backgroundColor: "#3441EB",
               zIndex: 0,
             }}
           >
@@ -399,7 +399,7 @@ export default function Coinflip() {
           style={{
             background:
               "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
-            backgroundColor: "rgb(28,0,113)",
+            backgroundColor: "#3441EB",
             boxShadow:
               "inset 0 1px 0 rgba(255,255,255,0.18), 0 10px 28px rgba(0,0,0,0.40), 0 1px 0 rgba(255,255,255,0.06)",
             backdropFilter: "blur(14px)",
@@ -411,8 +411,8 @@ export default function Coinflip() {
             className="flex items-center rounded-xl border border-white/10 h-14 px-2"
             style={{
               background:
-                "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
-              backgroundColor: "rgb(28,0,113)",
+                "#3441EB",
+              backgroundColor: "#3441EB",
               boxShadow:
                 "inset 0 1px 0 rgba(255,255,255,0.22), 0 6px 18px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.06)",
               backdropFilter: "blur(12px)",
@@ -459,8 +459,8 @@ export default function Coinflip() {
               className="w-full rounded-xl py-3 text-center font-semibold"
               style={{
                 background:
-                  "radial-gradient(120% 120% at 50% 10%, rgb(83,47,255) 0%, rgb(60,1,218) 35%, rgb(39,0,149) 65%, rgb(28,0,113) 100%)",
-                backgroundColor: "rgb(28,0,113)",
+                  "#3441EB",
+                backgroundColor: "#3441EB",
               }}
             >
               <div className="text-lg">{fmt(potentialProfit)}</div>
