@@ -3,7 +3,7 @@
 // --- Base URL from env (no trailing slash). Fallback to your ngrok tunnel.
 const BASE_URL =
   (import.meta.env.VITE_API ? import.meta.env.VITE_API.replace(/\/+$/, "") : "") ||
-  "https://328dea12d756.ngrok-free.app";
+  "https://8fa349f756d0.ngrok-free.app";
   
 
 // Detect if we're talking to an ngrok URL (so we can skip the warning page)
