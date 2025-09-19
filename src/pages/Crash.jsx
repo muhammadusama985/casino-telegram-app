@@ -1,4 +1,3 @@
-
 // Crash.jsx — JS/JSX (no TS). Uses src/api.js: games.crash() + getBalance() + telegramAuth().
 // Live-growing line behind a nose-locked plane. Bet UI per your screenshot.
 
@@ -383,9 +382,6 @@ export default function Crash() {
               </g>
             </svg>
           </div>
-
-
-
         </div>
 
         {/* CONTROLS */}
@@ -417,7 +413,6 @@ export default function Crash() {
                     +
                   </button>
                 </div>
-
 
                 <div className="quick-row">
                   <button
