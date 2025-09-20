@@ -7,6 +7,7 @@ import { games, getBalance, telegramAuth } from "../api";
 // --- LOTTIE (background under graph) ---
 import lottie from "lottie-web";
 import girlBg from "../assets/lottie/Girl_background.json"; // OR put file in /public and use path: "/Girl background.json"
+import girlPlane from "../assets/games/girlPlane.png"; // <-- NEW: your plane image
 
 /******************** UTILS ********************/
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -371,17 +372,36 @@ export default function Crash() {
               <rect x="0" y="0" width={w} height={h} fill="url(#grid)" />
               <rect x={pad} y={pad} width={innerW} height={innerH} className="frame" />
 
+              {/* NEW: Multiplier overlay on background (top-left, above grid/Lottie) */}
+              <text
+                x={pad + 10}
+                y={pad + 40}
+                fill="#FFFFFF22"
+                fontSize="46"
+                fontWeight="900"
+              >
+                {fmt(mult)}×
+              </text>
+
               {/* live path */}
               <path d={pathD} className={`trail ${crashed ? "crash" : "run"}`} />
 
-              {/* plane — nose at (0,0). rotate around nose, then translate to tip */}
-              <g transform={`translate(${planePose.x}, ${planePose.y})`}>
-                <g transform={`rotate(${planePose.deg})`}>
-                  <AirplaneNoseAtOrigin />
-                </g>
+              {/* NEW: Plane image (replaces SVG arrow). Rotates around "nose" at current tip */}
+              <g transform={`translate(${planePose.x}, ${planePose.y}) rotate(${planePose.deg})`}>
+                <image
+                  href={girlPlane}
+                  x="-60"   /* tweak these four numbers to fine-align */
+                  y="-50"
+                  width="120"
+                  height="100"
+                  preserveAspectRatio="xMidYMid meet"
+                />
               </g>
             </svg>
           </div>
+
+
+
         </div>
 
         {/* CONTROLS */}
@@ -413,6 +433,7 @@ export default function Crash() {
                     +
                   </button>
                 </div>
+
 
                 <div className="quick-row">
                   <button
@@ -487,6 +508,7 @@ export default function Crash() {
 }
 
 /******************** PLANE (NOSE at 0,0) ********************/
+/* Kept for reference; no longer used after switching to image */
 function AirplaneNoseAtOrigin() {
   return (
     <g className="plane" filter="url(#softGlow)">
