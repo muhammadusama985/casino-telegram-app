@@ -1,13 +1,19 @@
+
+
+
+
+
 // Crash.jsx — JS/JSX (no TS). Uses src/api.js: games.crash() + getBalance() + telegramAuth().
 // Live-growing line behind a nose-locked plane. Bet UI per your screenshot.
+
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { games, getBalance, telegramAuth } from "../api";
 
 // --- LOTTIE (background under graph) ---
 import lottie from "lottie-web";
-import girlBg from "../assets/lottie/Girl_background.json"; // OR put file in /public and use path: "/Girl background.json"
-import girlPlane from "../assets/games/girlPlane.png"; // <-- NEW: your plane image
+import girlBg from "../assets/lottie/Girl_background.json"; 
+import girlPlane from "../assets/games/girlPlane.png"; 
 
 /******************** UTILS ********************/
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -17,16 +23,9 @@ const fmt = (n, dp = 2) =>
     minimumFractionDigits: dp,
     maximumFractionDigits: dp,
   });
-
-// requested helpers
 const toNum = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-};
-const clampInt = (v, min, max) => {
-  const n = Math.floor(Number(v || 0));
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max ?? n, n));
 };
 
 /******************** MAIN ********************/
@@ -37,21 +36,21 @@ export default function Crash() {
   const [err, setErr] = useState("");
 
   // user inputs
-  const [bet, setBet] = useState(1); // matches screenshot
-  const [autoCashout, setAutoCashout] = useState("1.80"); // required for server-driven crash
+  const [bet, setBet] = useState(1); 
+  const [autoCashout, setAutoCashout] = useState("1.80"); 
 
   // round state
-  const [phase, setPhase] = useState("idle"); // idle|arming|running|crashed|cashed
-  const [cashoutAt, setCashoutAt] = useState(null); // number or null
-  const [bustPoint, setBustPoint] = useState(0); // server crashAt (loss) or > cashoutX (win)
+  const [phase, setPhase] = useState("idle"); 
+  const [cashoutAt, setCashoutAt] = useState(null); 
+  const [bustPoint, setBustPoint] = useState(0); 
   const [history, setHistory] = useState([]);
-  const [details, setDetails] = useState(null); // server outcome.details for debug
+  const [details, setDetails] = useState(null); 
 
   // animation refs
   const rafRef = useRef(0);
   const startTsRef = useRef(0);
-  const growthRateRef = useRef(0.22); // m(t) = exp(r t) ; 2x ≈ 3.1s
-  const tEndRef = useRef(5); // duration to animate (cashout or crash)
+  const growthRateRef = useRef(0.22); 
+  const tEndRef = useRef(50); // <- increased so animation continues until bet
 
   // live frame state
   const [mult, setMult] = useState(1);
@@ -61,190 +60,16 @@ export default function Crash() {
   const graphRef = useRef(null);
   const [graphSize, setGraphSize] = useState({ w: 860, h: 340, pad: 24 });
 
-  // Lottie background container (behind the SVG)
+  // Lottie background container
   const lottieRef = useRef(null);
 
+  // ---------- New: Start flight animation on mount ----------
   useEffect(() => {
-    const el = graphRef.current; if (!el) return;
-    const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect();
-      setGraphSize({ w: Math.max(320, r.width), h: Math.max(220, r.height), pad: 24 });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    startFlightAnimation();
+    return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // Lottie background (under the SVG; no logic/design change)
-  useEffect(() => {
-    if (!lottieRef.current) return;
-    const anim = lottie.loadAnimation({
-      container: lottieRef.current,
-      renderer: "svg",
-      loop: true,
-      autoplay: true,
-      // Use exactly ONE of these: animationData (for imported JSON) OR path (for /public)
-      animationData: girlBg,       // <-- using imported JSON
-      // path: "/Girl background.json", // <-- use this instead if file is in /public
-      rendererSettings: {
-        // IMPORTANT: show full Lottie without cropping/zoom (contain behavior)
-        preserveAspectRatio: "xMidYMid meet",
-        progressiveLoad: true,
-      },
-    });
-    return () => anim?.destroy();
-  }, []);
-
-  /* ===== Telegram auth + polling (your block; clears err on success) ===== */
-  useEffect(() => {
-    let stopPolling = () => { };
-    (async () => {
-      try {
-        const u = await telegramAuth();
-        if (Number.isFinite(Number(u?.coins))) {
-          const initial = toNum(u.coins);
-          setBalance((prev) => (initial !== prev ? initial : prev));
-          setErr(""); // clear stale error if balance loaded via auth
-        }
-        try {
-          const c = await getBalance();
-          if (Number.isFinite(c)) {
-            setBalance((prev) => (c !== prev ? c : prev));
-            setErr(""); // clear on success
-          }
-        } catch { }
-        stopPolling = (() => {
-          let alive = true;
-          (function tick() {
-            setTimeout(async () => {
-              if (!alive) return;
-              try {
-                const c = await getBalance();
-                if (Number.isFinite(c)) {
-                  setBalance((prev) => (c !== prev ? c : prev));
-                  setErr(""); // clear on success
-                }
-              } catch { } finally {
-                if (alive) tick();
-              }
-            }, 4000);
-          })();
-          return () => { alive = false; };
-        })();
-      } catch (e) {
-        console.error(" telegramAuth failed:", e);
-      }
-    })();
-    return () => { stopPolling?.(); };
-  }, []);
-
-  useEffect(() => {
-    const refresh = async () => {
-      try {
-        const c = await getBalance();
-        if (Number.isFinite(c)) setBalance((prev) => (c !== prev ? c : prev));
-      } catch { }
-    };
-    const onVisible = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-    window.addEventListener("balance:refresh", refresh);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.removeEventListener("balance:refresh", refresh);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, []);
-  /* ===== end Telegram auth block ===== */
-
-  // initial balance (kept; now clears err on success)
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const bal = await getBalance();
-        setBalance(round2(bal));
-        setErr(""); // clear if this succeeds
-      } catch (e) {
-        setErr("Failed to load balance. Make sure you're logged in.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  async function refreshBalanceSoft() {
-    try {
-      const bal = await getBalance();
-      if (Number.isFinite(bal)) {
-        setBalance(round2(bal));
-        setErr(""); // clear on success
-      }
-    } catch { /* ignore */ }
-  }
-
-  /******************** ROUND CONTROL ********************/
-  const resetRound = () => {
-    setMult(1);
-    setTNow(0);
-    setCashoutAt(null);
-    setBustPoint(0);
-    setDetails(null);
-  };
-
-  const startRound = async () => {
-    if (phase !== "idle") return;
-    const stake = Math.max(1, Math.floor(Number(bet || 0)));
-    const cashXRaw = Number(autoCashout);
-    const cashX = clamp(cashXRaw, 1.1, 50);
-    if (!Number.isFinite(stake) || stake < 1) return alert("Enter a valid bet amount.");
-    if (!Number.isFinite(cashXRaw)) return alert("Set Auto cash-out (e.g. 1.80).");
-
-    try {
-      setPhase("arming");
-      setErr("");
-
-      // hit your backend via src/api.js
-      const resp = await games.crash(stake, cashX);
-      // ⬇️ instant balance apply if server returns it (same idea as Dice)
-      if (Number.isFinite(Number(resp?.newBalance))) {
-        const nb = Number(resp.newBalance);
-        setBalance((prev) => (nb !== prev ? nb : prev));
-        window.dispatchEvent(new CustomEvent("balance:refresh"));
-      }
-
-      // Accept either flat or nested outcome shape
-      const outcome = resp?.outcome ?? resp;
-      const result = outcome?.result;            // 'win' | 'loss'
-      const d = outcome?.details || {};
-      setDetails(d);
-
-      // server crash/bust point (may be slightly above cashoutX on win)
-      const crashAt = Number(d?.crashAt ?? d?.bust ?? d?.crash ?? cashX);
-
-      const r = growthRateRef.current;
-      const tCash = Math.log(Math.max(cashX, 1.0001)) / r;
-      const tCrash = Math.log(Math.max(crashAt, 1.0001)) / r;
-
-      // Animate only up to the actual outcome event.
-      const tEnd = result === "win" ? tCash : tCrash;
-      tEndRef.current = Math.max(0.25, tEnd);
-
-      setBustPoint(crashAt);
-      setCashoutAt(result === "win" ? cashX : null);
-
-      resetAnimation();
-      setPhase("running");
-
-      // Reconcile balance from server after the bet
-      refreshBalanceSoft();
-    } catch (e) {
-      console.error(e);
-      setErr(String(e?.message || e));
-      setPhase("idle");
-    }
-  };
-
-  function resetAnimation() {
+  function startFlightAnimation() {
     cancelAnimationFrame(rafRef.current);
     startTsRef.current = performance.now();
     rafRef.current = requestAnimationFrame(tick);
@@ -264,70 +89,208 @@ export default function Crash() {
     if (elapsed >= tEnd - 1e-6) {
       cancelAnimationFrame(rafRef.current);
       if (cashoutAt != null) setPhase("cashed");
-      else setPhase("crashed");
-      setHistory((h) => [round2(cashoutAt ?? bustPoint), ...h].slice(0, 14));
-      window.dispatchEvent(new CustomEvent("balance:refresh")); // Telegram/iOS-safe
-      refreshBalanceSoft();                                     // immediate try
-      setTimeout(refreshBalanceSoft, 200);                      // tiny retry to avoid DB lag
-      return;
-
+      else if (phase === "running" || phase === "idle") setPhase("crashed");
       return;
     }
     rafRef.current = requestAnimationFrame(tick);
   }
 
+  /******************** REST OF ORIGINAL CODE BELOW ********************/
+  // graph sizing ResizeObserver
+  useEffect(() => {
+    const el = graphRef.current; if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      setGraphSize({ w: Math.max(320, r.width), h: Math.max(220, r.height), pad: 24 });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Lottie background
+  useEffect(() => {
+    if (!lottieRef.current) return;
+    const anim = lottie.loadAnimation({
+      container: lottieRef.current,
+      renderer: "svg",
+      loop: true,
+      autoplay: true,
+      animationData: girlBg,
+      rendererSettings: { preserveAspectRatio: "xMidYMid meet", progressiveLoad: true },
+    });
+    return () => anim?.destroy();
+  }, []);
+
+  // Telegram auth + polling
+  useEffect(() => {
+    let stopPolling = () => { };
+    (async () => {
+      try {
+        const u = await telegramAuth();
+        if (Number.isFinite(Number(u?.coins))) {
+          const initial = toNum(u.coins);
+          setBalance((prev) => (initial !== prev ? initial : prev));
+          setErr("");
+        }
+        try {
+          const c = await getBalance();
+          if (Number.isFinite(c)) {
+            setBalance((prev) => (c !== prev ? c : prev));
+            setErr("");
+          }
+        } catch { }
+        stopPolling = (() => {
+          let alive = true;
+          (function tick() {
+            setTimeout(async () => {
+              if (!alive) return;
+              try {
+                const c = await getBalance();
+                if (Number.isFinite(c)) {
+                  setBalance((prev) => (c !== prev ? c : prev));
+                  setErr("");
+                }
+              } catch { } finally { if (alive) tick(); }
+            }, 4000);
+          })();
+          return () => { alive = false; };
+        })();
+      } catch (e) { console.error(" telegramAuth failed:", e); }
+    })();
+    return () => { stopPolling?.(); };
+  }, []);
+
+  // Initial balance load
+  useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
+        const bal = await getBalance();
+        setBalance(round2(bal));
+        setErr("");
+      } catch (e) { setErr("Failed to load balance. Make sure you're logged in."); }
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  async function refreshBalanceSoft() {
+    try {
+      const bal = await getBalance();
+      if (Number.isFinite(bal)) setBalance(round2(bal));
+    } catch { }
+  }
+
+  const resetRound = () => {
+    setMult(1); setTNow(0); setCashoutAt(null); setBustPoint(0); setDetails(null);
+  };
+
+  const startRound = async () => {
+    if (phase !== "idle") return;
+    const stake = Math.max(1, Math.floor(Number(bet || 0)));
+    const cashXRaw = Number(autoCashout);
+    const cashX = clamp(cashXRaw, 1.1, 50);
+    if (!Number.isFinite(stake) || stake < 1) return alert("Enter a valid bet amount.");
+    if (!Number.isFinite(cashXRaw)) return alert("Set Auto cash-out (e.g. 1.80).");
+
+    try {
+      setPhase("arming");
+      setErr("");
+      const resp = await games.crash(stake, cashX);
+      if (Number.isFinite(Number(resp?.newBalance))) {
+        const nb = Number(resp.newBalance);
+        setBalance((prev) => (nb !== prev ? nb : prev));
+        window.dispatchEvent(new CustomEvent("balance:refresh"));
+      }
+
+      const outcome = resp?.outcome ?? resp;
+      const result = outcome?.result;
+      const d = outcome?.details || {};
+      setDetails(d);
+
+      const crashAt = Number(d?.crashAt ?? d?.bust ?? d?.crash ?? cashX);
+      const r = growthRateRef.current;
+      const tCash = Math.log(Math.max(cashX, 1.0001)) / r;
+      const tCrash = Math.log(Math.max(crashAt, 1.0001)) / r;
+
+      const tEnd = result === "win" ? tCash : tCrash;
+      tEndRef.current = Math.max(0.25, tEnd);
+
+      setBustPoint(crashAt);
+      setCashoutAt(result === "win" ? cashX : null);
+
+      resetAnimation();
+      setPhase("running");
+
+      refreshBalanceSoft();
+    } catch (e) { console.error(e); setErr(String(e?.message || e)); setPhase("idle"); }
+  };
+
+  function resetAnimation() {
+    cancelAnimationFrame(rafRef.current);
+    startTsRef.current = performance.now();
+    rafRef.current = requestAnimationFrame(tick);
+  }
+
   const nextRound = () => { setPhase("idle"); resetRound(); };
 
-  /******************** DERIVED ********************/
+  // Derived states
   const canStart = phase === "idle" && !loading && bet >= 1 && Number(autoCashout) >= 1.1;
   const running = phase === "running";
   const crashed = phase === "crashed";
   const cashed = phase === "cashed";
 
-  // geometry
   const { w, h, pad } = graphSize;
   const innerW = w - 2 * pad;
   const innerH = h - 2 * pad;
   const tEnd = Math.max(0.5, tEndRef.current || 5);
 
-  const yFromMult = (m) => {
-    const maxM = Math.max(1.0001, bustPoint || 2);
-    const frac = (m - 1) / (maxM - 1);
-    return h - pad - clamp(frac, 0, 1) * innerH;
-  };
+const yFromMult = (t) => {
+  const midY = pad + innerH / 2;        // mid-height of graph
+  const progress = clamp(t / tEnd, 0, 1);
 
-  // Build path from t=0 .. t=tNow (robust; no dash tricks)
-  const pathD = useMemo(() => {
-    const r = growthRateRef.current;
-    const N = 140;
-    const tEndLocal = clamp(tNow, 0, tEnd);
-    const pts = [];
-    for (let i = 0; i <= N; i++) {
-      const t = (i / N) * tEndLocal;
-      const m = Math.min(Math.exp(r * t), bustPoint || 2);
-      const x = pad + (innerW * t) / tEnd; // fills width by tEnd
-      const y = yFromMult(m);
-      pts.push([x, y]);
-    }
-    if (!pts.length) return `M ${pad} ${h - pad}`;
-    let d = `M ${pts[0][0]} ${pts[0][1]}`;
-    for (let i = 1; i < pts.length; i++) d += ` L ${pts[i][0]} ${pts[i][1]}`;
-    return d;
-  }, [tNow, tEnd, bustPoint, pad, innerW, h, innerH]);
+  if (progress < 0.5) {                 // first half = diagonal
+    return h - pad - (innerH / 2) * (progress / 0.5);
+  } else {                               // second half = horizontal
+    return midY;
+  }
+};
 
-  // plane pose: tip at current tNow
-  const planePose = useMemo(() => {
-    const r = growthRateRef.current;
-    const t2 = clamp(tNow, 0, tEnd);
-    const t1 = Math.max(0, t2 - tEnd / 160);
-    const m1 = Math.min(Math.exp(r * t1), bustPoint || 2);
-    const m2 = Math.min(Math.exp(r * t2), bustPoint || 2);
-    const x1 = pad + (innerW * t1) / tEnd, y1 = yFromMult(m1);
-    const x2 = pad + (innerW * t2) / tEnd, y2 = yFromMult(m2);
-    const dx = x2 - x1, dy = y2 - y1;
-    const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
-    return { x: x2, y: y2, deg };
-  }, [tNow, tEnd, bustPoint, pad, innerW, h, innerH]);
+
+
+
+const pathD = useMemo(() => {
+  const N = 140;
+  const pts = [];
+  for (let i = 0; i <= N; i++) {
+    const t = (i / N) * tNow;
+    const x = pad + (innerW * t) / tEnd;    // X linear
+    const y = yFromMult(t);                 // Y matches plane
+    pts.push([x, y]);
+  }
+  if (!pts.length) return `M ${pad} ${h - pad}`;
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length; i++) d += ` L ${pts[i][0]} ${pts[i][1]}`;
+  return d;
+}, [tNow, tEnd, pad, innerW, h, innerH]);
+
+
+
+const planePose = useMemo(() => {
+  const t2 = clamp(tNow, 0, tEnd);
+  const x2 = pad + (innerW * t2) / tEnd;
+  const y2 = yFromMult(t2);
+
+  // Plane angle: 45° during diagonal, 0° horizontal after mid
+  const deg = y2 === pad + innerH / 2 ? 0 : 0;
+
+  return { x: x2, y: y2, deg };
+}, [tNow, tEnd, pad, innerW, h, innerH]);
+
+
+
+
+
+
 
   /******************** RENDER ********************/
   return (
