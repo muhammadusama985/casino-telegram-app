@@ -1055,6 +1055,7 @@ export default function Crash() {
   const [cashoutAt, setCashoutAt] = useState(null);
 const [roundId, setRoundId] = useState(null);
 const [bustPoint, setBustPoint] = useState(0);    // crash multiplier
+const [startAtMs, setStartAtMs] = useState(null);  // server start time (ms)
 const serverSettledRef = useRef(false);           // prevent client-side double credit
 
   // animation refs
@@ -1253,6 +1254,7 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
       setInBet(false);
       setLockedBet(0);
       setCashoutAt(null);
+      setStartAtMs(null);
       resetRoundVisuals();
       setCountdown(5);
       setPhase("countdown");
@@ -1265,12 +1267,15 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
     setCashoutAt(null);
     setBustPoint(0);
     let id = 0;
-    const start = performance.now();
-    const dur = 5_000;
+  
 
     const step = () => {
-      const t = performance.now() - start;
-      const left = Math.max(0, dur - t);
+      // If we have server start time, count down to that.
+   // Otherwise fall back to a local 5s window from when phase started.
+   const now = Date.now();
+   const target = startAtMs ?? (now + 5000);
+   const leftMs = Math.max(0, target - now);
+   const left = Math.ceil(leftMs / 1000);
       setCountdown(Math.ceil(left / 1000));
       if (left <= 0) {
         // window closed → flight starts
@@ -1281,8 +1286,7 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
     };
     id = requestAnimationFrame(step);
     return () => cancelAnimationFrame(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, startAtMs]); // re-evaluate if server time arrives after join
 
   // Place bet during countdown
   const placeBet = async () => {
@@ -1298,6 +1302,12 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
   setLockedBet(stake);
   setRoundId(resp.roundId);
   setBustPoint(Number(resp.crashAt) || 0);  // perfect sync with backend
+   if (Number.isFinite(Number(resp?.startAt))) {
+    setStartAtMs(Number(resp.startAt));
+    if (Number.isFinite(Number(resp?.startsIn))) {
+      setCountdown(Number(resp.startsIn)); // align displayed seconds
+    }
+  }
   setInBet(true);
    } catch (e) {
      alert(e.message || "Join failed");
@@ -1308,6 +1318,8 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
  // Cash out during flight (server-settled)
 const cashoutNow = async () => {
   if (phase !== "running" || !inBet || cashoutAt != null) return;
+  if (startAtMs && Date.now() < startAtMs) return; // prevent early cashout calls
+
   const x = round2(mult);
   try {
     const resp = await crashCashout({ roundId, x });
