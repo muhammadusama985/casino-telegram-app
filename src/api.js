@@ -61,27 +61,6 @@ async function handle(res) {
   return data;
 }
 
-export async function crashJoin(stakeCoins) {
-  const res = await fetch('/crash/join', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-user-id': window.userId },
-    body: JSON.stringify({ stakeCoins })
-  });
-  if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'join-failed');
-  return res.json(); // { ok, roundId, crashAt, newBalance }
-}
-
-export async function crashCashout(roundId, atMult) {
-  const res = await fetch('/crash/cashout', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-user-id': window.userId },
-    body: JSON.stringify({ roundId, atMult })
-  });
-  if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'cashout-failed');
-  return res.json(); // { ok, roundId, result, payout, newBalance, details }
-}
-
-
 
 export async function api(path, { method = "GET", body, headers } = {}) {
   console.log('[api] request:', method, BASE_URL + path, body || null);
@@ -94,6 +73,8 @@ export async function api(path, { method = "GET", body, headers } = {}) {
   console.log('[api] response:', data);
   return data;
 }
+
+
 
 // ---------- Auth ----------
 export const auth = {
@@ -280,6 +261,27 @@ export async function getBalance() {
   }
   return num;
 }
+
+export async function crashJoin(stakeCoins) {
+  const r = await fetch('/api/crash/join', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'x-user-id': localStorage.getItem('uid') },
+    body: JSON.stringify({ stakeCoins })
+  }).then(r=>r.json());
+  if (!r.ok) throw new Error(r.error || 'join-failed');
+  return r; // { ok, roundId, crashAt, startsIn, newBalance }
+}
+
+export async function crashCashout({ roundId, x }) {
+  const r = await fetch('/api/crash/cashout', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'x-user-id': localStorage.getItem('uid') },
+    body: JSON.stringify({ roundId, x })
+  }).then(r=>r.json());
+  if (!r.ok) throw new Error(r.error || 'cashout-failed');
+  return r; // { ok, newBalance, at }
+}
+
 
 
 

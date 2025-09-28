@@ -1038,10 +1038,6 @@ export default function Crash() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // Slow-mo factor: 1 = normal, 0.5 = 2× slower, 0.25 = 4× slower
-const TIME_SCALE = 0.5;
-
-
   // inputs
   const [bet, setBet] = useState(1);
   const [autoCashout, setAutoCashout] = useState("1.80"); // kept for compatibility (not required for manual cashout)
@@ -1053,10 +1049,13 @@ const TIME_SCALE = 0.5;
   const [lockedBet, setLockedBet] = useState(0);   // frozen stake for current round
 
   // outcome
-const [cashoutAt, setCashoutAt] = useState(null);
-const [roundId, setRoundId] = useState(null);  const [bustPoint, setBustPoint] = useState(0);    // crash multiplier
   const [history, setHistory] = useState([]);
   const [details, setDetails] = useState(null);
+
+  const [cashoutAt, setCashoutAt] = useState(null);
+const [roundId, setRoundId] = useState(null);
+const [bustPoint, setBustPoint] = useState(0);    // crash multiplier
+const serverSettledRef = useRef(false);           // prevent client-side double credit
 
   // animation refs
   const rafRef = useRef(0);
@@ -1171,6 +1170,8 @@ const [roundId, setRoundId] = useState(null);  const [bustPoint, setBustPoint] =
     setCashoutAt(null);
     setBustPoint(0);
     setDetails(null);
+    serverSettledRef.current = false;
+
   };
 
   // Generate a reasonable crash point (client-sim). Heavy tail like typical Crash.
@@ -1182,16 +1183,22 @@ const [roundId, setRoundId] = useState(null);  const [bustPoint, setBustPoint] =
   };
 
   // Start the flight (after countdown hits 0)
- const startFlight = async () => {
-  // bustPoint is already set by crashJoin() for bettors; spectators can get RNG
-  resetRoundVisuals();
-  setPhase("running");
-  let crashAt = bustPoint || randomCrash();
-  const r = growthRateRef.current;
-  const tCrash = Math.log(Math.max(crashAt, 1.0001)) / r;
-  tEndRef.current = Math.max(0.25, tCrash);
-  beginAnimation();
-};
+  const startFlight = async () => {
+    resetRoundVisuals();
+    setPhase("running");
+
+    // Use backend-provided crashAt when the user joined; otherwise simulate for spectators.
+  const crashAt = inBet && Number.isFinite(bustPoint) && bustPoint > 1.01
+    ? bustPoint
+    : randomCrash();
+    setBustPoint(crashAt);
+
+    // Animate until crash or cashout
+    const r = growthRateRef.current;
+    const tCrash = Math.log(Math.max(crashAt, 1.0001)) / r;
+    tEndRef.current = Math.max(0.25, tCrash);
+    beginAnimation();
+  };
 
   const beginAnimation = () => {
     cancelAnimationFrame(rafRef.current);
@@ -1199,10 +1206,10 @@ const [roundId, setRoundId] = useState(null);  const [bustPoint, setBustPoint] =
     rafRef.current = requestAnimationFrame(tick);
   };
 
-  async function tick(ts) {
+  function tick(ts) {
     const r = growthRateRef.current;
- const elapsed = ((ts - startTsRef.current) / 1000) * TIME_SCALE;
-     const tEnd = tEndRef.current;
+    const elapsed = (ts - startTsRef.current) / 1000;
+    const tEnd = tEndRef.current;
 
     const tClamped = clamp(elapsed, 0, tEnd);
     const m = Math.exp(r * tClamped);
@@ -1218,14 +1225,10 @@ const [roundId, setRoundId] = useState(null);  const [bustPoint, setBustPoint] =
     }
 
     // Crash reached?
-   if (elapsed >= tEnd - 1e-6) {
-   // if player joined and never cashed, finalize loss on server
-   if (inBet && cashoutAt == null && roundId) {
-     try { await crashCashout(roundId, bustPoint); } catch {}
-   }
-   endRound("crashed");
-   return;
- }
+    if (elapsed >= tEnd - 1e-6) {
+      endRound("crashed");
+      return;
+    }
     rafRef.current = requestAnimationFrame(tick);
   }
 
@@ -1238,11 +1241,11 @@ const [roundId, setRoundId] = useState(null);  const [bustPoint, setBustPoint] =
     } else {
       setPhase("cashed");
       setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
-      // credit payout: bet * cashoutAt (stake was deducted at placeBet)
-      // ---- SERVER: replace with server settlement call if you have it ----
-      setBalance((b) => round2(b + lockedBet * cashoutAt));
-      window.dispatchEvent(new CustomEvent("balance:refresh"));
-      setTimeout(() => { /* try reconciling with server */ }, 0);
+         // Wallet credit happens on the server via /crash/cashout; avoid double-credit
+    if (!serverSettledRef.current) {
+      // optional: re-sync in case of network delay
+      refreshBalanceSoft();
+    }
     }
 
     // schedule next round's countdown
@@ -1302,26 +1305,30 @@ const [roundId, setRoundId] = useState(null);  const [bustPoint, setBustPoint] =
   };
 
   // Cash out during flight
- const cashoutNow = async () => {
-   if (phase !== "running" || !inBet || cashoutAt != null) return;
-   const at = round2(mult);
-   try {
-     const resp = await crashCashout(roundId, at);
-     if (Number.isFinite(Number(resp?.newBalance))) setBalance(Number(resp.newBalance));
-     setCashoutAt(at);                 // lock visuals
-     // End flight immediately as cashed:
-     cancelAnimationFrame(rafRef.current);
-     setPhase("cashed");
-     setHistory((h) => [at, ...h].slice(0, 14));
-     // queue next countdown
-     setTimeout(() => {
-       setInBet(false); setLockedBet(0); setRoundId(null);
-       setCashoutAt(null); resetRoundVisuals(); setCountdown(5); setPhase("countdown");
-     }, 800);
-   } catch (e) {
-     alert(e.message || "Cashout failed");
-   }
- };
+ // Cash out during flight (server-settled)
+const cashoutNow = async () => {
+  if (phase !== "running" || !inBet || cashoutAt != null) return;
+  const x = round2(mult);
+  try {
+    const resp = await crashCashout({ roundId, x });
+    if (resp?.ok) {
+      serverSettledRef.current = true;
+      setCashoutAt(x); // lock the UI at the server-accepted multiplier
+      if (Number.isFinite(Number(resp?.newBalance))) {
+        setBalance(Number(resp.newBalance));
+      } else {
+        // soft refresh in case wallet didn’t come back
+        refreshBalanceSoft();
+      }
+    } else {
+      alert(resp?.error || "Cashout failed");
+    }
+  } catch (e) {
+    console.warn("cashout error", e);
+    alert(e?.message || "Cashout error");
+  }
+};
+
 
   /************ derived + geometry ************/
   const running = phase === "running";
