@@ -262,24 +262,19 @@ export async function getBalance() {
   return num;
 }
 
+// IMPORTANT: use the same base + headers pipeline as everything else
 export async function crashJoin(stakeCoins) {
-  const r = await fetch('/api/crash/join', {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json', 'x-user-id': localStorage.getItem('uid') },
-    body: JSON.stringify({ stakeCoins })
-  }).then(r=>r.json());
-  if (!r.ok) throw new Error(r.error || 'join-failed');
-  return r; // { ok, roundId, crashAt, startsIn, newBalance }
+  return api("/games/crash/join", {
+    method: "POST",
+    body: { stakeCoins: Math.max(1, Math.floor(Number(stakeCoins || 0))) },
+  });
 }
 
 export async function crashCashout({ roundId, x }) {
-  const r = await fetch('/api/crash/cashout', {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json', 'x-user-id': localStorage.getItem('uid') },
-    body: JSON.stringify({ roundId, x })
-  }).then(r=>r.json());
-  if (!r.ok) throw new Error(r.error || 'cashout-failed');
-  return r; // { ok, newBalance, at }
+  return api("/games/crash/cashout", {
+    method: "POST",
+    body: { roundId, x },
+  });
 }
 
 
