@@ -202,6 +202,18 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
     const elapsed = (ts - startTsRef.current) / 1000;
     const tEnd = tEndRef.current;
 
+    
+ // If we hit (or passed) the crash time, lock to exact crash point and end.
+ if (elapsed >= tEnd - 1e-6) {
+   // show exact crash multiplier
+   if (bustPoint && Number.isFinite(bustPoint)) {
+     setTNow(tEnd);
+     setMult(bustPoint);
+   }
+   endRound("crashed");
+   return;
+ }
+
     const tClamped = clamp(elapsed, 0, tEnd);
     const m = Math.exp(r * tClamped);
 
@@ -215,23 +227,24 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
       return;
     }
 
-    // Crash reached?
-    if (elapsed >= tEnd - 1e-6) {
-      endRound("crashed");
-      return;
-    }
+ 
     rafRef.current = requestAnimationFrame(tick);
   }
 
   function endRound(kind) {
     cancelAnimationFrame(rafRef.current);
     if (kind === "crashed") {
+         if (bustPoint && Number.isFinite(bustPoint)) {
+     setMult(bustPoint); // lock visual to exact crashAt
+     setTNow(tEndRef.current || 0);
+   }
       setPhase("crashed");
       setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
       // if player didn't cashout in time, they lose stake (already deducted on placeBet)
     } else {
       setPhase("cashed");
       setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
+      
      // Server has already settled and returned newBalance in /crash/cashout
      // Optional gentle re-sync in case wallet polling lags:
      refreshBalanceSoft();
@@ -329,7 +342,18 @@ const cashoutNow = async () => {
         refreshBalanceSoft();
       }
     } else {
-      alert(resp?.error || "Cashout failed");
+        const code = resp?.error || "";
+     // If server says crash already happened (or effectively too late),
+     // immediately reflect the crash state on UI.
+     if (code === "already-crashed" || code === "too-late") {
+       // lock to backend bust if we have it; otherwise keep current
+       if (bustPoint && Number.isFinite(bustPoint)) {
+         setMult(bustPoint);
+       }
+       endRound("crashed");
+       return;
+     }
+     alert(code || "Cashout failed");
     }
   } catch (e) {
     console.warn("cashout error", e);
