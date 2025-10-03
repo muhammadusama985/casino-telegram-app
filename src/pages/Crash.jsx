@@ -63,6 +63,17 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
   const [graphSize, setGraphSize] = useState({ w: 860, h: 340, pad: 24 });
   const lottieRef = useRef(null);
 
+    // crash exit animation (straight line to right, then vanish)
+  const [exiting, setExiting] = useState(false);
+  const [exitProgress, setExitProgress] = useState(0); // 0..1
+  const exitFromRef = useRef({ x: 0, y: 0 });
+  const exitStartRef = useRef(0);
+  const exitDurRef = useRef(700); // ms (finish before your 800ms round reset)
+
+  // keep the latest plane pose in a ref so we can snapshot it at crash time
+  const planePoseRef = useRef({ x: 0, y: 0, deg: 0 });
+
+
   useEffect(() => {
     const el = graphRef.current; if (!el) return;
     const ro = new ResizeObserver(() => {
@@ -162,6 +173,8 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
     setBustPoint(0);
     setDetails(null);
     serverSettledRef.current = false;
+    setExiting(false);
+    setExitProgress(0);
 
   };
 
@@ -197,22 +210,37 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
     rafRef.current = requestAnimationFrame(tick);
   };
 
+    function exitTick(ts) {
+    const d = Math.max(1, exitDurRef.current);
+    const p = Math.min(1, (ts - exitStartRef.current) / d);
+    setExitProgress(p);
+    if (p < 1) requestAnimationFrame(exitTick);
+  }
+
+
   function tick(ts) {
     const r = growthRateRef.current;
     const elapsed = (ts - startTsRef.current) / 1000;
     const tEnd = tEndRef.current;
 
     
- // If we hit (or passed) the crash time, lock to exact crash point and end.
- if (elapsed >= tEnd - 1e-6) {
-   // show exact crash multiplier
-   if (bustPoint && Number.isFinite(bustPoint)) {
-     setTNow(tEnd);
-     setMult(bustPoint);
-   }
-   endRound("crashed");
-   return;
- }
+  // If we hit (or passed) the crash time, lock to exact crash point,
+  // kick off exit (straight → right + fade), then end round.
+  if (elapsed >= tEnd - 1e-6) {
+    if (bustPoint && Number.isFinite(bustPoint)) {
+      setTNow(tEnd);
+      setMult(bustPoint);
+    }
+    // snapshot plane's current position and start exit animation
+    exitFromRef.current = { x: planePoseRef.current.x, y: planePoseRef.current.y };
+    setExiting(true);
+    setExitProgress(0);
+    exitStartRef.current = performance.now();
+    requestAnimationFrame(exitTick);
+
+    endRound("crashed");
+    return;
+  }
 
     const tClamped = clamp(elapsed, 0, tEnd);
     const m = Math.exp(r * tClamped);
@@ -234,10 +262,10 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
   function endRound(kind) {
     cancelAnimationFrame(rafRef.current);
     if (kind === "crashed") {
-         if (bustPoint && Number.isFinite(bustPoint)) {
-     setMult(bustPoint); // lock visual to exact crashAt
-     setTNow(tEndRef.current || 0);
-   }
+            if (bustPoint && Number.isFinite(bustPoint)) {
+      setMult(bustPoint);
+      setTNow(tEndRef.current || 0);
+    }
       setPhase("crashed");
       setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
       // if player didn't cashout in time, they lose stake (already deducted on placeBet)
@@ -396,18 +424,37 @@ const cashoutNow = async () => {
     return d;
   }, [tNow, tEnd, bustPoint, pad, innerW, h, innerH]);
 
-  const planePose = useMemo(() => {
-    const r = growthRateRef.current;
-    const t2 = clamp(tNow, 0, tEnd);
-    const t1 = Math.max(0, t2 - tEnd / 160);
-    const m1 = Math.min(Math.exp(r * t1), bustPoint || 2);
-    const m2 = Math.min(Math.exp(r * t2), bustPoint || 2);
-    const x1 = pad + (innerW * t1) / tEnd, y1 = yFromMult(m1);
-    const x2 = pad + (innerW * t2) / tEnd, y2 = yFromMult(m2);
-    const dx = x2 - x1, dy = y2 - y1;
-    const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
-    return { x: x2, y: y2, deg };
-  }, [tNow, tEnd, bustPoint, pad, innerW, h, innerH]);
+ // --- your existing pose calc ---
+const planePose = useMemo(() => {
+  const r = growthRateRef.current;
+  const t2 = clamp(tNow, 0, tEnd);
+  const t1 = Math.max(0, t2 - tEnd / 160);
+  const m1 = Math.min(Math.exp(r * t1), bustPoint || 2);
+  const m2 = Math.min(Math.exp(r * t2), bustPoint || 2);
+  const x1 = pad + (innerW * t1) / tEnd, y1 = yFromMult(m1);
+  const x2 = pad + (innerW * t2) / tEnd, y2 = yFromMult(m2);
+  const dx = x2 - x1, dy = y2 - y1;
+  const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return { x: x2, y: y2, deg };
+}, [tNow, tEnd, bustPoint, pad, innerW, h, innerH]);
+
+// --- NEW: exit override goes RIGHT AFTER planePose ---
+let planeDraw = planePose;
+let planeOpacity = 1;
+if (exiting) {
+  const rightEdge = pad + innerW; // inside frame box
+  const from = exitFromRef.current;
+  const x = from.x + (rightEdge - from.x) * exitProgress;
+  const y = from.y; // straight line horizontally
+  planeDraw = { x, y, deg: 0 };
+  planeOpacity = 1 - exitProgress;
+}
+
+
+    useEffect(() => {
+    planePoseRef.current = planePose;
+  }, [planePose]);
+
 
   const canPlaceBet = phase === "countdown" && !inBet && !loading && bet >= 1;
   const canCashout = phase === "running" && inBet && cashoutAt == null;
@@ -483,7 +530,7 @@ const cashoutNow = async () => {
               <path d={pathD} className={`trail ${crashed ? "crash" : "run"}`} />
 
               {/* plane */}
-              <g transform={`translate(${planePose.x}, ${planePose.y}) rotate(${planePose.deg})`}>
++              <g transform={`translate(${planeDraw.x}, ${planeDraw.y}) rotate(${planeDraw.deg})`} opacity={planeOpacity}>
                 <image
                   href={girlPlane}
                   x="-60"
