@@ -29,7 +29,6 @@ export default function Crash() {
 
   // inputs
   const [bet, setBet] = useState(1);
-  const [autoCashout, setAutoCashout] = useState("1.80"); // kept for compatibility (not required for manual cashout)
 
   // round machine: countdown -> running -> crashed/cashed -> countdown...
   const [phase, setPhase] = useState("countdown"); // countdown|running|crashed|cashed
@@ -233,11 +232,10 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
     } else {
       setPhase("cashed");
       setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
-      // credit payout: bet * cashoutAt (stake was deducted at placeBet)
-      // ---- SERVER: replace with server settlement call if you have it ----
-      setBalance((b) => round2(b + lockedBet * cashoutAt));
-      window.dispatchEvent(new CustomEvent("balance:refresh"));
-      setTimeout(() => { /* try reconciling with server */ }, 0);
+     // Server has already settled and returned newBalance in /crash/cashout
+     // Optional gentle re-sync in case wallet polling lags:
+     refreshBalanceSoft();
+     
     }
 
     // schedule next round's countdown
@@ -272,7 +270,7 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
        const now = Date.now();
    const target = startAtMs ?? localCountdownEndRef.current ?? now;
    const leftMs = Math.max(0, target - now);
-   setCountdown(Math.ceil(leftMs / 1000));
+ setCountdown((prev) => Math.min(prev ?? 999, Math.ceil(leftMs / 1000)));
    if (leftMs <= 0) {
         // window closed → flight starts
         startFlight();
@@ -299,11 +297,13 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
   setLockedBet(stake);
   setRoundId(resp.roundId);
   setBustPoint(Number(resp.crashAt) || 0);  // perfect sync with backend
-   if (Number.isFinite(Number(resp?.startAt))) {
-  setStartAtMs(Number(resp.startAt));
-   const secs = Math.max(0, Math.ceil((Number(resp.startAt) - Date.now()) / 1000));
-   setCountdown(secs || 0);
- }
+    if (Number.isFinite(Number(resp?.startAt))) {
+    const srv = Number(resp.startAt);
+    // Do NOT extend the window; only set once or tighten if server is earlier
+    setStartAtMs((prev) => (prev ? Math.min(prev, srv) : srv));
+    // Do NOT call setCountdown here; let the running RAF tick continue.
+    // (Prevents the visible "restart" effect.)
+  }
   setInBet(true);
    } catch (e) {
      alert(e.message || "Join failed");
@@ -562,18 +562,7 @@ const cashoutNow = async () => {
               </div>
             </div>
 
-            {/* Optional: keep auto-cashout input visible (not required for manual cashout) */}
-            <div className="row" style={{ marginTop: 14 }}>
-              <label>Auto cash-out (optional)</label>
-              <input
-                type="number"
-                placeholder="e.g. 1.80"
-                step="0.01"
-                value={autoCashout}
-                onChange={(e) => setAutoCashout(e.target.value)}
-                disabled={phase !== "countdown" || inBet}
-              />
-            </div>
+       
 
             {(crashed || cashed) && (
               <div className={`round-result ${crashed ? "bad" : "good"}`}>
