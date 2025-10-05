@@ -559,7 +559,7 @@ if (exiting) {
                     y={h / 2}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="countdown-main"
+                    className="crash-main"
                   >
                     CRASHED
                   </text>
@@ -1228,6 +1228,14 @@ html, body, #root {
 .toast.bad { color:#FFB3BC; }
 .toast.good { color:#B7F7BD; }
 .toast.info { color:#9AE6FF; }
+
+.crash-main {
+  fill:#ffffffdd;
+  font-size:56px;   /* was 80px via countdown-main — now a bit smaller */
+  font-weight:900;
+  filter:url(#softGlow);
+}
+
 
 
       `}</style>
