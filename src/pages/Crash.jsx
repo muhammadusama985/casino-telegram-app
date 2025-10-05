@@ -210,6 +210,14 @@ const serverSettledRef = useRef(false);           // prevent client-side double 
     rafRef.current = requestAnimationFrame(tick);
   };
 
+    // pretty toast for errors like "already-crashed"
+  const [toast, setToast] = useState(null); // { text:string, kind:'good'|'bad'|'info' }
+  const flashToast = (text, kind = 'bad', ms = 1300) => {
+    setToast({ text, kind });
+    setTimeout(() => setToast(null), ms);
+  };
+
+
     function exitTick(ts) {
     const d = Math.max(1, exitDurRef.current);
     const p = Math.min(1, (ts - exitStartRef.current) / d);
@@ -374,6 +382,9 @@ const cashoutNow = async () => {
      // If server says crash already happened (or effectively too late),
      // immediately reflect the crash state on UI.
      if (code === "already-crashed" || code === "too-late") {
+
+          flashToast("Already crashed!", "bad");
+
        // lock to backend bust if we have it; otherwise keep current
        if (bustPoint && Number.isFinite(bustPoint)) {
          setMult(bustPoint);
@@ -381,6 +392,7 @@ const cashoutNow = async () => {
        endRound("crashed");
        return;
      }
+         // keep default alerts for other cases
      alert(code || "Cashout failed");
     }
   } catch (e) {
@@ -491,6 +503,12 @@ if (exiting) {
           <div className="graph-area" ref={graphRef}>
             <div className="lottie-bg" ref={lottieRef} aria-hidden="true" />
 
+                        {toast && (
+              <div className={`toast ${toast.kind}`}>
+                {toast.text}
+              </div>
+            )}
+
             <svg className="fg-svg" width="100%" height="100%" viewBox={`0 0 ${w} ${h}`}>
               <defs>
                 <pattern id="grid" width="38" height="38" patternUnits="userSpaceOnUse">
@@ -530,6 +548,28 @@ if (exiting) {
                     className="countdown-sub"
                   >
                     Betting window
+                  </text>
+                </g>
+              )}
+              {/* CRASHED overlay (mirrors countdown styling) */}
+              {crashed && (
+                <g>
+                  <text
+                    x={w / 2}
+                    y={h / 2}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    className="countdown-main"
+                  >
+                    CRASHED
+                  </text>
+                  <text
+                    x={w / 2}
+                    y={h / 2 + 44}
+                    textAnchor="middle"
+                    className="countdown-sub"
+                  >
+                    Busted at {fmt(bustPoint)}×
                   </text>
                 </g>
               )}
@@ -1170,6 +1210,24 @@ html, body, #root {
    stroke: rgba(0,0,0,.5);
    stroke-width: 2px;
 }
+   +/* Pretty toast – small, eye-catching, matches your glassy look */
+.toast {
+  position:absolute;
+  right:16px;
+  top:16px;
+  padding:10px 14px;
+  border-radius:12px;
+  font-weight:800;
+  letter-spacing:.2px;
+  backdrop-filter: blur(6px);
+  background: radial-gradient(120px 40px at 20% 0%, rgba(31,41,72,.9) 0%, rgba(10,13,20,.85) 70%);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06);
+  border:1px solid #22304A;
+  z-index: 2;
+}
+.toast.bad { color:#FFB3BC; }
+.toast.good { color:#B7F7BD; }
+.toast.info { color:#9AE6FF; }
 
 
       `}</style>
