@@ -1236,6 +1236,12 @@ html, body, #root {
   filter:url(#softGlow);
 }
 
+.backBtn:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+
 
 
       `}</style>
@@ -1244,11 +1250,39 @@ html, body, #root {
 }
 
 /************ stub TopBar (assumed present in your project) ************/
+/************ stub TopBar (assumed present in your project) ************/
 function TopBar({ balance }) {
+  const [usedBack, setUsedBack] = React.useState(false);
+
+  const goBackOnce = () => {
+    if (usedBack) return;
+    setUsedBack(true);
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      // Optional fallback: do nothing or route home if you have a router
+      // window.location.href = '/';
+    }
+  };
+
   return (
     <div className="topbar">
-      <div className="logo">✈️ Crash</div>
+      <div className="brand">
+        <button
+          className="backBtn"
+          onClick={goBackOnce}
+          disabled={usedBack}
+          aria-label="Back"
+          title="Back"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+        <div className="logo">✈️ Crash</div>
+      </div>
       <div className="wallet">Balance: {fmt(balance)}</div>
     </div>
   );
 }
+
