@@ -406,6 +406,14 @@ const cashoutNow = async () => {
     return h - pad - clamp(frac, 0, 1) * innerH;
   };
 
+   // Map multiplier to X so crash doesn't always land at right edge.
+ // We pick an X-range cap a bit ABOVE bustPoint so the crash can land anywhere across the width.
+ const xFromMult = (m) => {
+   const maxMX = Math.max(2, (bustPoint || 2) * 1.35); // 35% headroom beyond crash
+   const frac = (m - 1) / (maxMX - 1);
+   return pad + clamp(frac, 0, 1) * innerW;
+ };
+
   const pathD = useMemo(() => {
     const r = growthRateRef.current;
     const N = 140;
@@ -414,7 +422,7 @@ const cashoutNow = async () => {
     for (let i = 0; i <= N; i++) {
       const t = (i / N) * tEndLocal;
       const m = Math.min(Math.exp(r * t), bustPoint || 2);
-      const x = pad + (innerW * t) / tEnd;
+      const x = xFromMult(m);
       const y = yFromMult(m);
       pts.push([x, y]);
     }
@@ -431,8 +439,8 @@ const planePose = useMemo(() => {
   const t1 = Math.max(0, t2 - tEnd / 160);
   const m1 = Math.min(Math.exp(r * t1), bustPoint || 2);
   const m2 = Math.min(Math.exp(r * t2), bustPoint || 2);
-  const x1 = pad + (innerW * t1) / tEnd, y1 = yFromMult(m1);
-  const x2 = pad + (innerW * t2) / tEnd, y2 = yFromMult(m2);
+  const x1 = xFromMult(m1), y1 = yFromMult(m1);
+  const x2 = xFromMult(m2), y2 = yFromMult(m2);
   const dx = x2 - x1, dy = y2 - y1;
   const deg = (Math.atan2(dy, dx) * 180) / Math.PI;
   return { x: x2, y: y2, deg };
