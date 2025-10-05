@@ -400,20 +400,22 @@ const cashoutNow = async () => {
   const innerH = h - 2 * pad;
   const tEnd = Math.max(0.5, tEndRef.current || 5);
 
+  // Use a fixed visual cap so we don't hit the top/right edges unless crash ≈ cap
+  const MAX_VISUAL_M = 50; // aligns with backend clamp(..., 50)
   const yFromMult = (m) => {
-    const maxM = Math.max(1.0001, bustPoint || Math.max(2, cashoutAt || 2));
-    const frac = (m - 1) / (maxM - 1);
+    const mClamped = clamp(m, 1.0001, MAX_VISUAL_M);
+    // log scale matches m(t)=exp(r t) so the curve looks linear in time
+    const frac = Math.log(mClamped) / Math.log(MAX_VISUAL_M); // 1× -> 0, 50× -> 1
     return h - pad - clamp(frac, 0, 1) * innerH;
   };
 
-   // --- NEW: map multiplier → X using a fixed visual cap so crash can land anywhere
- const MAX_VISUAL_M = 50; // match backend clamp(…, 50)
- const xFromMult = (m) => {
-   // Use log so growth looks linear in time (since m = exp(r t))
-   const mClamped = clamp(m, 1.0001, MAX_VISUAL_M);
-   const frac = Math.log(mClamped) / Math.log(MAX_VISUAL_M); // 1× -> 0, 50× -> 1
-   return pad + frac * innerW;
- };
+  const xFromMult = (m) => {
+    const mClamped = clamp(m, 1.0001, MAX_VISUAL_M);
+    const frac = Math.log(mClamped) / Math.log(MAX_VISUAL_M);
+    return pad + clamp(frac, 0, 1) * innerW;
+  };
+
+ 
 
   const pathD = useMemo(() => {
     const r = growthRateRef.current;
@@ -423,7 +425,7 @@ const cashoutNow = async () => {
     for (let i = 0; i <= N; i++) {
       const t = (i / N) * tEndLocal;
       const m = Math.min(Math.exp(r * t), bustPoint || 2);
-      const x = xFromMult(m);
+     const x = xFromMult(m);
       const y = yFromMult(m);
       pts.push([x, y]);
     }
@@ -451,12 +453,9 @@ const planePose = useMemo(() => {
 let planeDraw = planePose;
 let planeOpacity = 1;
 if (exiting) {
-  const rightEdge = pad + innerW; // inside frame box
-  const from = exitFromRef.current;
-  const x = from.x + (rightEdge - from.x) * exitProgress;
-  const y = from.y; // straight line horizontally
-  planeDraw = { x, y, deg: 0 };
-  planeOpacity = 1 - exitProgress;
+   const from = exitFromRef.current;
+  planeDraw = { x: from.x, y: from.y, deg: 0 }; // stay where it crashed
+  planeOpacity = 1 - exitProgress;              // just fade out
 }
 
 
@@ -538,8 +537,31 @@ if (exiting) {
               {/* live path */}
               <path d={pathD} className={`trail ${crashed ? "crash" : "run"}`} />
 
+               {/* crash label at exact crash point */}
+  {crashed && bustPoint > 1 && (
+    <g>
+      {(() => {
+        const cx = xFromMult(bustPoint);
+        const cy = yFromMult(bustPoint) - 10; // nudge up a bit
+        return (
+          <>
+            <circle cx={cx} cy={cy} r="5" fill="#FF7D8C" />
+            <text
+              x={cx}
+              y={cy - 12}
+              textAnchor="middle"
+              className="crash-label"
+            >
+              Busted {fmt(bustPoint)}×
+            </text>
+          </>
+        );
+      })()}
+    </g>
+  )}
+
               {/* plane */}
-+              <g transform={`translate(${planeDraw.x}, ${planeDraw.y}) rotate(${planeDraw.deg})`} opacity={planeOpacity}>
+             <g transform={`translate(${planeDraw.x}, ${planeDraw.y}) rotate(${planeDraw.deg})`} opacity={planeOpacity}>
                 <image
                   href={girlPlane}
                   x="-60"
@@ -1140,6 +1162,14 @@ html, body, #root {
   } 
 }
 
+ .crash-label {
+   fill:#FFCBD3; 
+   font-size:12px; 
+   font-weight:700; 
+   paint-order: stroke; 
+   stroke: rgba(0,0,0,.5);
+   stroke-width: 2px;
+}
 
 
       `}</style>
