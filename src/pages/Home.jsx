@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom"; // ✅ Added for routing
+import { useNavigate } from "react-router-dom"; 
 import WebApp from "@twa-dev/sdk";
 import bannerImg from "../assets/background.jpg";
 import coin from "../assets/games/coin.png";
 import dice from "../assets/games/dice.jpg";
-import crash from "../assets/games/crash.jpg";
+import crash from "../assets/games/crash.png";
 import slot from "../assets/games/slot.jpg";
 import betsoft from "../assets/providers/betsoft.jpg";
 import blueprint from "../assets/providers/blueprint.jpg";
@@ -31,29 +31,38 @@ const PROVIDERS = [
 // Small card components
 // ----------------------
 function GameCard({ img, title, id }) {
-  const navigate = useNavigate(); // ✅ Used here for navigation
+  const navigate = useNavigate();
 
   return (
     <button
       onClick={() => navigate(`/${id}`)}
       className="
-        min-w-[180px] max-w-[180px] snap-start
+        min-w-[260px] max-w-[260px] snap-start
         bg-zinc-900 rounded-2xl overflow-hidden
         border border-zinc-800 shadow-sm
         hover:border-zinc-700 transition
       "
     >
-      <div className="aspect-[4/5] bg-zinc-800">
-        <img src={img} alt={title} className="h-full w-full object-cover" />
+      {/* FULL image fill */}
+      <div className="w-full h-[150px] bg-zinc-800 overflow-hidden">
+        <img
+          src={img}
+          alt={title}
+          className="w-full h-full object-cover"
+        />
       </div>
-      <div className="px-3 py-2">
-        <p className="text-sm font-semibold text-white leading-tight line-clamp-2">
+
+      {/* Text under image */}
+      <div className="px-3 py-3">
+        <p className="text-sm font-semibold text-white text-center leading-tight">
           {title}
         </p>
       </div>
     </button>
   );
 }
+
+
 
 function ProviderCard({ img }) {
   return (

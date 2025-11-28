@@ -5,7 +5,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import slotImg from "../assets/games/slot.jpg";
 import coinImg from "../assets/games/coin.png";
 import diceImg from "../assets/games/dice.jpg";
-import crashImg from "../assets/games/crash.jpg";
+import crashImg from "../assets/games/crash.png";
 
 function useClickOutside(ref, handler) {
   useEffect(() => {
