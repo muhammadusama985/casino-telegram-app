@@ -1747,50 +1747,35 @@ export default function Crash() {
     rafRef.current = requestAnimationFrame(tick);
   }
 
- function endRound(kind) {
-  cancelAnimationFrame(rafRef.current);
-
-  if (kind === "crashed") {
-    if (bustPoint && Number.isFinite(bustPoint)) {
-      setMult(bustPoint);
-      setTNow(tEndRef.current || 0);
+  function endRound(kind) {
+    cancelAnimationFrame(rafRef.current);
+    if (kind === "crashed") {
+      if (bustPoint && Number.isFinite(bustPoint)) {
+        setMult(bustPoint);
+        setTNow(tEndRef.current || 0);
+      }
+      setPhase("crashed");
+      setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
+    } else {
+      setPhase("cashed");
+      setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
+      refreshBalanceSoft();
     }
-    // keep history if you want past bust values
-    setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
 
-    // ❌ don't show "crashed" phase or multiplier UI
-    // ✅ immediately jump to next round countdown (intermediate screen)
-    setInBet(false);
-    setLockedBet(0);
-    setCashoutAt(null);
-    setStartAtMs(null);
-    localCountdownEndRef.current = null;
-    resetRoundVisuals();
-    setCountdown(5);
-    setPhase("countdown");
-    goToFrame(SEG.current.IDLE[0]);
-    return;
+    // Schedule next round’s countdown
+    setTimeout(() => {
+      setInBet(false);
+      setLockedBet(0);
+      setCashoutAt(null);
+      setStartAtMs(null);
+      localCountdownEndRef.current = null;
+      resetRoundVisuals();
+      setCountdown(5);
+      setPhase("countdown");
+      // return to idle pose
+      goToFrame(SEG.current.IDLE[0]);
+    }, 800);
   }
-
-  // cashed flow unchanged (still shows result briefly)
-  setPhase("cashed");
-  setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
-  refreshBalanceSoft();
-
-  // Schedule next round’s countdown after cashout result
-  setTimeout(() => {
-    setInBet(false);
-    setLockedBet(0);
-    setCashoutAt(null);
-    setStartAtMs(null);
-    localCountdownEndRef.current = null;
-    resetRoundVisuals();
-    setCountdown(5);
-    setPhase("countdown");
-    goToFrame(SEG.current.IDLE[0]);
-  }, 800);
-}
-
 
   // Countdown loop
   useEffect(() => {
