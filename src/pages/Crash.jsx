@@ -1754,7 +1754,7 @@ export default function Crash() {
         setMult(bustPoint);
         setTNow(tEndRef.current || 0);
       }
-      setPhase("crashed");
+      // setPhase("crashed");
       setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
     } else {
       // setPhase("cashed");
