@@ -1757,7 +1757,7 @@ export default function Crash() {
       setPhase("crashed");
       setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
     } else {
-      setPhase("cashed");
+      // setPhase("cashed");
       setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
       refreshBalanceSoft();
     }
