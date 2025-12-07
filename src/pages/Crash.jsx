@@ -3745,7 +3745,7 @@ export default function Crash() {
       setPhase("countdown");
       // return to idle pose
       goToFrame(SEG.current.IDLE[0]);
-    }, 800);
+    }, 250);
   }
 
   // Countdown loop (still accurate to seconds, just controls when startFlight is called)
