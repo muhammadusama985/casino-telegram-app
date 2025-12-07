@@ -1747,35 +1747,50 @@ export default function Crash() {
     rafRef.current = requestAnimationFrame(tick);
   }
 
-  function endRound(kind) {
-    cancelAnimationFrame(rafRef.current);
-    if (kind === "crashed") {
-      if (bustPoint && Number.isFinite(bustPoint)) {
-        setMult(bustPoint);
-        setTNow(tEndRef.current || 0);
-      }
-      setPhase("crashed");
-      setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
-    } else {
-      setPhase("cashed");
-      setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
-      refreshBalanceSoft();
-    }
+ function endRound(kind) {
+  cancelAnimationFrame(rafRef.current);
 
-    // Schedule next round’s countdown
-    setTimeout(() => {
-      setInBet(false);
-      setLockedBet(0);
-      setCashoutAt(null);
-      setStartAtMs(null);
-      localCountdownEndRef.current = null;
-      resetRoundVisuals();
-      setCountdown(5);
-      setPhase("countdown");
-      // return to idle pose
-      goToFrame(SEG.current.IDLE[0]);
-    }, 800);
+  if (kind === "crashed") {
+    if (bustPoint && Number.isFinite(bustPoint)) {
+      setMult(bustPoint);
+      setTNow(tEndRef.current || 0);
+    }
+    // keep history if you want past bust values
+    setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
+
+    // ❌ don't show "crashed" phase or multiplier UI
+    // ✅ immediately jump to next round countdown (intermediate screen)
+    setInBet(false);
+    setLockedBet(0);
+    setCashoutAt(null);
+    setStartAtMs(null);
+    localCountdownEndRef.current = null;
+    resetRoundVisuals();
+    setCountdown(5);
+    setPhase("countdown");
+    goToFrame(SEG.current.IDLE[0]);
+    return;
   }
+
+  // cashed flow unchanged (still shows result briefly)
+  setPhase("cashed");
+  setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
+  refreshBalanceSoft();
+
+  // Schedule next round’s countdown after cashout result
+  setTimeout(() => {
+    setInBet(false);
+    setLockedBet(0);
+    setCashoutAt(null);
+    setStartAtMs(null);
+    localCountdownEndRef.current = null;
+    resetRoundVisuals();
+    setCountdown(5);
+    setPhase("countdown");
+    goToFrame(SEG.current.IDLE[0]);
+  }, 800);
+}
+
 
   // Countdown loop
   useEffect(() => {
@@ -2615,25 +2630,35 @@ html, body, #root {
 }
 
 /* FULLSCREEN LOADING ANIMATION – fully responsive on mobile & desktop */
-.loading-screen{
-  position:fixed;
-  inset:0;
-  width:100vw;
-  height:100vh;
-  background:#080A0F;
-  z-index:9999;
-  display:flex;
-  justify-content:center;
-  align-items:center;
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #080A0F;
+  z-index: 9999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Lottie scales with viewport, but keeps decent size on desktop */
 .loading-lottie > svg,
-.loading-lottie > canvas{
+.loading-lottie > canvas {
   width: min(320px, 80vw) !important;
   height: auto !important;
-  max-height:80vh !important;
-  display:block;
+  max-height: 80vh !important;
+  display: block;
+}
+
+/* ✅ On MOBILE: make the loading Lottie fill full screen */
+@media (max-width: 600px) {
+  .loading-lottie > svg,
+  .loading-lottie > canvas {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
 }
 
       `}</style>
