@@ -1696,7 +1696,7 @@ export default function Crash() {
     if (elapsed >= tEnd - 1e-6) {
       if (bustPoint && Number.isFinite(bustPoint)) {
         setTNow(tEnd);
-        setMult(bustPoint);
+        // setMult(bustPoint);
       }
 
       // On crash: play ONLY the straight-exit slice (3300..3600)
@@ -1754,10 +1754,10 @@ export default function Crash() {
         setMult(bustPoint);
         setTNow(tEndRef.current || 0);
       }
-      // setPhase("crashed");
+      setPhase("crashed");
       setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
     } else {
-      // setPhase("cashed");
+      setPhase("cashed");
       setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
       refreshBalanceSoft();
     }
@@ -1872,7 +1872,8 @@ export default function Crash() {
   const showGirl = running || crashPlaying;
   const showIntermediate = phase === "countdown"; // overlay between rounds
   // hide multipliers during countdown
-  const showMult = phase !== "countdown";
+// show multiplier only while actually flying, not during crash animation
+const showMult = phase === "running" && !crashPlaying;
 
   return (
     <div className="crash-root">
