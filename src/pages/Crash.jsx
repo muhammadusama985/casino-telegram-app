@@ -1805,59 +1805,90 @@ export default function Crash() {
   }, [phase, startAtMs]);
 
   // Place bet during countdown
-  const placeBet = async () => {
-    if (phase !== "countdown" || inBet) return;
-    const stake = Math.max(1, Math.floor(Number(bet || 0)));
-    if (!Number.isFinite(stake) || stake < 1) return alert("Enter a valid bet amount.");
+// Place bet during countdown (optimistic UI)
+const placeBet = async () => {
+  if (phase !== "countdown" || inBet) return;
+  const stake = Math.max(1, Math.floor(Number(bet || 0)));
+  if (!Number.isFinite(stake) || stake < 1) return alert("Enter a valid bet amount.");
 
-    try {
-      const resp = await crashJoin(stake);
-      if (Number.isFinite(Number(resp?.newBalance))) setBalance(Number(resp.newBalance));
-      setLockedBet(stake);
-      setRoundId(resp.roundId);
-      setBustPoint(Number(resp.crashAt) || 0);
-      if (Number.isFinite(Number(resp?.startAt))) {
-        const srv = Number(resp.startAt);
-        setStartAtMs((prev) => (prev ? Math.min(prev, srv) : srv));
-      }
-      setInBet(true);
-    } catch (e) {
-      alert(e.message || "Join failed");
+  // 🔹 Optimistic UI: instantly lock the bet + mark joined
+  setLockedBet(stake);
+  setInBet(true);
+
+  try {
+    const resp = await crashJoin(stake);
+
+    // backend has already debited, just sync balance
+    if (Number.isFinite(Number(resp?.newBalance))) {
+      setBalance(Number(resp.newBalance));
     }
-  };
+
+    setRoundId(resp.roundId);
+    setBustPoint(Number(resp.crashAt) || 0);
+
+    if (Number.isFinite(Number(resp?.startAt))) {
+      const srv = Number(resp.startAt);
+      // keep the earliest start time (in case of any drift)
+      setStartAtMs((prev) => (prev ? Math.min(prev, srv) : srv));
+    }
+  } catch (e) {
+    // 🔻 If API fails, revert optimistic state
+    setInBet(false);
+    setLockedBet(0);
+    alert(e?.message || "Join failed");
+  }
+};
+
 
   // Cash out during flight (server-settled)
-  const cashoutNow = async () => {
-    if (phase !== "running" || !inBet || cashoutAt != null) return;
-    if (startAtMs && Date.now() < startAtMs) return; // not started yet on server
+// Cash out during flight (server-settled, optimistic UI)
+const cashoutNow = async () => {
+  if (phase !== "running" || !inBet || cashoutAt != null) return;
+  if (startAtMs && Date.now() < startAtMs) return; // not started yet on server
 
-    const x = round2(mult);
-    try {
-      const resp = await crashCashout({ roundId, x });
-      if (resp?.ok) {
-        serverSettledRef.current = true;
-        setCashoutAt(x);
-        if (Number.isFinite(Number(resp?.newBalance))) {
-          setBalance(Number(resp.newBalance));
-        } else {
-          refreshBalanceSoft();
-        }
-        pause(); // pause at current flight frame
+  const x = round2(mult);
+
+  // 🔹 Optimistic UI: instantly freeze at current multiplier
+  setCashoutAt(x);
+  pause(); // stop the flight animation right away
+
+  try {
+    const resp = await crashCashout({ roundId, x });
+
+    if (resp?.ok) {
+      serverSettledRef.current = true;
+
+      // sync wallet with backend
+      if (Number.isFinite(Number(resp?.newBalance))) {
+        setBalance(Number(resp.newBalance));
       } else {
-        const code = resp?.error || "";
-        if (code === "already-crashed" || code === "too-late") {
-          flashToast("Already crashed!", "bad");
-          playSegment(SEG.current.CRASH_STRAIGHT, true);
-          endRound("crashed");
-          return;
-        }
-        alert(code || "Cashout failed");
+        refreshBalanceSoft();
       }
-    } catch (e) {
-      console.warn("cashout error", e);
-      alert(e?.message || "Cashout error");
+      // ✅ Your existing tick() will see cashoutAt != null
+      //    and call endRound("cashed"), so no extra work here.
+    } else {
+      const code = resp?.error || "";
+
+      if (code === "already-crashed" || code === "too-late") {
+        // Backend says it was actually too late → treat as crash instead
+        flashToast("Already crashed!", "bad");
+        setCashoutAt(null); // cancel our optimistic cashout
+        playSegment(SEG.current.CRASH_STRAIGHT, true);
+        endRound("crashed");
+        return;
+      }
+
+      // Other failure: revert optimistic cashout and inform user
+      setCashoutAt(null);
+      alert(code || "Cashout failed");
     }
-  };
+  } catch (e) {
+    // Network or unknown error — revert optimistic state
+    setCashoutAt(null);
+    alert(e?.message || "Cashout error");
+  }
+};
+
 
   /************ derived ************/
   const running = phase === "running";
