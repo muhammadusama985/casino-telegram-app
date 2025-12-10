@@ -3365,6 +3365,14 @@ export default function Crash() {
   const canCashout1 = phase === "running" && inBet1 && cashoutAt1 == null;
   const canCashout2 = phase === "running" && inBet2 && cashoutAt2 == null;
 
+  // helper: choose chip color tone based on multiplier
+  const chipTone = (x) => {
+    if (!Number.isFinite(x)) return "";
+    if (x < 2) return "low";
+    if (x < 10) return "mid";
+    return "high";
+  };
+
   /************ render ************/
   // Keep Girl visible while either RUNNING or while CRASH segment is still playing.
   const showGirl = running || crashPlaying;
@@ -3627,6 +3635,24 @@ export default function Crash() {
         </div>
       </div>
 
+      {/* BOTTOM TAB BAR: previous multipliers */}
+      <div className="bottom-tabbar">
+        <div className="bottom-tabbar-inner">
+          <div className="history-title">Previous multipliers</div>
+          <div className="history">
+            {history.length === 0 ? (
+              <span className="history-empty">No rounds yet</span>
+            ) : (
+              history.map((m, idx) => (
+                <div key={idx} className={`chip ${chipTone(m)}`}>
+                  {fmt(m)}×
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Minimal CSS additions that your existing `css` string may not have */}
       <style>{`
         .countdown-main { fill:#ffffffdd; font-size:80px; font-weight:900; filter:url(#softGlow); }
@@ -3685,7 +3711,7 @@ html, body, #root {
 .wrap { 
   max-width:1200px; 
   margin:0 auto; 
-  padding:10px; 
+  padding:10px 10px 64px; 
   display:grid; 
   gap:1px; 
   grid-template-columns:1.25fr 0.75fr; 
@@ -3694,7 +3720,7 @@ html, body, #root {
 @media (max-width:980px){ 
   .wrap { 
     grid-template-columns:1fr; 
-    padding:10px; 
+    padding:10px 10px 72px; 
   } 
 }
 
@@ -4084,13 +4110,19 @@ html, body, #root {
 .history-title { 
   font-size:13px; 
   color:#A8B3C9; 
-  margin-bottom:8px; 
+  margin-bottom:4px; 
 }
 
 .history { 
   display:flex; 
   flex-wrap:wrap; 
   gap:8px; 
+}
+
+.history-empty {
+  font-size:12px;
+  color:#6B7280;
+  opacity:.8;
 }
 
 .chip { 
@@ -4250,6 +4282,27 @@ html, body, #root {
   }
 }
 
+/* Bottom tab bar with history multipliers */
+.bottom-tabbar {
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:8;
+  border-top:1px solid #161B26;
+  background:linear-gradient(180deg,rgba(5,6,10,0.94),rgba(5,6,10,0.98));
+  backdrop-filter: blur(10px);
+  padding:6px 10px;
+}
+
+.bottom-tabbar-inner {
+  max-width:1200px;
+  margin:0 auto;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
       `}</style>
     </div>
   );
@@ -4296,4 +4349,5 @@ function TopBar({ balance }) {
     </div>
   );
 }
+
 
