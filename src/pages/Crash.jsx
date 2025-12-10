@@ -2765,11 +2765,11 @@ export default function Crash() {
   const [phase, setPhase] = useState("countdown"); // countdown|running|crashed|cashed
   const [countdown, setCountdown] = useState(5); // seconds left to place bet
 
-
   // per-bet join state
   const [inBet1, setInBet1] = useState(false);
   const [inBet2, setInBet2] = useState(false);
 
+  const anyInBet = inBet1 || inBet2;
 
   const [lockedBet1, setLockedBet1] = useState(0);
   const [lockedBet2, setLockedBet2] = useState(0);
@@ -2785,10 +2785,8 @@ export default function Crash() {
   const [cashoutAt1, setCashoutAt1] = useState(null);
   const [cashoutAt2, setCashoutAt2] = useState(null);
 
-
   const [roundId1, setRoundId1] = useState(null);
   const [roundId2, setRoundId2] = useState(null);
-
 
   const [bustPoint, setBustPoint] = useState(0); // crash multiplier
   const serverSettledRef = useRef(false); // prevent client-side double credit
@@ -2802,7 +2800,6 @@ export default function Crash() {
   // live frame state
   const [mult, setMult] = useState(1);
   const [tNow, setTNow] = useState(0);
-
 
   // Lottie (Girl1 handles rocket): idle → high-fly → straight crash
   const lottieWrapRef = useRef(null);
@@ -2959,7 +2956,7 @@ export default function Crash() {
 
   /************ auth + balance polling (unchanged) ************/
   useEffect(() => {
-    let stopPolling = () => { };
+    let stopPolling = () => {};
     (async () => {
       try {
         const u = await telegramAuth();
@@ -2976,7 +2973,7 @@ export default function Crash() {
             setBalance((p) => (c !== p ? c : p));
             setErr("");
           }
-        } catch { }
+        } catch {}
         stopPolling = (() => {
           let alive = true;
           (function tick() {
@@ -3029,7 +3026,7 @@ export default function Crash() {
         setBalance(round2(bal));
         setErr("");
       }
-    } catch { }
+    } catch {}
   }
 
   /************ round engine ************/
@@ -3152,8 +3149,6 @@ export default function Crash() {
       playBgSegment(BG_SEG.current.PURPLE, true, true);
     }
 
-
-
     rafRef.current = requestAnimationFrame(tick);
   }
 
@@ -3167,8 +3162,14 @@ export default function Crash() {
       setPhase("crashed");
       setHistory((h) => [round2(bustPoint), ...h].slice(0, 14));
     } else {
+      // keep cashed branch safe (not used in current flow)
+      const maxCash =
+        Math.max(
+          cashoutAt1 != null ? cashoutAt1 : 0,
+          cashoutAt2 != null ? cashoutAt2 : 0
+        ) || bustPoint || 0;
       setPhase("cashed");
-      setHistory((h) => [round2(cashoutAt), ...h].slice(0, 14));
+      setHistory((h) => [round2(maxCash), ...h].slice(0, 14));
       refreshBalanceSoft();
     }
 
@@ -3188,7 +3189,6 @@ export default function Crash() {
       setCountdown(5);
       setPhase("countdown");
 
-
       // return to idle pose
       goToFrame(SEG.current.IDLE[0]);
     }, 800);
@@ -3197,7 +3197,8 @@ export default function Crash() {
   // Countdown loop
   useEffect(() => {
     if (phase !== "countdown") return;
-    setCashoutAt(null);
+    setCashoutAt1(null);
+    setCashoutAt2(null);
     setBustPoint(0);
     let id = 0;
 
@@ -3221,7 +3222,6 @@ export default function Crash() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, startAtMs]);
 
-  // Place bet during countdown
   // Place bet during countdown (optimistic UI)
   const placeBet = async (slot) => {
     const isBet1 = slot === 1;
@@ -3284,8 +3284,6 @@ export default function Crash() {
     }
   };
 
-
-  // Cash out during flight (server-settled)
   // Cash out during flight (server-settled, optimistic UI) per bet
   const cashoutNow = async (slot) => {
     const isBet1 = slot === 1;
@@ -3354,7 +3352,6 @@ export default function Crash() {
     }
   };
 
-
   /************ derived ************/
   const running = phase === "running";
   const crashed = phase === "crashed";
@@ -3367,7 +3364,6 @@ export default function Crash() {
 
   const canCashout1 = phase === "running" && inBet1 && cashoutAt1 == null;
   const canCashout2 = phase === "running" && inBet2 && cashoutAt2 == null;
-
 
   /************ render ************/
   // Keep Girl visible while either RUNNING or while CRASH segment is still playing.
@@ -3470,8 +3466,6 @@ export default function Crash() {
                     x2
                   </button>
                 </div>
-
-
               </div>
 
               {/* RIGHT SIDE: big action button */}
@@ -3504,11 +3498,8 @@ export default function Crash() {
                     Next round in 5s…
                   </button>
                 )}
-
               </div>
             </div>
-
-
           </div>
         </div>
 
@@ -3550,7 +3541,6 @@ export default function Crash() {
                   >
                     +
                   </button>
-
                 </div>
 
                 <div className="quick-row">
@@ -3568,7 +3558,6 @@ export default function Crash() {
                   >
                     x2
                   </button>
-
                 </div>
 
                 <div className="balance-line">
@@ -3606,7 +3595,6 @@ export default function Crash() {
                     Next round in 5s…
                   </button>
                 )}
-
               </div>
             </div>
 
@@ -3635,11 +3623,8 @@ export default function Crash() {
                 )}
               </div>
             )}
-
           </div>
         </div>
-
-
       </div>
 
       {/* Minimal CSS additions that your existing `css` string may not have */}
@@ -4175,15 +4160,16 @@ html, body, #root {
   } 
 }
 
- .crash-label {
-   fill:#FFCBD3; 
-   font-size:12px; 
-   font-weight:700; 
-   paint-order: stroke; 
-   stroke: rgba(0,0,0,.5);
-   stroke-width: 2px;
+.crash-label {
+  fill:#FFCBD3; 
+  font-size:12px; 
+  font-weight:700; 
+  paint-order: stroke; 
+  stroke: rgba(0,0,0,.5);
+  stroke-width: 2px;
 }
-   +/* Pretty toast – small, eye-catching, matches your glassy look */
+
+/* Pretty toast – small, eye-catching, matches your glassy look */
 .toast {
   position:absolute;
   right:16px;
@@ -4310,3 +4296,4 @@ function TopBar({ balance }) {
     </div>
   );
 }
+
