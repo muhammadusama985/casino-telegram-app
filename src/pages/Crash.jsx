@@ -3635,11 +3635,11 @@ export default function Crash() {
         </div>
       </div>
 
-      {/* BOTTOM TAB BAR: previous multipliers */}
+      {/* BOTTOM TAB BAR: previous multipliers (horizontally scrollable) */}
       <div className="bottom-tabbar">
         <div className="bottom-tabbar-inner">
           <div className="history-title">Previous multipliers</div>
-          <div className="history">
+          <div className="history history-scroll">
             {history.length === 0 ? (
               <span className="history-empty">No rounds yet</span>
             ) : (
@@ -4125,6 +4125,26 @@ html, body, #root {
   opacity:.8;
 }
 
+/* horizontal scroll behavior for bottom history strip */
+.history-scroll {
+  flex-wrap:nowrap;
+  overflow-x:auto;
+  padding-bottom:2px;
+}
+
+.history-scroll::-webkit-scrollbar {
+  height:4px;
+}
+
+.history-scroll::-webkit-scrollbar-track {
+  background:transparent;
+}
+
+.history-scroll::-webkit-scrollbar-thumb {
+  background:rgba(148,163,184,.7);
+  border-radius:9999px;
+}
+
 .chip { 
   border-radius:9999px; 
   padding:6px 10px; 
@@ -4132,6 +4152,7 @@ html, body, #root {
   font-size:12px; 
   border:1px solid #23314B; 
   background:#0B1018; 
+  white-space:nowrap;
 }
 
 .chip.low { 
@@ -4349,5 +4370,6 @@ function TopBar({ balance }) {
     </div>
   );
 }
+
 
 
