@@ -96,7 +96,7 @@ export async function api(path, { method = "GET", body, headers } = {}) {
 // ---------- AUTH ----------
 export const adminAuth = {
   async login(password) {
-    const email = import.meta.env.VITE_ADMIN_EMAIL || "admin@casino.local";
+    const email = import.meta.env.VITE_ADMIN_EMAIL || "imperialcasino@gmail.com";
     const r = await api("/admin/auth/login", {
       method: "POST",
       body: { email, password },
