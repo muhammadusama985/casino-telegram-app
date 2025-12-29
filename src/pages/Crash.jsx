@@ -3636,22 +3636,32 @@ export default function Crash() {
       </div>
 
       {/* BOTTOM TAB BAR: previous multipliers (horizontally scrollable) */}
-      <div className="bottom-tabbar">
-        <div className="bottom-tabbar-inner">
-          <div className="history-title">Previous multipliers</div>
-          <div className="history history-scroll">
-            {history.length === 0 ? (
-              <span className="history-empty">No rounds yet</span>
-            ) : (
-              history.map((m, idx) => (
-                <div key={idx} className={`chip ${chipTone(m)}`}>
-                  {fmt(m)}×
-                </div>
-              ))
-            )}
+   <div className="bottom-tabbar">
+  <div className="bottom-tabbar-inner">
+    <div className="history-title">Previous multipliers</div>
+    <div className="history history-scroll">
+      {history.length === 0 ? (
+        <>
+          {/* Display 8 random sample multipliers */}
+          {Array.from({ length: 8 }).map((_, idx) => {
+            const randomMultiplier = (Math.random() * 3 + 1.1).toFixed(2);
+            return (
+              <div key={`sample-${idx}`} className={`chip sample-chip ${chipTone(randomMultiplier)}`}>
+                {randomMultiplier}×
+              </div>
+            );
+          })}
+        </>
+      ) : (
+        history.map((m, idx) => (
+          <div key={idx} className={`chip ${chipTone(m)}`}>
+            {fmt(m)}×
           </div>
-        </div>
-      </div>
+        ))
+      )}
+    </div>
+  </div>
+</div>
 
       {/* Minimal CSS additions that your existing `css` string may not have */}
       <style>{`

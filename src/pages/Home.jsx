@@ -182,21 +182,21 @@ export default function Home() {
         </Section>
 
         {/* Footer */}
-        <div className="mt-8 mb-28 text-xs text-zinc-400 space-y-2">
-          <p>
-            18+ only | Play responsibly |{" "}
-            <span className="underline">Terms apply</span> v1.2.0
-          </p>
-          <p>Support: help@example.com @yoursupportbot</p>
-          <p className="pt-2">
-            <strong>18+ GAMBLE RESPONSIBLY</strong>
-          </p>
-          <p className="leading-relaxed">
-            Yourbrand.com is owned and operated by Example Ventures SRL.
-            Registration number: 3-102-880024, registered address: City,
-            Country. Licensed and regulated by …
-          </p>
-        </div>
+      <div className="mt-8 mb-28 text-xs text-zinc-400 space-y-2">
+  <p>
+    18+ only | Play responsibly |{" "}
+    <span className="underline">Terms apply</span> v1.2.0
+  </p>
+  <p className="pt-2">
+    <strong>18+ GAMBLE RESPONSIBLY</strong>
+  </p>
+  <p className="leading-relaxed">
+    ImperialCasino.com is owned and operated by Imperial Ventures Ltd.
+    Registration number: IMP-2023-456789. Licensed and regulated by the 
+    Gaming Commission of Seychelles.
+    For support and inquiries, join the Imperial Community.
+  </p>
+</div>
       </div>
     </div>
   );
